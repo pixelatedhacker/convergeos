@@ -29,5 +29,18 @@ carry a caller-chosen request ID. Reusing that ID when retrying the same action 
 turns.
 
 Agent mesh does not create threads, choose providers, or create worktrees. Create and configure the
-target thread first, then delegate to it. Bot profiles will provide reusable endpoint creation in a
-separate feature.
+target thread first, then delegate to it. Bots make selected isolated threads easier to recognize
+and reuse as stable destinations.
+
+## Bots
+
+A bot is an isolated thread with a name and a durable inbox. Create a worktree-backed thread, open
+its thread menu, and choose **Make this thread a bot**. The bot initially uses the thread title as
+its name. Rename the thread and choose **Use thread title as bot name** when you want to update it.
+
+Other agents can list only bots when choosing a destination. Messages still land in the bot's
+original thread, so its provider settings, history, approvals, checkpoints, and worktree remain
+visible in the normal conversation.
+
+Choose **Disable bot** before archiving or deleting its inbox. Disabling removes the reusable bot
+identity but keeps the thread and its history.

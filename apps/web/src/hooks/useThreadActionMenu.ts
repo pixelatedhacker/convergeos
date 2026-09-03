@@ -20,6 +20,7 @@ import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   readEnvironmentSupportsPinning,
+  readEnvironmentSupportsBotProfiles,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsTitleRegeneration,
@@ -93,6 +94,8 @@ export function useThreadActionMenu(input: {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const configureBot = useAtomCommand(threadEnvironment.configureBot, { reportFailure: false });
+  const disableBot = useAtomCommand(threadEnvironment.disableBot, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
   const markThreadUnread = useUiStateStore((s) => s.markThreadUnread);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -134,6 +137,7 @@ export function useThreadActionMenu(input: {
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
+          botProfiles: readEnvironmentSupportsBotProfiles(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
@@ -145,6 +149,8 @@ export function useThreadActionMenu(input: {
           canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
           isRegeneratingTitle,
           isRunning: thread.session?.status === "running" && thread.session.activeTurnId != null,
+          isBot: thread.botProfile != null,
+          canBecomeBot: thread.worktreePath != null,
           supports,
           snoozePresets,
         });
@@ -250,6 +256,39 @@ export function useThreadActionMenu(input: {
               }),
             );
             return;
+          case "make-bot":
+          case "refresh-bot-name":
+            await reportFailure("Failed to save bot profile", () =>
+              configureBot({
+                environmentId: threadRef.environmentId,
+                input: {
+                  threadId: threadRef.threadId,
+                  expectedRevision: thread.botProfile?.revision ?? null,
+                  displayName: thread.title,
+                  description: thread.botProfile?.description ?? null,
+                },
+              }),
+            );
+            return;
+          case "disable-bot": {
+            if (thread.botProfile == null) return;
+            const confirmed = await settlePromise(() =>
+              api.dialogs.confirm(
+                `Disable bot "${thread.botProfile?.displayName ?? thread.title}"? The thread and its history will remain.`,
+              ),
+            );
+            if (confirmed._tag === "Failure" || !confirmed.value) return;
+            await reportFailure("Failed to disable bot", () =>
+              disableBot({
+                environmentId: threadRef.environmentId,
+                input: {
+                  threadId: threadRef.threadId,
+                  expectedRevision: thread.botProfile?.revision ?? 1,
+                },
+              }),
+            );
+            return;
+          }
           case "mark-unread":
             markThreadUnread(scopedThreadKey(threadRef), thread.latestTurn?.completedAt);
             return;
@@ -337,6 +376,8 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      configureBot,
+      disableBot,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,

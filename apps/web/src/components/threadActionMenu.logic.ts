@@ -18,6 +18,9 @@ export type ThreadActionMenuId =
   | "unsnooze"
   | "rename"
   | "regenerate-title"
+  | "make-bot"
+  | "refresh-bot-name"
+  | "disable-bot"
   | "mark-unread"
   | "copy"
   | "copy-path"
@@ -35,11 +38,14 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an active turn, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
+  readonly isBot: boolean;
+  readonly canBecomeBot: boolean;
   readonly supports: {
     readonly settlement: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
+    readonly botProfiles: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
@@ -106,6 +112,23 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.supports.botProfiles
+      ? state.isBot
+        ? [
+            { id: "refresh-bot-name" as const, label: "Use thread title as bot name", icon: "bot" },
+            { id: "disable-bot" as const, label: "Disable bot", icon: "bot-off" },
+          ]
+        : [
+            {
+              id: "make-bot" as const,
+              label: state.canBecomeBot
+                ? "Make this thread a bot"
+                : "Bots require an isolated worktree",
+              icon: "bot",
+              disabled: !state.canBecomeBot,
+            },
+          ]
+      : []),
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
     {
       id: "copy",
@@ -130,7 +153,7 @@ export function buildThreadActionMenuItems(
       id: "archive",
       label: "Archive thread",
       icon: "archive",
-      disabled: state.isRunning,
+      disabled: state.isRunning || state.isBot,
       separatorBefore: true,
     },
     {
@@ -138,6 +161,7 @@ export function buildThreadActionMenuItems(
       label: "Delete",
       destructive: true,
       icon: "trash",
+      disabled: state.isBot,
     },
   ];
 }

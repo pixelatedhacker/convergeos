@@ -40,6 +40,7 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
+  BotIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -1586,6 +1587,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               </span>
             </div>
             <div className="mt-1 flex min-w-0">
+              {thread.botProfile != null ? (
+                <BotIcon
+                  aria-label={`Bot: ${thread.botProfile.displayName}`}
+                  className="mr-1.5 size-3.5 shrink-0 text-muted-foreground"
+                />
+              ) : null}
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -1756,6 +1763,12 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
             projectIcon={props.projectIcon}
             className="size-4 shrink-0"
           />
+          {thread.botProfile != null ? (
+            <BotIcon
+              aria-label={`Bot: ${thread.botProfile.displayName}`}
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+          ) : null}
           <span className="min-w-0 flex-1 truncate">{thread.title}</span>
           <span className="shrink-0 text-xs text-muted-foreground/55 tabular-nums">
             {threadTimeLabel(thread)}
@@ -1808,6 +1821,8 @@ export default function Sidebar() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const configureBot = useAtomCommand(threadEnvironment.configureBot, { reportFailure: false });
+  const disableBot = useAtomCommand(threadEnvironment.disableBot, { reportFailure: false });
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({
@@ -3168,6 +3183,8 @@ export default function Sidebar() {
         const supportsTitleRegeneration =
           serverConfigs.get(thread.environmentId)?.environment.capabilities
             .threadTitleRegeneration === true;
+        const supportsBotProfiles =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.botProfiles === true;
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
@@ -3185,11 +3202,14 @@ export default function Sidebar() {
               isRegeneratingTitle,
               isRunning:
                 thread.session?.status === "running" && thread.session.activeTurnId != null,
+              isBot: thread.botProfile != null,
+              canBecomeBot: thread.worktreePath != null,
               supports: {
                 settlement: supportsSettlement,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 titleRegeneration: supportsTitleRegeneration,
+                botProfiles: supportsBotProfiles,
               },
               snoozePresets,
             }),
@@ -3269,6 +3289,57 @@ export default function Sidebar() {
                 stackedThreadToast({
                   type: "error",
                   title: "Failed to regenerate thread title",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
+          case "make-bot":
+          case "refresh-bot-name": {
+            const result = await configureBot({
+              environmentId: threadRef.environmentId,
+              input: {
+                threadId: threadRef.threadId,
+                expectedRevision: thread.botProfile?.revision ?? null,
+                displayName: thread.title,
+                description: thread.botProfile?.description ?? null,
+              },
+            });
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to save bot profile",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
+          case "disable-bot": {
+            const botProfile = thread.botProfile;
+            if (botProfile == null) return;
+            const confirmed = await settlePromise(() =>
+              api.dialogs.confirm(
+                `Disable bot "${botProfile.displayName}"? The thread and its history will remain.`,
+              ),
+            );
+            if (confirmed._tag === "Failure" || !confirmed.value) return;
+            const result = await disableBot({
+              environmentId: threadRef.environmentId,
+              input: {
+                threadId: threadRef.threadId,
+                expectedRevision: botProfile.revision,
+              },
+            });
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to disable bot",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -3361,6 +3432,7 @@ export default function Sidebar() {
     },
     [
       archiveThread,
+      configureBot,
       attemptPin,
       attemptSettle,
       attemptSnooze,
@@ -3373,6 +3445,7 @@ export default function Sidebar() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      disableBot,
       handleMultiSelectContextMenu,
       markThreadUnread,
       openProjectSettings,

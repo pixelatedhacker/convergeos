@@ -25,6 +25,7 @@ import { useThreadPr } from "../../state/use-thread-pr";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
+import { BotBadge } from "./BotBadge";
 import {
   resolveThreadListV2SnoozeMenuSelection,
   resolveThreadListV2SnoozeGateExpiryMs,
@@ -714,15 +715,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           {statusLabel?.label ?? timeLabel}
         </Text>
       </View>
-      <Text
-        className={cn(
-          "mt-1 text-base font-t3-medium",
-          selected ? "text-user-bubble-foreground" : "text-foreground",
-        )}
-        numberOfLines={2}
-      >
-        {thread.title}
-      </Text>
+      <View className="mt-1 flex-row items-center gap-1.5">
+        {thread.botProfile != null ? (
+          <BotBadge displayName={thread.botProfile.displayName} selected={selected} />
+        ) : null}
+        <Text
+          className={cn(
+            "min-w-0 flex-1 text-base font-t3-medium",
+            selected ? "text-user-bubble-foreground" : "text-foreground",
+          )}
+          numberOfLines={2}
+        >
+          {thread.title}
+        </Text>
+      </View>
       {props.searchMatch ? (
         <View className="mt-1">
           <ThreadSearchMatchExcerpt
@@ -891,15 +897,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             </View>
           ) : null}
           <View className="min-w-0 flex-1">
-            <Text
-              className={cn(
-                "text-base",
-                selected ? "text-user-bubble-foreground" : "text-foreground-muted",
-              )}
-              numberOfLines={1}
-            >
-              {thread.title}
-            </Text>
+            <View className="flex-row items-center gap-1.5">
+              {thread.botProfile != null ? (
+                <BotBadge displayName={thread.botProfile.displayName} selected={selected} />
+              ) : null}
+              <Text
+                className={cn(
+                  "min-w-0 flex-1 text-base",
+                  selected ? "text-user-bubble-foreground" : "text-foreground-muted",
+                )}
+                numberOfLines={1}
+              >
+                {thread.title}
+              </Text>
+            </View>
             {props.searchMatch ? (
               <ThreadSearchMatchExcerpt
                 match={props.searchMatch}

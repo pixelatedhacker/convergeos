@@ -7,6 +7,7 @@
  * @module ProjectionThreadRepository
  */
 import {
+  BotProfile,
   CommandId,
   IsoDateTime,
   ModelSelection,
@@ -35,6 +36,7 @@ export const ProjectionThread = Schema.Struct({
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  botProfile: Schema.optional(Schema.NullOr(BotProfile)),
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

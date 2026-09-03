@@ -10,7 +10,9 @@ import {
 import {
   type ArchiveThreadInput,
   type CreateThreadInput,
+  type ConfigureThreadBotInput,
   type DeleteThreadInput,
+  type DisableThreadBotInput,
   type InterruptThreadTurnInput,
   type RespondToThreadApprovalInput,
   type RespondToThreadUserInputInput,
@@ -30,7 +32,9 @@ import {
   type UpdateThreadMetadataInput,
   archiveThread,
   createThread,
+  configureThreadBot,
   deleteThread,
+  disableThreadBot,
   interruptThreadTurn,
   respondToThreadApproval,
   respondToThreadUserInput,
@@ -54,7 +58,9 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 export type {
   ArchiveThreadInput,
   CreateThreadInput,
+  ConfigureThreadBotInput,
   DeleteThreadInput,
+  DisableThreadBotInput,
   InterruptThreadTurnInput,
   RespondToThreadApprovalInput,
   RespondToThreadUserInputInput,
@@ -87,6 +93,18 @@ export function createThreadEnvironmentAtoms<R, E>(
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: (input: CreateThreadInput) => createThread(input),
+      scheduler,
+      concurrency,
+    }),
+    configureBot: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:configure-bot",
+      execute: (input: ConfigureThreadBotInput) => configureThreadBot(input),
+      scheduler,
+      concurrency,
+    }),
+    disableBot: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:disable-bot",
+      execute: (input: DisableThreadBotInput) => disableThreadBot(input),
       scheduler,
       concurrency,
     }),

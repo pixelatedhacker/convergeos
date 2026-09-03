@@ -364,11 +364,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.delete": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      if (thread.botProfile != null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is a bot inbox; disable the bot before deleting it`,
+        });
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -386,11 +392,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.archive": {
-      yield* requireThreadNotArchived({
+      const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+      if (thread.botProfile != null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is a bot inbox; disable the bot before archiving it`,
+        });
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -828,6 +840,107 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ? { linkedPullRequest: command.linkedPullRequest }
             : {}),
           updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.bot.configure": {
+      const thread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const project = yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: thread.projectId,
+      });
+      const workspacePath = thread.worktreePath;
+      if (
+        workspacePath === null ||
+        normalizeProjectPathForComparison(workspacePath) ===
+          normalizeProjectPathForComparison(project.workspaceRoot)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} needs an isolated worktree before it can become a bot`,
+        });
+      }
+      const conflictingBot = readModel.threads.find(
+        (candidate) =>
+          candidate.id !== thread.id &&
+          candidate.deletedAt === null &&
+          candidate.botProfile != null &&
+          normalizeProjectPathForComparison(candidate.worktreePath ?? project.workspaceRoot) ===
+            normalizeProjectPathForComparison(workspacePath),
+      );
+      if (conflictingBot !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} shares the bot worktree owned by ${conflictingBot.id}`,
+        });
+      }
+      const currentProfile = thread.botProfile ?? null;
+      const currentRevision = currentProfile?.revision ?? null;
+      if (currentRevision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} bot profile revision changed`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.bot-configured",
+        payload: {
+          threadId: command.threadId,
+          profile: {
+            displayName: command.displayName,
+            description: command.description,
+            revision: (currentRevision ?? 0) + 1,
+            createdAt: currentProfile?.createdAt ?? command.createdAt,
+            updatedAt,
+          },
+        },
+      };
+    }
+
+    case "thread.bot.disable": {
+      const thread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (thread.botProfile == null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is not a bot inbox`,
+        });
+      }
+      if (thread.botProfile.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} bot profile revision changed`,
+        });
+      }
+      const disabledAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: disabledAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.bot-disabled",
+        payload: {
+          threadId: command.threadId,
+          previousRevision: thread.botProfile.revision,
+          disabledAt,
         },
       };
     }
