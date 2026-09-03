@@ -1,4 +1,5 @@
 import {
+  AgentMeshRequestId,
   CheckpointRef,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -420,6 +421,20 @@ describe("OrchestrationEngine", () => {
             })
             .pipe(Effect.flip);
           expect(livenessError._tag).toBe("OrchestrationCommandInvariantError");
+          expect(yield* engine.latestSequence).toBe(livenessSnapshotSequence);
+
+          const peerTurnError = yield* engine
+            .dispatch({
+              type: "thread.peer-turn.start",
+              commandId: CommandId.make(`cmd-peer-turn-${expectedLiveness}`),
+              requestId: AgentMeshRequestId.make(`peer-${expectedLiveness}`),
+              sourceThreadId: unrelatedThreadId,
+              threadId: liveThreadId,
+              messageId: MessageId.make(`message-peer-${expectedLiveness}`),
+              message: "Start peer work.",
+            })
+            .pipe(Effect.flip);
+          expect(peerTurnError._tag).toBe("OrchestrationCommandInvariantError");
           expect(yield* engine.latestSequence).toBe(livenessSnapshotSequence);
           backgroundLiveness.clearThreadLiveness(liveThreadId);
         }

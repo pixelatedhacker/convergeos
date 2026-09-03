@@ -449,7 +449,7 @@ export const OrchestrationThreadActivity = Schema.Struct({
 });
 export type OrchestrationThreadActivity = typeof OrchestrationThreadActivity.Type;
 
-const OrchestrationLatestTurnState = Schema.Literals([
+export const OrchestrationLatestTurnState = Schema.Literals([
   "running",
   "interrupted",
   "completed",
@@ -1040,6 +1040,31 @@ const ThreadSessionStopCommand = Schema.Struct({
   onlyIfSettled: Schema.optional(Schema.Boolean),
 });
 
+export const AgentMeshRequestId = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(64),
+  Schema.isPattern(/^[a-zA-Z0-9_-]+$/),
+);
+export type AgentMeshRequestId = typeof AgentMeshRequestId.Type;
+
+export const ThreadPeerTurnStartCommand = Schema.Struct({
+  type: Schema.Literal("thread.peer-turn.start"),
+  commandId: CommandId,
+  requestId: AgentMeshRequestId,
+  sourceThreadId: ThreadId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  message: TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
+});
+
+export const ThreadPeerTurnInterruptCommand = Schema.Struct({
+  type: Schema.Literal("thread.peer-turn.interrupt"),
+  commandId: CommandId,
+  requestId: AgentMeshRequestId,
+  sourceThreadId: ThreadId,
+  threadId: ThreadId,
+  observedTurnId: TurnId,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
@@ -1169,6 +1194,8 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ThreadPeerTurnStartCommand,
+  ThreadPeerTurnInterruptCommand,
   ThreadAutoSettleCommand,
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,

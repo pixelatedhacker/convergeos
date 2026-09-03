@@ -522,7 +522,7 @@ function AgentBrowserAccessSetting() {
     <SettingsRow
       serverScoped
       {...searchableSetting("agent-browser-access")}
-      description="Let agents open and drive the preview browser. When off, the browser tools and the instructions describing them are withheld from agent sessions. Your own browser panel is unaffected."
+      description="Let agents open and drive the preview browser. When off, calls to the browser tools are denied and the instructions describing them are withheld. Your own browser panel is unaffected."
       status={
         settings.enableAgentBrowserAccess
           ? undefined
@@ -547,6 +547,43 @@ function AgentBrowserAccessSetting() {
             updateSettings({ enableAgentBrowserAccess: Boolean(checked) })
           }
           aria-label="Allow agent browser access"
+        />
+      }
+    />
+  );
+}
+
+function AgentMeshAccessSetting() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("agent-mesh-access")}
+      description="Let agents discover, read, message, and interrupt other agent threads in the same project. Messages are allowed only between isolated workspaces."
+      status={
+        settings.enableAgentMeshAccess
+          ? "Applies to sessions started from now on; running agents keep their current tools."
+          : "Running agents keep mesh access until their session restarts."
+      }
+      resetAction={
+        settings.enableAgentMeshAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess ? (
+          <SettingResetButton
+            label="agent mesh access"
+            onClick={() =>
+              updateSettings({
+                enableAgentMeshAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <Switch
+          checked={settings.enableAgentMeshAccess}
+          onCheckedChange={(checked) => updateSettings({ enableAgentMeshAccess: Boolean(checked) })}
+          aria-label="Allow agent mesh access"
         />
       }
     />
@@ -924,6 +961,9 @@ export function IntegrationsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="agents" title="Agents">
+        <AgentMeshAccessSetting />
+      </SettingsSection>
       <SettingsSection id="browser" title="Browser">
         {/* Server-authoritative, so it stays editable on any client anchored to
             a server; `serverScoped` covers the hosted app, which has none. It

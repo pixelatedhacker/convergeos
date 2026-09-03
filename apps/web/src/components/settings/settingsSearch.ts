@@ -330,6 +330,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["allow open drive preview tools sessions"],
   },
   {
+    id: "agent-mesh-access",
+    title: "Agent mesh access",
+    to: "/settings/integrations",
+    searchTerms: ["agents threads delegate message interrupt mcp collaboration"],
+  },
+  {
     id: "browser-profiles",
     title: "Browser profiles",
     to: "/settings/integrations",
