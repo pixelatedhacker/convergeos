@@ -22,6 +22,8 @@ import {
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
+import { UsageToolkitHandlersLive } from "./toolkits/usage/handlers.ts";
+import { UsageToolkit } from "./toolkits/usage/tools.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -215,6 +217,10 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
+export const UsageToolkitRegistrationLive = McpServer.toolkit(UsageToolkit).pipe(
+  Layer.provide(UsageToolkitHandlersLive),
+);
+
 const McpTransportLive = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
@@ -222,4 +228,7 @@ const McpTransportLive = McpServer.layerHttp({
   protocols: [McpProtocol.v2025_06_18],
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
-export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+export const layer = Layer.mergeAll(
+  PreviewToolkitRegistrationLive,
+  UsageToolkitRegistrationLive,
+).pipe(Layer.provideMerge(McpTransportLive));

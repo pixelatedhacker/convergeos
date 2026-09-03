@@ -119,6 +119,8 @@ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
+import * as CodexBarCollector from "./subscriptionQuota/CodexBarCollector.ts";
+import * as SubscriptionQuotaService from "./subscriptionQuota/SubscriptionQuotaService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -192,6 +194,10 @@ const BackgroundLayerLive = BackgroundPolicy.layer.pipe(
 );
 
 const UsageLayerLive = UsageService.layer.pipe(Layer.provide(ServerSettingsLayerLive));
+
+const SubscriptionQuotaLayerLive = SubscriptionQuotaService.layer.pipe(
+  Layer.provide(CodexBarCollector.layer.pipe(Layer.provide(ProcessRunner.layer))),
+);
 
 const ResourceDiagnosticsLayerLive = Layer.mergeAll(
   ResourceTelemetryLayerLive,
@@ -496,7 +502,12 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   ),
 );
 
-const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
+const RuntimeCoreWithQuotaLive = Layer.mergeAll(
+  RuntimeCoreDependenciesLive,
+  SubscriptionQuotaLayerLive,
+);
+
+const RuntimeDependenciesLive = RuntimeCoreWithQuotaLive.pipe(
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),
