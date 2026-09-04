@@ -7,7 +7,7 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
 
 | Driver kind   | Driver source                                 |
 | ------------- | --------------------------------------------- |
@@ -17,6 +17,7 @@ orchestration layer does not know which one is behind a thread.
 | `grok`        | [`Drivers/GrokDriver.ts`][grok]               |
 | `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]       |
 | `antigravity` | [`Drivers/AntigravityDriver.ts`][antigravity] |
+| `ohMyPi`      | [`Drivers/OhMyPiDriver.ts`][oh-my-pi]         |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
 adapter in a child scope. Adapter implementations live beside them in
@@ -54,6 +55,27 @@ probes hang or surprise the user. A failed `initialize` degrades to `warning` wi
 list instead of persisting `error` over a working install. The built-in `grok-build` slug is the
 CLI's product name, not an ACP model id. `applyGrokAcpModelSelection` treats it as "keep the
 session's current model" and never sends it in `session/set_model`.
+
+### Oh My Pi ACP ownership
+
+[`OhMyPiDriver`][oh-my-pi] runs the user's `omp` installation. Each active thread owns one
+`omp acp` process because Oh My Pi applies approval mode at process startup. The driver uses the
+standard ACP transport in `AcpSessionRuntime`; it does not reuse Cursor or Grok extensions.
+
+Oh My Pi is disabled by default. Its legacy `providers.ohMyPi` settings entry supplies the default
+instance with `binaryPath: "omp"`, while additional instances use the normal `providerInstances`
+map. The executable inherits the instance environment. Oh My Pi owns upstream credentials and
+configuration on the environment host.
+
+Provider checks run `omp --version` and the bounded `omp models --json --no-extensions` catalog
+command. The catalog uses `provider/model` selectors and can vary by working directory. The
+`default` model is an internal T3 Code marker that keeps the session's current model; the adapter
+never sends it to ACP.
+
+The adapter advertises form elicitation but not ACP filesystem or terminal capabilities. It maps
+ACP permission requests and form questions into the existing canonical request events. The
+project-scoped MCP server is passed as an authenticated HTTP server when the session starts. Native
+credentials, MCP authorization, subprocesses, and protocol logs never leave the environment host.
 
 ## Antigravity ownership and protocol
 
@@ -333,6 +355,7 @@ when a request opens (approval) or user input is requested, via
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [antigravity]: ../../apps/server/src/provider/Drivers/AntigravityDriver.ts
+[oh-my-pi]: ../../apps/server/src/provider/Drivers/OhMyPiDriver.ts
 [antigravity-adapter]: ../../apps/server/src/provider/Layers/AntigravityAdapter.ts
 [antigravity-provider]: ../../apps/server/src/provider/Layers/AntigravityProvider.ts
 [antigravity-installation]: ../../apps/server/src/provider/AntigravityInstallation.ts

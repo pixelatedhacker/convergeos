@@ -245,7 +245,8 @@ function parseUserInputQuestions(
           };
         })
         .filter((option): option is UserInputQuestion["options"][number] => option !== null);
-      if (options.length === 0) {
+      const allowCustomAnswer = question.allowCustomAnswer === true;
+      if (options.length === 0 && !allowCustomAnswer) {
         return null;
       }
       return {

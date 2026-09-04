@@ -4,6 +4,7 @@ import {
   CodexSettings,
   CursorSettings,
   GrokSettings,
+  OhMyPiSettings,
   OpenCodeSettings,
   ProviderDriverKind,
 } from "@t3tools/contracts";
@@ -13,6 +14,7 @@ import {
   ClaudeAI,
   CursorIcon,
   GrokIcon,
+  OhMyPiIcon,
   type Icon,
   OpenAI,
   OpenCodeIcon,
@@ -69,6 +71,13 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     icon: GrokIcon,
     badgeLabel: "Early Access",
     settingsSchema: GrokSettings,
+  },
+  {
+    value: ProviderDriverKind.make("ohMyPi"),
+    label: "Oh My Pi",
+    icon: OhMyPiIcon,
+    badgeLabel: "Early Access",
+    settingsSchema: OhMyPiSettings,
   },
   {
     value: ProviderDriverKind.make("opencode"),

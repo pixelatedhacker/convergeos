@@ -1,5 +1,6 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
+  OH_MY_PI_DEFAULT_MODEL,
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
@@ -50,6 +51,18 @@ function renderPicker(input: {
 }
 
 describe("ProviderModelPicker", () => {
+  it("labels the Oh My Pi default marker", () => {
+    const markup = renderPicker({
+      instanceId: "ohMyPi",
+      driver: "ohMyPi",
+      model: OH_MY_PI_DEFAULT_MODEL,
+      options: [],
+    });
+
+    expect(markup).toContain("Default");
+    expect(markup).not.toContain(">default<");
+  });
+
   it.each(["", ANTIGRAVITY_DEFAULT_MODEL])(
     "shows a choice prompt before Antigravity has an account catalog for %s",
     (model) => {
@@ -84,7 +97,7 @@ describe("ProviderModelPicker", () => {
     },
   );
 
-  it.each(["opencode", "antigravity"])(
+  it.each(["opencode", "antigravity", "ohMyPi"])(
     "keeps the selected model label when the %s account catalog does not contain it",
     (driver) => {
       const markup = renderPicker({

@@ -88,6 +88,44 @@ const nativeQuestion = {
 } as const;
 
 describe("pending user input answers", () => {
+  it("keeps free-text prompts that explicitly allow a custom answer", () => {
+    const requested = makeActivity({
+      id: EventId.make("free-text-question"),
+      kind: "user-input.requested",
+      summary: "User input requested",
+      createdAt: "2026-09-02T00:00:00.000Z",
+      payload: {
+        requestId: "interaction_free_text",
+        questions: [
+          {
+            id: "details",
+            header: "Details",
+            question: "What should the agent use?",
+            options: [],
+            allowCustomAnswer: true,
+          },
+        ],
+      },
+    });
+
+    expect(derivePendingUserInputs([requested])).toEqual([
+      {
+        requestId: "interaction_free_text",
+        createdAt: requested.createdAt,
+        questions: [
+          {
+            id: "details",
+            header: "Details",
+            question: "What should the agent use?",
+            options: [],
+            allowCustomAnswer: true,
+            multiSelect: false,
+          },
+        ],
+      },
+    ]);
+  });
+
   it("preserves native choice values and custom-answer rules from activities", () => {
     const requested = makeActivity({
       id: EventId.make("native-question"),

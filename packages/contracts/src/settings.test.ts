@@ -8,6 +8,7 @@ import {
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
   defaultEnabledForDriver,
+  OhMyPiSettings,
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
@@ -20,6 +21,29 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+const decodeOhMyPiSettings = Schema.decodeUnknownSync(OhMyPiSettings);
+
+describe("OhMyPiSettings", () => {
+  it("defaults to a disabled omp binary", () => {
+    expect(decodeOhMyPiSettings({})).toEqual({
+      enabled: false,
+      binaryPath: "omp",
+    });
+    expect(DEFAULT_SERVER_SETTINGS.providers.ohMyPi).toEqual({
+      enabled: false,
+      binaryPath: "omp",
+    });
+    expect(defaultEnabledForDriver(ProviderDriverKind.make("ohMyPi"))).toBe(false);
+  });
+
+  it("accepts and trims an Oh My Pi provider patch", () => {
+    expect(
+      decodeServerSettingsPatch({
+        providers: { ohMyPi: { enabled: true, binaryPath: "  /opt/bin/omp  " } },
+      }).providers?.ohMyPi,
+    ).toEqual({ enabled: true, binaryPath: "/opt/bin/omp" });
+  });
+});
 
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {

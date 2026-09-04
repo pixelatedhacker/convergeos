@@ -62,6 +62,12 @@ export const PROVIDER_OPTIONS: Array<{
     pickerSidebarBadge: "new",
   },
   {
+    value: ProviderDriverKind.make("ohMyPi"),
+    label: "Oh My Pi",
+    available: true,
+    pickerSidebarBadge: "new",
+  },
+  {
     value: ProviderDriverKind.make("antigravity"),
     label: "Antigravity",
     available: true,
@@ -532,7 +538,8 @@ function parseUserInputQuestions(
           };
         })
         .filter((option): option is UserInputQuestion["options"][number] => option !== null);
-      if (options.length === 0) {
+      const allowCustomAnswer = question.allowCustomAnswer === true;
+      if (options.length === 0 && !allowCustomAnswer) {
         return null;
       }
       return {

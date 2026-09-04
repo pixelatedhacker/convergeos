@@ -72,6 +72,13 @@ describe("ProviderSettingsForm helpers", () => {
     ]);
   });
 
+  it("derives the Oh My Pi binary path field", () => {
+    const ohMyPi = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("ohMyPi")];
+    if (!ohMyPi) throw new Error("Oh My Pi provider definition is missing");
+
+    expect(deriveProviderSettingsFields(ohMyPi).map((field) => field.key)).toEqual(["binaryPath"]);
+  });
+
   it("preserves unknown config keys while omitting empty configurable fields", () => {
     const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
     expect(opencode).toBeDefined();

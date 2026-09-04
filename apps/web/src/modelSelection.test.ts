@@ -350,6 +350,11 @@ describe("instance-scoped model selection", () => {
       availableModel: "gemini-3.1-pro",
       missingModel: "gemini-3.1-pro-high",
     },
+    {
+      driverName: "ohMyPi",
+      availableModel: "anthropic/claude-sonnet-4",
+      missingModel: "openai/gpt-5.4",
+    },
   ])("$driverName catalog gaps", ({ driverName, availableModel, missingModel }) => {
     it("preserves a selected model when a catalog refresh no longer contains it", () => {
       const providers = [
