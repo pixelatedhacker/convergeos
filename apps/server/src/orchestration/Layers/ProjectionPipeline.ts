@@ -637,6 +637,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             branch: event.payload.branch,
             worktreePath: event.payload.worktreePath,
             linkedPullRequest: null,
+            botProfile: null,
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -838,6 +839,32 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               ? { linkedPullRequest: event.payload.linkedPullRequest }
               : {}),
             updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.bot-configured": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            botProfile: event.payload.profile,
+            updatedAt: event.payload.profile.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.bot-disabled": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            botProfile: null,
+            updatedAt: event.payload.disabledAt,
           });
           return;
         }

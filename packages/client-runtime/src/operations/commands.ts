@@ -43,6 +43,8 @@ export type PinThreadInput = CommandInput<"thread.pin">;
 export type UnpinThreadInput = CommandInput<"thread.unpin">;
 export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
 export type UpdateThreadMetadataInput = CommandInput<"thread.meta.update">;
+export type ConfigureThreadBotInput = CommandInput<"thread.bot.configure">;
+export type DisableThreadBotInput = CommandInput<"thread.bot.disable">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
 export type StartThreadTurnInput = CommandInput<"thread.turn.start">;
@@ -237,6 +239,30 @@ export const updateThreadMetadata: (input: UpdateThreadMetadataInput) => Command
     ...input,
     type: "thread.meta.update",
     commandId: yield* commandId(input),
+  });
+});
+
+export const configureThreadBot: (input: ConfigureThreadBotInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.configureThreadBot",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "thread.bot.configure",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const disableThreadBot: (input: DisableThreadBotInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.disableThreadBot",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "thread.bot.disable",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
   });
 });
 

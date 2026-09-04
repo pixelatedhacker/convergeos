@@ -79,6 +79,7 @@ const projectAgent = (
       : "isolated",
   updatedAt: thread.updatedAt,
   current: thread.id === caller.id,
+  ...(thread.botProfile == null ? {} : { botProfile: thread.botProfile }),
 });
 
 export const make = Effect.gen(function* () {
@@ -165,7 +166,11 @@ export const make = Effect.gen(function* () {
       return yield* meshError("list", "callerUnavailable");
     }
     const projectThreads = snapshot.threads
-      .filter((thread) => thread.projectId === caller.projectId)
+      .filter(
+        (thread) =>
+          thread.projectId === caller.projectId &&
+          (input.onlyBots !== true || thread.botProfile != null),
+      )
       .sort((left, right) => {
         if (left.id === scope.threadId) return -1;
         if (right.id === scope.threadId) return 1;

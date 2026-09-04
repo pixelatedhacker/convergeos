@@ -58,5 +58,20 @@ The decider rejects a peer send when:
 An interrupt carries the exact turn ID observed by the caller. The decider rejects it if the target
 has moved to another turn before dispatch.
 
-Bots may later create isolated, reusable endpoints. Kanban may later schedule work onto those
-endpoints. Neither feature should bypass these orchestration invariants.
+## Bot profiles
+
+A bot profile belongs to exactly one thread; the thread ID is the bot's address and canonical
+inbox. This deliberately avoids a second identity registry. A profile has a display name,
+description, revision, and timestamps. Configuration uses compare-and-swap revisions so two
+clients cannot silently overwrite one another.
+
+Only an active thread with a distinct worktree can become a bot. Two active bots cannot claim the
+same normalized worktree. An active bot inbox cannot be archived or deleted until its profile is
+disabled; disabling preserves the thread, history, and worktree.
+
+The profile is stored on the thread projection and travels with normal shell snapshots, so local,
+remote, relay, web, desktop, and mobile clients share the same state. `agents_list` accepts
+`onlyBots` and includes profile metadata in results. Sends still target the underlying thread and
+therefore keep every agent-mesh authorization and workspace invariant above.
+
+Kanban may later schedule work onto bot inboxes. It must not bypass these orchestration invariants.

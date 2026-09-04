@@ -16,6 +16,8 @@ import {
   ProjectMetaUpdatedPayload,
   ThreadActivityAppendedPayload,
   ThreadArchivedPayload,
+  ThreadBotConfiguredPayload,
+  ThreadBotDisabledPayload,
   ThreadCreatedPayload,
   ThreadDeletedPayload,
   ThreadInteractionModeSetPayload,
@@ -303,6 +305,7 @@ export function projectEvent(
             interactionMode: payload.interactionMode,
             branch: payload.branch,
             worktreePath: payload.worktreePath,
+            botProfile: null,
             latestTurn: null,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -478,6 +481,28 @@ export function projectEvent(
               ? { linkedPullRequest: payload.linkedPullRequest }
               : {}),
             updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.bot-configured":
+      return decodeForEvent(ThreadBotConfiguredPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            botProfile: payload.profile,
+            updatedAt: payload.profile.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.bot-disabled":
+      return decodeForEvent(ThreadBotDisabledPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            botProfile: null,
+            updatedAt: payload.disabledAt,
           }),
         })),
       );

@@ -1,6 +1,7 @@
 import {
   ArchiveIcon,
   ArrowUpDownIcon,
+  BotIcon,
   ChevronRightIcon,
   CloudIcon,
   ContainerIcon,
@@ -82,6 +83,7 @@ import { releaseProjectDraftUploads } from "../lib/composerDraftUploads";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isMacPlatform } from "../lib/utils";
 import {
+  readEnvironmentSupportsBotProfiles,
   readThreadShell,
   useProject,
   useProjects,
@@ -743,6 +745,12 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             </Tooltip>
           )}
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
+          {thread.botProfile != null ? (
+            <BotIcon
+              aria-label={`Bot: ${thread.botProfile.displayName}`}
+              className="size-3 shrink-0 text-muted-foreground"
+            />
+          ) : null}
           {renamingThreadKey === threadKey ? (
             <input
               ref={handleRenameInputRef}
@@ -1164,6 +1172,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const configureBot = useAtomCommand(threadEnvironment.configureBot, { reportFailure: false });
+  const disableBot = useAtomCommand(threadEnvironment.disableBot, { reportFailure: false });
   const updateSettings = useUpdateClientSettings();
   const sidebarThreadPreviewCount = useClientSettings<SidebarThreadPreviewCount>(
     (settings) => settings.sidebarThreadPreviewCount,
@@ -2180,17 +2190,42 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       );
       const threadWorkspacePath =
         thread.worktreePath ?? threadProject?.workspaceRoot ?? project.workspaceRoot ?? null;
+      const supportsBotProfiles = readEnvironmentSupportsBotProfiles(thread.environmentId);
       const clicked = await api.contextMenu.show(
         [
           ...(thread.branch
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
           { id: "rename", label: "Rename thread" },
+          ...(supportsBotProfiles
+            ? thread.botProfile != null
+              ? [
+                  { id: "refresh-bot-name", label: "Use thread title as bot name", icon: "bot" },
+                  { id: "disable-bot", label: "Disable bot", icon: "bot-off" },
+                ]
+              : [
+                  {
+                    id: "make-bot",
+                    label:
+                      thread.worktreePath == null
+                        ? "Bots require an isolated worktree"
+                        : "Make this thread a bot",
+                    icon: "bot",
+                    disabled: thread.worktreePath == null,
+                  },
+                ]
+            : []),
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "project-settings", label: "Project settings" },
-          { id: "delete", label: "Delete", destructive: true, icon: "trash" },
+          {
+            id: "delete",
+            label: "Delete",
+            destructive: true,
+            icon: "trash",
+            disabled: thread.botProfile != null,
+          },
         ],
         position,
       );
@@ -2230,6 +2265,53 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
       if (clicked === "rename") {
         startThreadRename(threadKey, thread.title);
+        return;
+      }
+
+      if (clicked === "make-bot" || clicked === "refresh-bot-name") {
+        const result = await configureBot({
+          environmentId: threadRef.environmentId,
+          input: {
+            threadId: threadRef.threadId,
+            expectedRevision: thread.botProfile?.revision ?? null,
+            displayName: thread.title,
+            description: thread.botProfile?.description ?? null,
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to save bot profile",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+        return;
+      }
+
+      if (clicked === "disable-bot") {
+        const botProfile = thread.botProfile;
+        if (botProfile == null) return;
+        const confirmed = await api.dialogs.confirm(
+          `Disable bot "${botProfile.displayName}"? The thread and its history will remain.`,
+        );
+        if (!confirmed) return;
+        const result = await disableBot({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId, expectedRevision: botProfile.revision },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to disable bot",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
         return;
       }
 
@@ -2282,9 +2364,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     },
     [
       appSettingsConfirmThreadDelete,
+      configureBot,
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      disableBot,
       handleNewThread,
       isMobile,
       markThreadUnread,

@@ -482,6 +482,19 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 });
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
+export const BotDisplayName = TrimmedNonEmptyString.check(Schema.isMaxLength(80));
+export const BotDescription = TrimmedString.check(Schema.isMaxLength(500));
+
+/** A named agent profile whose containing thread is its canonical inbox. */
+export const BotProfile = Schema.Struct({
+  displayName: BotDisplayName,
+  description: Schema.NullOr(BotDescription),
+  revision: PositiveInt,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type BotProfile = typeof BotProfile.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -494,6 +507,7 @@ export const OrchestrationThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  botProfile: Schema.optional(Schema.NullOr(BotProfile)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -572,6 +586,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  botProfile: Schema.optional(Schema.NullOr(BotProfile)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -911,6 +926,24 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   ),
 );
 
+const ThreadBotConfigureCommand = Schema.Struct({
+  type: Schema.Literal("thread.bot.configure"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedRevision: Schema.NullOr(PositiveInt),
+  displayName: BotDisplayName,
+  description: Schema.NullOr(BotDescription),
+  createdAt: IsoDateTime,
+});
+
+const ThreadBotDisableCommand = Schema.Struct({
+  type: Schema.Literal("thread.bot.disable"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1081,6 +1114,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadBotConfigureCommand,
+  ThreadBotDisableCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1109,6 +1144,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadBotConfigureCommand,
+  ThreadBotDisableCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1230,6 +1267,8 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unpinned",
   "thread.pin-reordered",
   "thread.meta-updated",
+  "thread.bot-configured",
+  "thread.bot-disabled",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
@@ -1379,6 +1418,17 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   updatedAt: IsoDateTime,
+});
+
+export const ThreadBotConfiguredPayload = Schema.Struct({
+  threadId: ThreadId,
+  profile: BotProfile,
+});
+
+export const ThreadBotDisabledPayload = Schema.Struct({
+  threadId: ThreadId,
+  previousRevision: PositiveInt,
+  disabledAt: IsoDateTime,
 });
 
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
@@ -1591,6 +1641,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.meta-updated"),
     payload: ThreadMetaUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.bot-configured"),
+    payload: ThreadBotConfiguredPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.bot-disabled"),
+    payload: ThreadBotDisabledPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

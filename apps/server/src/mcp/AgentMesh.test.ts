@@ -164,6 +164,34 @@ it.effect("lists only same-project agents with bounded status metadata", () =>
   }),
 );
 
+it.effect("filters the mesh to bots and returns their profile metadata", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness([
+      shell(callerId),
+      shell(targetId, {
+        worktreePath: "/worktrees/reviewer",
+        botProfile: {
+          displayName: "Reviewer",
+          description: "Reviews changes before handoff.",
+          revision: 1,
+          createdAt: "2026-09-03T20:00:00.000Z",
+          updatedAt: "2026-09-03T20:00:00.000Z",
+        },
+      }),
+    ]);
+    const mesh = yield* harness.make;
+
+    const result = yield* mesh.list({ threadId: callerId }, { onlyBots: true });
+
+    expect(result.agents).toHaveLength(1);
+    expect(result.agents[0]).toMatchObject({
+      threadId: targetId,
+      workspaceIsolation: "isolated",
+      botProfile: { displayName: "Reviewer", revision: 1 },
+    });
+  }),
+);
+
 it.effect("dispatches a message through the existing target thread", () =>
   Effect.gen(function* () {
     const harness = makeHarness([

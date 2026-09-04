@@ -1,4 +1,5 @@
 import {
+  BotProfile,
   ChatAttachment,
   CheckpointRef,
   IsoDateTime,
@@ -100,6 +101,7 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
+    botProfile: Schema.NullOr(Schema.fromJsonString(BotProfile)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -471,6 +473,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           branch,
           worktree_path AS "worktreePath",
           linked_pull_request_json AS "linkedPullRequest",
+          bot_profile_json AS "botProfile",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -509,6 +512,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           branch,
           worktree_path AS "worktreePath",
           linked_pull_request_json AS "linkedPullRequest",
+          bot_profile_json AS "botProfile",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -549,6 +553,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           branch,
           worktree_path AS "worktreePath",
           linked_pull_request_json AS "linkedPullRequest",
+          bot_profile_json AS "botProfile",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1011,6 +1016,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           branch,
           worktree_path AS "worktreePath",
           linked_pull_request_json AS "linkedPullRequest",
+          bot_profile_json AS "botProfile",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1907,6 +1913,7 @@ pending_approval_requests AS (
                 interactionMode: row.interactionMode,
                 branch: row.branch,
                 worktreePath: row.worktreePath,
+                botProfile: row.botProfile,
                 ...(row.linkedPullRequest === null
                   ? {}
                   : { linkedPullRequest: row.linkedPullRequest }),
@@ -2120,6 +2127,7 @@ pending_approval_requests AS (
                   interactionMode: row.interactionMode,
                   branch: row.branch,
                   worktreePath: row.worktreePath,
+                  botProfile: row.botProfile,
                   ...(row.linkedPullRequest === null
                     ? {}
                     : { linkedPullRequest: row.linkedPullRequest }),
@@ -2260,6 +2268,7 @@ pending_approval_requests AS (
                       interactionMode: row.interactionMode,
                       branch: row.branch,
                       worktreePath: row.worktreePath,
+                      botProfile: row.botProfile,
                       ...(row.linkedPullRequest === null
                         ? {}
                         : { linkedPullRequest: row.linkedPullRequest }),
@@ -2408,6 +2417,7 @@ pending_approval_requests AS (
                 interactionMode: row.interactionMode,
                 branch: row.branch,
                 worktreePath: row.worktreePath,
+                botProfile: row.botProfile,
                 ...(row.linkedPullRequest === null
                   ? {}
                   : { linkedPullRequest: row.linkedPullRequest }),
@@ -2702,6 +2712,7 @@ pending_approval_requests AS (
         interactionMode: threadRow.value.interactionMode,
         branch: threadRow.value.branch,
         worktreePath: threadRow.value.worktreePath,
+        botProfile: threadRow.value.botProfile,
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),
@@ -2940,6 +2951,7 @@ pending_approval_requests AS (
         interactionMode: threadRow.value.interactionMode,
         branch: threadRow.value.branch,
         worktreePath: threadRow.value.worktreePath,
+        botProfile: threadRow.value.botProfile,
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),

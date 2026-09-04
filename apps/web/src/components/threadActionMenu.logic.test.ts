@@ -10,7 +10,15 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
-  supports: { settlement: true, snooze: true, pinning: true, titleRegeneration: true },
+  isBot: false,
+  canBecomeBot: true,
+  supports: {
+    settlement: true,
+    snooze: true,
+    pinning: true,
+    titleRegeneration: true,
+    botProfiles: true,
+  },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
   ],
@@ -31,7 +39,13 @@ describe("buildThreadActionMenuItems", () => {
     expect(
       ids({
         ...baseState,
-        supports: { settlement: false, snooze: false, pinning: false, titleRegeneration: false },
+        supports: {
+          settlement: false,
+          snooze: false,
+          pinning: false,
+          titleRegeneration: false,
+          botProfiles: false,
+        },
       }),
     ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
   });
@@ -95,7 +109,13 @@ describe("buildThreadActionMenuItems", () => {
     expect(
       ids({
         ...baseState,
-        supports: { settlement: false, snooze: false, pinning: false, titleRegeneration: false },
+        supports: {
+          settlement: false,
+          snooze: false,
+          pinning: false,
+          titleRegeneration: false,
+          botProfiles: false,
+        },
       }),
     ).toContain("archive");
   });
@@ -105,5 +125,30 @@ describe("buildThreadActionMenuItems", () => {
       (item) => item.id === "archive",
     );
     expect(archiveItem?.disabled).toBe(true);
+  });
+
+  it("creates, updates, and disables bot profiles only when supported", () => {
+    expect(ids(baseState)).toContain("make-bot");
+    expect(ids({ ...baseState, isBot: true })).toEqual(
+      expect.arrayContaining(["refresh-bot-name", "disable-bot"]),
+    );
+    expect(
+      ids({
+        ...baseState,
+        supports: { ...baseState.supports, botProfiles: false },
+      }),
+    ).not.toContain("make-bot");
+  });
+
+  it("requires an isolated worktree and protects active bot inboxes", () => {
+    expect(
+      buildThreadActionMenuItems({ ...baseState, canBecomeBot: false }).find(
+        (item) => item.id === "make-bot",
+      ),
+    ).toMatchObject({ disabled: true, label: "Bots require an isolated worktree" });
+
+    const botItems = buildThreadActionMenuItems({ ...baseState, isBot: true });
+    expect(botItems.find((item) => item.id === "archive")?.disabled).toBe(true);
+    expect(botItems.find((item) => item.id === "delete")?.disabled).toBe(true);
   });
 });

@@ -27,6 +27,7 @@ import { useThreadPr, type ThreadPr } from "../../state/use-thread-pr";
 import type { HomeGroupDisplayAction } from "../home/homeListItems";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
+import { BotBadge } from "./BotBadge";
 import { resolveThreadStatus } from "./threadPresentation";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 
@@ -580,9 +581,17 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
         <View className="pr-[18px] pt-[10px]" style={{ paddingLeft: THREAD_LIST_COMPACT_INSET }}>
           <View className={cn("gap-[3px] pb-[10px]", !props.isLast && "border-b border-separator")}>
             <View className="flex-row items-center justify-between gap-2">
-              <Text className="flex-1 text-lg font-t3-bold text-foreground" numberOfLines={1}>
-                {thread.title}
-              </Text>
+              <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+                {thread.botProfile != null ? (
+                  <BotBadge displayName={thread.botProfile.displayName} />
+                ) : null}
+                <Text
+                  className="min-w-0 flex-1 text-lg font-t3-bold text-foreground"
+                  numberOfLines={1}
+                >
+                  {thread.title}
+                </Text>
+              </View>
               <View className="flex-row items-center gap-2">
                 {statusPill}
                 <Text className="text-base tabular-nums text-foreground-tertiary">{timestamp}</Text>
@@ -633,15 +642,20 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
       >
         <View className="gap-[3px]">
           <View className="flex-row items-center justify-between gap-2">
-            <Text
-              className={cn(
-                "flex-1 text-base font-t3-medium",
-                selected ? "text-user-bubble-foreground" : "text-foreground",
-              )}
-              numberOfLines={1}
-            >
-              {thread.title}
-            </Text>
+            <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+              {thread.botProfile != null ? (
+                <BotBadge displayName={thread.botProfile.displayName} selected={selected} />
+              ) : null}
+              <Text
+                className={cn(
+                  "min-w-0 flex-1 text-base font-t3-medium",
+                  selected ? "text-user-bubble-foreground" : "text-foreground",
+                )}
+                numberOfLines={1}
+              >
+                {thread.title}
+              </Text>
+            </View>
             <View className="flex-row items-center gap-2">
               {statusPill}
               <Text

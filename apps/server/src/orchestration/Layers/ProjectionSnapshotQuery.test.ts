@@ -84,6 +84,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           branch,
           worktree_path,
           linked_pull_request_json,
+          bot_profile_json,
           latest_turn_id,
           latest_user_message_at,
           pending_approval_count,
@@ -105,6 +106,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           NULL,
           NULL,
           '{"projectId":"project-1","repository":"pingdotgg/t3code","number":42,"url":"https://github.com/pingdotgg/t3code/pull/42"}',
+          '{"displayName":"Reviewer","description":"Checks the work.","revision":2,"createdAt":"2026-02-24T00:00:02.000Z","updatedAt":"2026-02-24T00:00:03.000Z"}',
           'turn-1',
           '2026-02-24T00:00:04.000Z',
           1,
@@ -315,6 +317,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             number: 42,
             url: "https://github.com/pingdotgg/t3code/pull/42",
           },
+          botProfile: {
+            displayName: "Reviewer",
+            description: "Checks the work.",
+            revision: 2,
+            createdAt: "2026-02-24T00:00:02.000Z",
+            updatedAt: "2026-02-24T00:00:03.000Z",
+          },
           latestTurn: {
             turnId: asTurnId("turn-1"),
             state: "completed",
@@ -442,6 +451,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             repository: "pingdotgg/t3code",
             number: 42,
             url: "https://github.com/pingdotgg/t3code/pull/42",
+          },
+          botProfile: {
+            displayName: "Reviewer",
+            description: "Checks the work.",
+            revision: 2,
+            createdAt: "2026-02-24T00:00:02.000Z",
+            updatedAt: "2026-02-24T00:00:03.000Z",
           },
           latestTurn: {
             turnId: asTurnId("turn-1"),

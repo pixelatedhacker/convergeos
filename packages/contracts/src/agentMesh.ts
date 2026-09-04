@@ -12,6 +12,7 @@ import {
 } from "./baseSchemas.ts";
 import {
   AgentMeshRequestId,
+  BotProfile,
   OrchestrationLatestTurnState,
   OrchestrationSessionStatus,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
@@ -34,11 +35,13 @@ export const AgentMeshAgent = Schema.Struct({
   workspaceIsolation: Schema.Literals(["shared", "isolated"]),
   updatedAt: IsoDateTime,
   current: Schema.Boolean,
+  botProfile: Schema.optional(BotProfile),
 });
 export type AgentMeshAgent = typeof AgentMeshAgent.Type;
 
 export const AgentMeshListInput = Schema.Struct({
   limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+  onlyBots: Schema.optional(Schema.Boolean),
 });
 export type AgentMeshListInput = typeof AgentMeshListInput.Type;
 
