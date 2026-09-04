@@ -96,7 +96,7 @@ The live backend agent implementation and its event stream. The main service is 
 #### Provider
 
 The backend agent runtime that actually performs work. Seven drivers ship built in: Codex, Claude,
-Cursor, Grok, OpenCode, Oh My Pi, and Antigravity. See [ProviderService.ts][14],
+Cursor, Grok, OpenCode, Oh My Pi, Antigravity, and Antigravity CLI. See [ProviderService.ts][14],
 [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
 
 #### Session

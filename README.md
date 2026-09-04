@@ -22,6 +22,7 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
 > - Oh My Pi: install [Oh My Pi](https://github.com/can1357/oh-my-pi), then run `omp` to configure a model provider
 > - Antigravity: enable it in Settings, then use **Install Antigravity** and **Sign in with Google**. No CLI is required.
+> - Antigravity CLI: install [the `agy` CLI](https://antigravity.google/docs/cli/install/), sign in by running `agy`, then enable **Antigravity CLI**. This provider requires Full access.
 
 ### Try it out (install-free)
 

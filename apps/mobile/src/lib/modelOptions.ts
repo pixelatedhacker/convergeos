@@ -1,5 +1,6 @@
 import {
   OH_MY_PI_DEFAULT_MODEL,
+  ANTIGRAVITY_CLI_DEFAULT_MODEL,
   type ModelCapabilities,
   type ModelSelection,
   type ServerConfig as T3ServerConfig,
@@ -38,11 +39,13 @@ function providerDisplayLabel(provider: {
   if (provider.driver === "codex") return "Codex";
   if (provider.driver === "claudeAgent") return "Claude";
   if (provider.driver === "ohMyPi") return "Oh My Pi";
+  if (provider.driver === "antigravityCli") return "Antigravity CLI";
   return provider.instanceId;
 }
 
 function modelDisplayLabel(driver: string, slug: string, name: string | undefined): string {
   if (driver === "ohMyPi" && slug === OH_MY_PI_DEFAULT_MODEL) return "Default";
+  if (driver === "antigravityCli" && slug === ANTIGRAVITY_CLI_DEFAULT_MODEL) return "Default";
   return name ?? slug;
 }
 

@@ -90,7 +90,8 @@ export function shouldIncludeModelPickerOption(input: {
     input.entry.enabled &&
     (input.entry.driverKind === "opencode" ||
       input.entry.driverKind === "antigravity" ||
-      input.entry.driverKind === "ohMyPi") &&
+      input.entry.driverKind === "ohMyPi" ||
+      input.entry.driverKind === "antigravityCli") &&
     input.entry.instanceId === input.activeInstanceId &&
     input.option.slug === input.activeModel &&
     input.option.isUnavailable === true

@@ -17,7 +17,8 @@
 - [Source control integrations](./user/source-control.md)
 - [Background service (Linux)](./user/background-service.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) ·
-  [OpenCode](./user/providers-opencode.md) · [Oh My Pi](./user/providers-oh-my-pi.md)
+  [OpenCode](./user/providers-opencode.md) · [Oh My Pi](./user/providers-oh-my-pi.md) ·
+  [Antigravity](./user/providers-antigravity.md) · [Antigravity CLI](./user/providers-antigravity-cli.md)
 
 Mobile app: [apps/mobile/README.md](../apps/mobile/README.md)
 

@@ -20,6 +20,7 @@ import { makeTurnCommandMetadata, type TurnCommandMetadata } from "../../lib/com
 import { buildProjectThreadStartTurnInput } from "../../lib/projectThreadStartTurn";
 import { randomHex } from "../../lib/uuid";
 import { isModelSelectionUnavailable } from "../../lib/modelOptions";
+import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { scheduleUnusedComposerAttachmentCleanup } from "../../state/use-composer-drafts";
 import { setPendingConnectionError } from "../../state/use-remote-environment-registry";
@@ -127,6 +128,11 @@ export function useCreateProjectThread() {
       const provider = serverConfig?.providers.find(
         (candidate) => candidate.instanceId === input.modelSelection.instanceId,
       );
+      const modeError = getProviderRuntimeModeBlockReason(provider, input.runtimeMode);
+      if (modeError) {
+        setPendingConnectionError(modeError);
+        return AsyncResult.failure(Cause.fail(new Error(modeError)));
+      }
 
       const result = await startTurn({
         environmentId: input.project.environmentId,

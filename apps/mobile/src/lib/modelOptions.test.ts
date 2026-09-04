@@ -13,19 +13,22 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
-  it("labels the built-in Oh My Pi instance and default model", () => {
+  it.each([
+    { driver: "ohMyPi", label: "Oh My Pi", defaultModel: "default" },
+    { driver: "antigravityCli", label: "Antigravity CLI", defaultModel: "antigravity-cli-default" },
+  ])("labels the built-in $label instance and default model", ({ driver, label, defaultModel }) => {
     const config = {
       providers: [
         {
-          instanceId: "ohMyPi",
-          driver: "ohMyPi",
+          instanceId: driver,
+          driver,
           enabled: true,
           installed: true,
           auth: { status: "unknown" },
           models: [
             {
-              slug: "default",
-              name: "default",
+              slug: defaultModel,
+              name: defaultModel,
               isCustom: false,
               isDefault: true,
               capabilities: null,
@@ -38,8 +41,8 @@ describe("mobile model options", () => {
     expect(buildModelOptions(config, null)).toMatchObject([
       {
         label: "Default",
-        providerLabel: "Oh My Pi",
-        providerDriver: "ohMyPi",
+        providerLabel: label,
+        providerDriver: driver,
         isDefault: true,
       },
     ]);

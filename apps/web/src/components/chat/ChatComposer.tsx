@@ -164,6 +164,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -902,6 +903,8 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
+  supportedRuntimeModes?: ReadonlyArray<RuntimeMode> | undefined;
+  runtimeModeBlockReason?: string | null | undefined;
   size?: "sm" | "xs";
   onToggleInteractionMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -965,7 +968,14 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
       <Tooltip>
         <Select
           value={props.runtimeMode}
-          onValueChange={(value) => props.onRuntimeModeChange(value!)}
+          onValueChange={(value) => {
+            if (
+              value &&
+              (props.supportedRuntimeModes === undefined ||
+                props.supportedRuntimeModes.includes(value))
+            )
+              props.onRuntimeModeChange(value);
+          }}
         >
           <TooltipTrigger
             render={
@@ -980,25 +990,46 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
             <SelectValue>{runtimeModeOption.label}</SelectValue>
           </TooltipTrigger>
           <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
-            {runtimeModeOptions.map((mode) => {
-              const option = runtimeModeConfig[mode];
-              const OptionIcon = option.icon;
-              return (
-                <SelectItem key={mode} value={mode} hideIndicator className="min-w-64 py-2">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid min-w-0 flex-1 gap-0.5">
-                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                        <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        {option.label}
-                      </span>
-                      <span className="text-muted-foreground text-xs leading-4">
-                        {option.description}
-                      </span>
+            {props.runtimeModeBlockReason ? (
+              <p className="max-w-72 px-2 py-1.5 text-xs text-muted-foreground">
+                {props.runtimeModeBlockReason}
+              </p>
+            ) : null}
+            {runtimeModeOptions
+              .filter(
+                (mode) =>
+                  props.supportedRuntimeModes === undefined ||
+                  props.supportedRuntimeModes.includes(mode) ||
+                  mode === props.runtimeMode,
+              )
+              .map((mode) => {
+                const option = runtimeModeConfig[mode];
+                const OptionIcon = option.icon;
+                return (
+                  <SelectItem
+                    key={mode}
+                    value={mode}
+                    disabled={
+                      props.supportedRuntimeModes !== undefined &&
+                      !props.supportedRuntimeModes.includes(mode)
+                    }
+                    hideIndicator
+                    className="min-w-64 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="grid min-w-0 flex-1 gap-0.5">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                          <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                          {option.label}
+                        </span>
+                        <span className="text-muted-foreground text-xs leading-4">
+                          {option.description}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </SelectItem>
-              );
-            })}
+                  </SelectItem>
+                );
+              })}
           </SelectPopup>
         </Select>
         <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
@@ -1586,10 +1617,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectModelSelection: activeProjectDefaultModelSelection,
     settings,
   });
-  const providerSendBlockReason = getAntigravitySendBlockReason(
+  const runtimeModeBlockReason = getProviderRuntimeModeBlockReason(
     selectedProviderEntry?.snapshot,
-    selectedModel,
+    runtimeMode,
   );
+  const providerSendBlockReason =
+    runtimeModeBlockReason ??
+    (selectedProvider === "antigravityCli" && composerImages.length > 0
+      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
+      : null) ??
+    (selectedProvider === "antigravityCli" && phase === "running"
+      ? "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft."
+      : null) ??
+    getAntigravitySendBlockReason(selectedProviderEntry?.snapshot, selectedModel);
   const sendDisabledReason =
     externalSendDisabledReason ??
     (activePendingProgress ? null : (attachmentBlockReason ?? providerSendBlockReason));
@@ -3742,6 +3782,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           showInteractionModeToggle={planModeUiEnabled}
           interactionMode={interactionMode}
           runtimeMode={runtimeMode}
+          supportedRuntimeModes={selectedProviderEntry?.snapshot.supportedRuntimeModes}
+          runtimeModeBlockReason={runtimeModeBlockReason}
           size={composerControlsInStrip ? "xs" : "sm"}
           onToggleInteractionMode={toggleInteractionMode}
           onRuntimeModeChange={handleRuntimeModeChange}
@@ -3820,6 +3862,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         <CompactComposerControlsMenu
           interactionMode={interactionMode}
           runtimeMode={runtimeMode}
+          supportedRuntimeModes={selectedProviderEntry?.snapshot.supportedRuntimeModes}
+          runtimeModeBlockReason={runtimeModeBlockReason}
           showInteractionModeToggle={planModeUiEnabled}
           traitsMenuContent={providerTraitsMenuContent}
           onToggleInteractionMode={toggleInteractionMode}
@@ -3860,6 +3904,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               <CompactComposerControlsMenu
                 interactionMode={interactionMode}
                 runtimeMode={runtimeMode}
+                supportedRuntimeModes={selectedProviderEntry?.snapshot.supportedRuntimeModes}
+                runtimeModeBlockReason={runtimeModeBlockReason}
                 size="xs"
                 hidden={hiddenRestingBlockIds.length === 0}
                 showInteractionModeToggle={

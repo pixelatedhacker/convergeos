@@ -612,6 +612,25 @@ export const OhMyPiSettings = makeProviderSettingsSchema(
 );
 export type OhMyPiSettings = typeof OhMyPiSettings.Type;
 
+export const AntigravityCliSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("agy").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description:
+          "Path to the Antigravity CLI binary. Sign in with agy on the host first. CLI sessions require Full access; interactive approvals are unavailable.",
+        providerSettingsForm: { placeholder: "agy", clearWhenEmpty: "omit" },
+      }),
+    ),
+  },
+  { order: ["binaryPath"] },
+);
+export type AntigravityCliSettings = typeof AntigravityCliSettings.Type;
+
 /**
  * Antigravity ACP auth methods. Personal and Enterprise open a Google sign-in
  * in the browser. The API key and Agent Platform methods take credentials from
@@ -925,6 +944,7 @@ export const ServerSettings = Schema.Struct({
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     ohMyPi: OhMyPiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    antigravityCli: AntigravityCliSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     antigravity: AntigravitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -1077,6 +1097,11 @@ const OhMyPiSettingsPatch = Schema.Struct({
   binaryPath: Schema.optionalKey(TrimmedString),
 });
 
+const AntigravityCliSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+});
+
 const AntigravitySettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   authMethod: Schema.optionalKey(AntigravityAuthMethod),
@@ -1141,6 +1166,7 @@ export const ServerSettingsPatch = Schema.Struct({
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
       ohMyPi: Schema.optionalKey(OhMyPiSettingsPatch),
+      antigravityCli: Schema.optionalKey(AntigravityCliSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       antigravity: Schema.optionalKey(AntigravitySettingsPatch),
     }),

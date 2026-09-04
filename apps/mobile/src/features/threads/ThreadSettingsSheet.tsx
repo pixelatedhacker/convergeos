@@ -70,6 +70,10 @@ import {
 } from "../layout/native-mail-search-toolbar";
 import { RUNTIME_MODE_CHOICES, selectableChoices } from "./thread-settings-options";
 import {
+  getProviderRuntimeModeBlockReason,
+  supportsProviderRuntimeMode,
+} from "@t3tools/client-runtime/providerRuntimeModes";
+import {
   canCommitPendingModel,
   modelMatchesCatalogQuery,
   pendingModelAfterPress,
@@ -500,7 +504,7 @@ function ThreadSettingsSessionProvider(
   const value = useMemo<ThreadSettingsSessionValue>(
     () => ({
       environmentId: props.environmentId,
-      providerInstanceId: props.providerInstanceId,
+      providerInstanceId: props.providerInstanceId ?? props.selectedModel?.instanceId,
       providerGroups: props.providerGroups,
       runtimeMode: props.runtimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
@@ -531,6 +535,7 @@ function ThreadSettingsSessionProvider(
       isDisplayed,
       props.environmentId,
       props.providerInstanceId,
+      props.selectedModel?.instanceId,
       pendingModel,
       pressModel,
       providerFilter,
@@ -928,6 +933,11 @@ function ThreadSettingsChoiceContent(props: {
 }) {
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
+  const config = useAtomValue(serverEnvironment.configValueAtom(session.environmentId));
+  const provider = config?.providers.find(
+    (entry) => entry.instanceId === session.providerInstanceId,
+  );
+  const runtimeModeBlockReason = getProviderRuntimeModeBlockReason(provider, session.runtimeMode);
   const descriptorId = props.submenu.kind === "descriptor" ? props.submenu.id : null;
 
   const activeDescriptor =
@@ -940,7 +950,9 @@ function ThreadSettingsChoiceContent(props: {
   const submenuContent =
     props.submenu.kind === "runtime"
       ? {
-          rows: RUNTIME_MODE_CHOICES.map((choice) => ({
+          rows: RUNTIME_MODE_CHOICES.filter((choice) =>
+            supportsProviderRuntimeMode(provider, choice.mode),
+          ).map((choice) => ({
             id: choice.mode,
             label: choice.label,
             description: choice.description,
@@ -983,6 +995,9 @@ function ThreadSettingsChoiceContent(props: {
       contentInsetAdjustmentBehavior="automatic"
       showsVerticalScrollIndicator={false}
     >
+      {props.submenu.kind === "runtime" && runtimeModeBlockReason ? (
+        <Text className="pb-3 text-sm text-foreground-muted">{runtimeModeBlockReason}</Text>
+      ) : null}
       <View className="overflow-hidden rounded-2xl bg-card">
         {submenuContent.rows.map((row, index) => (
           <ChoiceRow

@@ -1,5 +1,6 @@
 import {
   AntigravitySettings,
+  AntigravityCliSettings,
   ClaudeSettings,
   CodexSettings,
   CursorSettings,
@@ -90,6 +91,13 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     label: "Antigravity",
     icon: AntigravityIcon,
     settingsSchema: AntigravitySettings,
+  },
+  {
+    value: ProviderDriverKind.make("antigravityCli"),
+    label: "Antigravity CLI",
+    icon: AntigravityIcon,
+    badgeLabel: "Early Access",
+    settingsSchema: AntigravityCliSettings,
   },
 ];
 

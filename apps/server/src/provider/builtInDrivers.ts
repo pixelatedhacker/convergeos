@@ -27,6 +27,10 @@ import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver.ts";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver.ts";
 import { AntigravityDriver, type AntigravityDriverEnv } from "./Drivers/AntigravityDriver.ts";
 import { OhMyPiDriver, type OhMyPiDriverEnv } from "./Drivers/OhMyPiDriver.ts";
+import {
+  AntigravityCliDriver,
+  type AntigravityCliDriverEnv,
+} from "./Drivers/AntigravityCliDriver.ts";
 import type { AnyProviderDriver } from "./ProviderDriver.ts";
 
 /**
@@ -41,7 +45,8 @@ export type BuiltInDriversEnv =
   | GrokDriverEnv
   | OpenCodeDriverEnv
   | AntigravityDriverEnv
-  | OhMyPiDriverEnv;
+  | OhMyPiDriverEnv
+  | AntigravityCliDriverEnv;
 
 /**
  * Ordered list of built-in drivers. Order matters only for tie-breaking in
@@ -56,4 +61,5 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   OpenCodeDriver,
   AntigravityDriver,
   OhMyPiDriver,
+  AntigravityCliDriver,
 ];

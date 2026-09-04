@@ -148,6 +148,8 @@ export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
 export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
 /** Keep the official Antigravity session's current model. Never send this ID to ACP. */
 export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default";
+/** Omit the model flag and use the native CLI's configured default. */
+export const ANTIGRAVITY_CLI_DEFAULT_MODEL = "antigravity-cli-default";
 /** Keep Oh My Pi's current session model. Never send this ID to ACP. */
 export const OH_MY_PI_DEFAULT_MODEL = "default";
 export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
@@ -160,6 +162,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [GROK_DRIVER_KIND]: "grok-build",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [ProviderDriverKind.make("antigravity")]: ANTIGRAVITY_DEFAULT_MODEL,
+  [ProviderDriverKind.make("antigravityCli")]: ANTIGRAVITY_CLI_DEFAULT_MODEL,
   [OH_MY_PI_DRIVER_KIND]: OH_MY_PI_DEFAULT_MODEL,
 };
 
@@ -210,4 +213,5 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [GROK_DRIVER_KIND]: "Grok",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [OH_MY_PI_DRIVER_KIND]: "Oh My Pi",
+  [ProviderDriverKind.make("antigravityCli")]: "Antigravity CLI",
 };

@@ -39,6 +39,7 @@ import {
   resolveThreadOutboxDispatchStep,
   resolveThreadOutboxFailureAction,
   resolveQueuedThreadSettings,
+  queuedProviderInputBlockReason,
   shouldRetryThreadOutboxDelivery,
   threadOutboxRetryDelayMs,
   type QueuedThreadCreation,
@@ -637,6 +638,15 @@ export function useThreadOutboxDrain(): void {
       );
       if (!serverConfig) return false;
       const settings = resolveQueuedThreadSettings(queuedMessage, thread, serverConfig.providers);
+      const inputError = queuedProviderInputBlockReason({
+        provider: serverConfig.providers.find(
+          (entry) => entry.instanceId === settings.modelSelection.instanceId,
+        ),
+        runtimeMode: settings.runtimeMode,
+        attachments: queuedMessage.attachments,
+        threadBusy: thread.session?.status === "running" || thread.session?.status === "starting",
+      });
+      if (inputError) return restoreQueuedMessage(queuedMessage, inputError);
       if (isModelSelectionUnavailable(serverConfig, settings.modelSelection)) {
         return restoreQueuedMessage(
           queuedMessage,
@@ -741,6 +751,21 @@ export function useThreadOutboxDrain(): void {
         settings,
         currentConfig.providers,
       );
+      const currentThread = findThread(
+        appAtomRegistry.get(environmentThreadShells.threadShellsAtom),
+        persistedMessage,
+      );
+      const currentInputError = queuedProviderInputBlockReason({
+        provider: currentConfig.providers.find(
+          (entry) => entry.instanceId === sendSettings.modelSelection.instanceId,
+        ),
+        runtimeMode: sendSettings.runtimeMode,
+        attachments: persistedMessage.attachments,
+        threadBusy:
+          currentThread?.session?.status === "running" ||
+          currentThread?.session?.status === "starting",
+      });
+      if (currentInputError) return restoreQueuedMessage(persistedMessage, currentInputError);
       const deliveryResult = await startTurn({
         environmentId: queuedMessage.environmentId,
         input: {
@@ -812,6 +837,15 @@ export function useThreadOutboxDrain(): void {
         },
         serverConfig.providers,
       );
+      const inputError = queuedProviderInputBlockReason({
+        provider: serverConfig.providers.find(
+          (entry) => entry.instanceId === settings.modelSelection.instanceId,
+        ),
+        runtimeMode: settings.runtimeMode,
+        attachments: queuedMessage.attachments,
+        threadBusy: false,
+      });
+      if (inputError) return restoreQueuedMessage(queuedMessage, inputError);
       if (isModelSelectionUnavailable(serverConfig, settings.modelSelection)) {
         return restoreQueuedMessage(
           queuedMessage,
@@ -867,6 +901,15 @@ export function useThreadOutboxDrain(): void {
         settings,
         currentConfig.providers,
       );
+      const currentInputError = queuedProviderInputBlockReason({
+        provider: currentConfig.providers.find(
+          (entry) => entry.instanceId === sendSettings.modelSelection.instanceId,
+        ),
+        runtimeMode: sendSettings.runtimeMode,
+        attachments: persistedMessage.attachments,
+        threadBusy: false,
+      });
+      if (currentInputError) return restoreQueuedMessage(persistedMessage, currentInputError);
       const deliveryResult = await startTurn({
         environmentId: queuedMessage.environmentId,
         input: buildProjectThreadStartTurnInput({
