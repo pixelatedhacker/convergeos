@@ -36,3 +36,20 @@ it.effect("reports the scoped credential context when preview capability is unav
     expect(error.message).toBe("MCP credential does not grant the preview capability.");
   });
 });
+
+it.effect("denies subscription usage without the explicit capability", () =>
+  Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireUsageCapability().pipe(Effect.flip);
+    expect(error._tag).toBe("SubscriptionQuotaMcpUnavailableError");
+    expect(error.capability).toBe("usage.read");
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, {
+      environmentId: EnvironmentId.make("environment-usage"),
+      threadId: ThreadId.make("thread-usage"),
+      providerSessionId: "provider-session-mcp-test",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      capabilities: new Set(["preview"] as const),
+      issuedAt: 1,
+    }),
+  ),
+);

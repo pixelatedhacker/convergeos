@@ -1,13 +1,14 @@
 import {
   type EnvironmentId,
   PreviewAutomationUnavailableError,
+  SubscriptionQuotaMcpUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview";
+export type McpCapability = "preview" | "usage.read";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
@@ -24,12 +25,26 @@ export class McpInvocationContext extends Context.Service<
 >()("t3/mcp/McpInvocationContext") {}
 
 export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function* (
-  capability: McpCapability,
+  capability: "preview",
 ) {
   const invocation = yield* McpInvocationContext;
   if (!invocation.capabilities.has(capability)) {
     return yield* new PreviewAutomationUnavailableError({
       capability,
+      environmentId: invocation.environmentId,
+      threadId: invocation.threadId,
+      providerSessionId: invocation.providerSessionId,
+      providerInstanceId: invocation.providerInstanceId,
+    });
+  }
+  return invocation;
+});
+
+export const requireUsageCapability = Effect.fn("mcp.requireUsageCapability")(function* () {
+  const invocation = yield* McpInvocationContext;
+  if (!invocation.capabilities.has("usage.read")) {
+    return yield* new SubscriptionQuotaMcpUnavailableError({
+      capability: "usage.read",
       environmentId: invocation.environmentId,
       threadId: invocation.threadId,
       providerSessionId: invocation.providerSessionId,
