@@ -79,6 +79,13 @@ describe("ProviderSettingsForm helpers", () => {
     expect(deriveProviderSettingsFields(ohMyPi).map((field) => field.key)).toEqual(["binaryPath"]);
   });
 
+  it("uses CLI configuration fields separately from Antigravity ACP auth", () => {
+    const cli = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("antigravityCli")];
+    if (!cli) throw new Error("Antigravity CLI definition is missing");
+    expect(cli.label).toBe("Antigravity CLI");
+    expect(deriveProviderSettingsFields(cli).map((field) => field.key)).toEqual(["binaryPath"]);
+  });
+
   it("preserves unknown config keys while omitting empty configurable fields", () => {
     const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
     expect(opencode).toBeDefined();

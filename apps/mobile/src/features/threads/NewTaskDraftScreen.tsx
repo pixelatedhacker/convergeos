@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
+import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import {
   CommonActions,
   StackActions,
@@ -178,6 +179,18 @@ export function NewTaskDraftScreen(props: {
       (environment) => environment.environmentId === selectedProject.environmentId,
     )?.connectionState === "connected";
   const modelUnavailable = environmentConnected && flow.selectedModelOption?.isUnavailable === true;
+  const activeProvider = selectedEnvironmentServerConfig?.providers.find(
+    (entry) => entry.instanceId === flow.selectedModel?.instanceId,
+  );
+  const providerModeBlockReason = getProviderRuntimeModeBlockReason(
+    activeProvider,
+    flow.runtimeMode,
+  );
+  const cliAttachmentBlockReason =
+    activeProvider?.driver === "antigravityCli" &&
+    flow.attachments.some((attachment) => attachment.type === "image")
+      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
+      : null;
   const uploadStates = useAtomValue(composerAttachmentUploadsAtom);
   const attachmentBlockReason = selectedProject
     ? composerAttachmentUploadBlockReason({
@@ -887,6 +900,24 @@ export function NewTaskDraftScreen(props: {
       flow.planModeEnabled ? (draft.interactionMode ?? flow.interactionMode) : "default",
     );
     const initialMessageText = draft.text.trim();
+    const provider = selectedEnvironmentServerConfig?.providers.find(
+      (entry) => entry.instanceId === modelSelection?.instanceId,
+    );
+    const modeError = getProviderRuntimeModeBlockReason(provider, runtimeMode);
+    if (modeError) {
+      Alert.alert("Access mode unavailable", modeError);
+      return;
+    }
+    if (
+      provider?.driver === "antigravityCli" &&
+      draft.attachments.some((attachment) => attachment.type === "image")
+    ) {
+      Alert.alert(
+        "Images unavailable",
+        "Antigravity CLI accepts text only. Remove image attachments to continue.",
+      );
+      return;
+    }
 
     if (
       attachmentBlockReason !== null ||
@@ -1055,6 +1086,8 @@ export function NewTaskDraftScreen(props: {
   const isAndroid = Platform.OS === "android";
   const canStart =
     attachmentBlockReason === null &&
+    providerModeBlockReason === null &&
+    cliAttachmentBlockReason === null &&
     !modelUnavailable &&
     Boolean(flow.selectedProject) &&
     Boolean(flow.selectedModel) &&
@@ -1248,6 +1281,19 @@ export function NewTaskDraftScreen(props: {
         </View>
       ) : null}
       <View className="pb-1">{workspaceControls}</View>
+
+      {providerModeBlockReason || cliAttachmentBlockReason ? (
+        <Pressable
+          accessibilityRole="button"
+          className="px-3 py-2"
+          disabled={isComposerInteractionLocked}
+          onPress={settingsSheetPresentation.open}
+        >
+          <Text className="text-xs text-foreground">
+            {providerModeBlockReason ?? cliAttachmentBlockReason}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {modelUnavailable ? (
         <Pressable

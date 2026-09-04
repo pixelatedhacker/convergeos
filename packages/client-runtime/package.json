@@ -71,6 +71,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./providerRuntimeModes": {
+      "types": "./src/providerRuntimeModes.ts",
+      "default": "./src/providerRuntimeModes.ts"
+    },
     "./voice-input": {
       "types": "./src/voice-input/index.ts",
       "default": "./src/voice-input/index.ts"

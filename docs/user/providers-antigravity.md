@@ -1,5 +1,7 @@
 # Antigravity
 
+For the separately installed `agy` command, use the [Antigravity CLI provider](./providers-antigravity-cli.md).
+
 T3 Code runs Google's official Antigravity ACP agent. By default it signs in with your personal
 Google account and uses that account's Antigravity access, including access provided by a
 Google AI subscription. It never falls back to a different sign-in method than the one you

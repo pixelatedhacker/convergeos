@@ -37,6 +37,10 @@ answers and do not accept custom text.
 Oh My Pi maps **Supervised** and **Auto** to `always-ask`, **Auto-accept edits** to `write`, and
 **Full access** to `yolo`. T3 Code still shows any permission request or form that Oh My Pi sends.
 
+The separate **Antigravity CLI** provider supports only **Full access**. Its headless interface
+cannot show interactive approval requests. Select the Antigravity ACP provider for supervised
+work. See [Antigravity CLI](./providers-antigravity-cli.md).
+
 ## Choosing a Mode
 
 Use **Full access** for work in a worktree or a sandbox you can throw away.
@@ -56,7 +60,7 @@ threads do the same: **Supervised** starts Grok in ask mode even if your Grok CL
 set to always-approve, and **Full access** starts Grok with always-approve. The labels above
 describe what you get; the exact per-provider translation is internal and may change.
 
-Mobile offers the same four modes with the same labels and descriptions.
+Mobile uses the same mode labels and descriptions. Providers can limit which modes are available.
 
 Antigravity's native `/plan` command requests a plan. It does not change the permission mode.
 T3 Code's separate Plan mode control is not available for Antigravity. See

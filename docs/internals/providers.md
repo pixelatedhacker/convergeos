@@ -7,17 +7,18 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
+[`builtInDrivers.ts`][drivers] exports the built-in drivers:
 
-| Driver kind   | Driver source                                 |
-| ------------- | --------------------------------------------- |
-| `codex`       | [`Drivers/CodexDriver.ts`][codex]             |
-| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]           |
-| `cursor`      | [`Drivers/CursorDriver.ts`][cursor]           |
-| `grok`        | [`Drivers/GrokDriver.ts`][grok]               |
-| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]       |
-| `antigravity` | [`Drivers/AntigravityDriver.ts`][antigravity] |
-| `ohMyPi`      | [`Drivers/OhMyPiDriver.ts`][oh-my-pi]         |
+| Driver kind      | Driver source                                        |
+| ---------------- | ---------------------------------------------------- |
+| `codex`          | [`Drivers/CodexDriver.ts`][codex]                    |
+| `claudeAgent`    | [`Drivers/ClaudeDriver.ts`][claude]                  |
+| `cursor`         | [`Drivers/CursorDriver.ts`][cursor]                  |
+| `grok`           | [`Drivers/GrokDriver.ts`][grok]                      |
+| `opencode`       | [`Drivers/OpenCodeDriver.ts`][opencode]              |
+| `antigravity`    | [`Drivers/AntigravityDriver.ts`][antigravity]        |
+| `ohMyPi`         | [`Drivers/OhMyPiDriver.ts`][oh-my-pi]                |
+| `antigravityCli` | [`Drivers/AntigravityCliDriver.ts`][antigravity-cli] |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
 adapter in a child scope. Adapter implementations live beside them in
@@ -76,6 +77,37 @@ The adapter advertises form elicitation but not ACP filesystem or terminal capab
 ACP permission requests and form questions into the existing canonical request events. The
 project-scoped MCP server is passed as an authenticated HTTP server when the session starts. Native
 credentials, MCP authorization, subprocesses, and protocol logs never leave the environment host.
+
+## Antigravity CLI ownership and protocol
+
+`antigravityCli` runs the native `agy` executable. It is separate from the ACP `antigravity`
+driver, including its continuation identity and cursor format. The instance uses the host's CLI
+credentials and configuration. There is no T3-managed CLI installation or sign-in profile.
+
+The adapter owns one subprocess for each turn. It sends a single text prompt through NDJSON
+stdin, closes stdin, and consumes `init`, `step_update`, and `result` events. The native
+conversation ID is stored in the resume cursor before `sendTurn` returns. Later turns use
+`--conversation` with that ID, so model selection can change without losing history. Catalog
+model IDs can encode effort levels; the adapter does not add a separate `--effort` override.
+Cancellation closes only the active turn's owned process. The adapter rejects concurrent sends.
+
+Native result usage is cumulative across resumed processes. Per-turn usage comes from the
+current turn's deduplicated step counters. Cumulative results remain native diagnostic data;
+they must not be presented as context-window occupancy or charged as new tokens on every turn.
+
+The snapshot advertises `supportedRuntimeModes: ["full-access"]`. Old providers omit this
+optional capability and retain all modes. Clients preserve incompatible saved modes until the
+user changes them. The adapter validates the mode too, including requests from older clients.
+It never simulates interactive approvals or sends unsupported CLI control messages.
+
+`agy models` supplies tab-separated model slugs and labels. Discovery has bounded output and a
+deadline. Catalog success does not prove authenticated model access, and version stays unknown
+when the CLI does not expose a supported version command. The local default-model marker is
+never passed to `--model`.
+
+Images, Plan mode, conversation rollback, system text generation, and automatic project MCP
+injection are unsupported. The CLI can use MCP servers already present in its own configuration.
+The integration does not modify that configuration.
 
 ## Antigravity ownership and protocol
 
@@ -355,6 +387,7 @@ when a request opens (approval) or user input is requested, via
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [antigravity]: ../../apps/server/src/provider/Drivers/AntigravityDriver.ts
+[antigravity-cli]: ../../apps/server/src/provider/Drivers/AntigravityCliDriver.ts
 [oh-my-pi]: ../../apps/server/src/provider/Drivers/OhMyPiDriver.ts
 [antigravity-adapter]: ../../apps/server/src/provider/Layers/AntigravityAdapter.ts
 [antigravity-provider]: ../../apps/server/src/provider/Layers/AntigravityProvider.ts

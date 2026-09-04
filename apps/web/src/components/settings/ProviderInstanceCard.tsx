@@ -477,7 +477,9 @@ export function ProviderInstanceCard({
   const visibleTab = driverOption === undefined ? "configuration" : activeTab;
 
   const customModels =
-    instance.driver === "antigravity" || instance.driver === "ohMyPi"
+    instance.driver === "antigravity" ||
+    instance.driver === "ohMyPi" ||
+    instance.driver === "antigravityCli"
       ? []
       : readConfigStringArray(instance.config, "customModels");
   // Server-returned models may lag behind settings writes. Treat probe

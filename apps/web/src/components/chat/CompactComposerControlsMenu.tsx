@@ -1,4 +1,5 @@
 import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import { RUNTIME_MODE_LABELS } from "@t3tools/client-runtime/providerRuntimeModes";
 import { memo, type ReactNode, useState } from "react";
 import { EllipsisIcon } from "lucide-react";
 import {
@@ -15,6 +16,8 @@ import { composerFloatingLayerProps } from "./composerEventScope";
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
+  supportedRuntimeModes?: ReadonlyArray<RuntimeMode> | undefined;
+  runtimeModeBlockReason?: string | null | undefined;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
   size?: "sm" | "xs";
@@ -77,17 +80,44 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
           </>
         ) : null}
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
+        {props.runtimeModeBlockReason ? (
+          <p className="max-w-72 px-2 py-1.5 text-xs text-muted-foreground">
+            {props.runtimeModeBlockReason}
+          </p>
+        ) : null}
         <MenuRadioGroup
           value={props.runtimeMode}
           onValueChange={(value) => {
             if (!value || value === props.runtimeMode) return;
-            props.onRuntimeModeChange(value as RuntimeMode);
+            const mode = RuntimeMode.literals.find((mode) => mode === value);
+            if (
+              mode &&
+              (props.supportedRuntimeModes === undefined ||
+                props.supportedRuntimeModes.includes(mode))
+            ) {
+              props.onRuntimeModeChange(mode);
+            }
           }}
         >
-          <MenuRadioItem value="approval-required">Supervised</MenuRadioItem>
-          <MenuRadioItem value="auto-accept-edits">Auto-accept edits</MenuRadioItem>
-          <MenuRadioItem value="auto">Auto</MenuRadioItem>
-          <MenuRadioItem value="full-access">Full access</MenuRadioItem>
+          {RuntimeMode.literals
+            .filter(
+              (mode) =>
+                props.supportedRuntimeModes === undefined ||
+                props.supportedRuntimeModes.includes(mode) ||
+                mode === props.runtimeMode,
+            )
+            .map((mode) => (
+              <MenuRadioItem
+                key={mode}
+                value={mode}
+                disabled={
+                  props.supportedRuntimeModes !== undefined &&
+                  !props.supportedRuntimeModes.includes(mode)
+                }
+              >
+                {RUNTIME_MODE_LABELS[mode]}
+              </MenuRadioItem>
+            ))}
         </MenuRadioGroup>
       </MenuPopup>
     </Menu>

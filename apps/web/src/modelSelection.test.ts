@@ -355,6 +355,11 @@ describe("instance-scoped model selection", () => {
       availableModel: "anthropic/claude-sonnet-4",
       missingModel: "openai/gpt-5.4",
     },
+    {
+      driverName: "antigravityCli",
+      availableModel: "gemini-3.8-flash-high",
+      missingModel: "gemini-3.8-flash-medium",
+    },
   ])("$driverName catalog gaps", ({ driverName, availableModel, missingModel }) => {
     it("preserves a selected model when a catalog refresh no longer contains it", () => {
       const providers = [

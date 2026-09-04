@@ -10,6 +10,7 @@ import type {
 } from "@t3tools/contracts";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
+import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import {
   memo,
   useCallback,
@@ -335,6 +336,21 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
   const composerOwnerKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  const providerModeBlockReason = getProviderRuntimeModeBlockReason(
+    selectedProviderStatus,
+    currentRuntimeMode,
+  );
+  const cliAttachmentBlockReason =
+    selectedProviderStatus?.driver === "antigravityCli" &&
+    props.draftAttachments.some((attachment) => attachment.type === "image")
+      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
+      : null;
+  const cliBusyBlockReason =
+    selectedProviderStatus?.driver === "antigravityCli" &&
+    (props.selectedThread.session?.status === "running" ||
+      props.selectedThread.session?.status === "starting")
+      ? "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft."
+      : null;
 
   const composerMenu = useComposerCommandMenu({
     draftMessage: props.draftMessage,
@@ -377,6 +393,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     hasContent &&
     !voiceInput.blocksSubmission &&
     attachmentBlockReason === null &&
+    providerModeBlockReason === null &&
+    cliAttachmentBlockReason === null &&
+    cliBusyBlockReason === null &&
     !modelUnavailable;
 
   // Keep the feed inset aligned with the card or compact dictation strip.
@@ -593,6 +612,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         {modelUnavailable ? (
           <Pressable accessibilityRole="button" className="px-3 py-2" onPress={openSettings}>
             <Text className="text-xs text-foreground">Model unavailable. Open model settings.</Text>
+          </Pressable>
+        ) : null}
+
+        {providerModeBlockReason || cliAttachmentBlockReason || cliBusyBlockReason ? (
+          <Pressable accessibilityRole="button" className="px-3 py-2" onPress={openSettings}>
+            <Text className="text-xs text-foreground">
+              {providerModeBlockReason ?? cliAttachmentBlockReason ?? cliBusyBlockReason}
+            </Text>
           </Pressable>
         ) : null}
 

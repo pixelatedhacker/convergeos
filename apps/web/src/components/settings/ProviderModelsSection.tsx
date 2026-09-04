@@ -202,7 +202,8 @@ export function ProviderModelsSection({
   }, [displayModels]);
 
   const handleAdd = () => {
-    if (driverKind === "antigravity" || driverKind === "ohMyPi") return;
+    if (driverKind === "antigravity" || driverKind === "ohMyPi" || driverKind === "antigravityCli")
+      return;
     const normalized = normalizeCustomModelSlug(input);
     if (!normalized) {
       setError("Enter a model slug.");
@@ -506,7 +507,9 @@ export function ProviderModelsSection({
         })}
       </div>
 
-      {driverKind === "antigravity" || driverKind === "ohMyPi" ? null : isAdding ? (
+      {driverKind === "antigravity" ||
+      driverKind === "ohMyPi" ||
+      driverKind === "antigravityCli" ? null : isAdding ? (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Input
             id={`provider-instance-${instanceId}-custom-model`}
@@ -552,7 +555,10 @@ export function ProviderModelsSection({
         </Button>
       )}
 
-      {driverKind !== "antigravity" && driverKind !== "ohMyPi" && error ? (
+      {driverKind !== "antigravity" &&
+      driverKind !== "ohMyPi" &&
+      driverKind !== "antigravityCli" &&
+      error ? (
         <p className="mt-2 text-xs text-destructive">{error}</p>
       ) : null}
     </div>

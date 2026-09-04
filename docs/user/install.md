@@ -85,23 +85,27 @@ application files under `/mnt/c` instead and reinstalls the runtime on the next 
 T3 Code uses provider runtimes but does not bundle them. Install and authenticate each
 provider's CLI, or use T3 Code's managed setup for Antigravity.
 
-| Provider    | CLI                                                                                                        | Default binary     | Log in with                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------- |
-| Codex       | [Codex CLI](https://developers.openai.com/codex/cli)                                                       | `codex`            | `codex login`                      |
-| Claude      | [Claude Code](https://claude.com/product/claude-code)                                                      | `claude`           | `claude auth login`                |
-| Cursor      | [Cursor CLI](https://cursor.com/cli)                                                                       | `cursor-agent`     | `agent login`                      |
-| Grok Build  | [Grok Build CLI](https://x.ai/cli)                                                                         | `grok`             | `grok login`                       |
-| OpenCode    | [OpenCode](https://opencode.ai)                                                                            | `opencode`         | `opencode auth login`              |
-| Oh My Pi    | [Oh My Pi](https://github.com/can1357/oh-my-pi)                                                            | `omp`              | Run `omp`                          |
-| Antigravity | [Official ACP agent](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json) | Managed by T3 Code | **Sign in with Google** in T3 Code |
+| Provider        | CLI                                                                                                        | Default binary     | Log in with                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------- |
+| Codex           | [Codex CLI](https://developers.openai.com/codex/cli)                                                       | `codex`            | `codex login`                      |
+| Claude          | [Claude Code](https://claude.com/product/claude-code)                                                      | `claude`           | `claude auth login`                |
+| Cursor          | [Cursor CLI](https://cursor.com/cli)                                                                       | `cursor-agent`     | `agent login`                      |
+| Grok Build      | [Grok Build CLI](https://x.ai/cli)                                                                         | `grok`             | `grok login`                       |
+| OpenCode        | [OpenCode](https://opencode.ai)                                                                            | `opencode`         | `opencode auth login`              |
+| Oh My Pi        | [Oh My Pi](https://github.com/can1357/oh-my-pi)                                                            | `omp`              | Run `omp`                          |
+| Antigravity     | [Official ACP agent](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json) | Managed by T3 Code | **Sign in with Google** in T3 Code |
+| Antigravity CLI | [Antigravity CLI](https://antigravity.google/docs/cli/install/)                                            | `agy`              | Run `agy`                          |
 
-Codex and Claude are on by default. Cursor, Grok Build, OpenCode, Oh My Pi, and Antigravity are
+Codex and Claude are on by default. Cursor, Grok Build, OpenCode, Oh My Pi, Antigravity, and Antigravity CLI are
 off by default. Turn them on in **Settings** > **Providers** when you want to use them.
 
 For Antigravity, select the environment in provider settings, then install and sign in there.
 The runtime and credentials stay on that environment, even when you use a phone or remote
 browser. See [Antigravity setup](./providers-antigravity.md) for Google sign-in, remote callback
 steps, and supported hosts.
+
+Antigravity CLI uses a separately installed `agy` command and the host's CLI sign-in. It supports
+Full access without interactive approvals. See [Antigravity CLI setup](./providers-antigravity-cli.md).
 
 Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
 T3 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
