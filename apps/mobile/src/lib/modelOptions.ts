@@ -1,7 +1,8 @@
-import type {
-  ModelCapabilities,
-  ModelSelection,
-  ServerConfig as T3ServerConfig,
+import {
+  OH_MY_PI_DEFAULT_MODEL,
+  type ModelCapabilities,
+  type ModelSelection,
+  type ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
 import {
   buildExplicitProviderOptionSelectionsFromDescriptors,
@@ -36,7 +37,13 @@ function providerDisplayLabel(provider: {
   if (provider.displayName) return provider.displayName;
   if (provider.driver === "codex") return "Codex";
   if (provider.driver === "claudeAgent") return "Claude";
+  if (provider.driver === "ohMyPi") return "Oh My Pi";
   return provider.instanceId;
+}
+
+function modelDisplayLabel(driver: string, slug: string, name: string | undefined): string {
+  if (driver === "ohMyPi" && slug === OH_MY_PI_DEFAULT_MODEL) return "Default";
+  return name ?? slug;
 }
 
 function normalizeSelectionOptions(
@@ -168,7 +175,7 @@ export function buildModelOptions(
       const key = `${provider.instanceId}:${model.slug}`;
       options.set(key, {
         key,
-        label: model.name,
+        label: modelDisplayLabel(provider.driver, model.slug, model.name),
         subtitle: model.subProvider ?? "",
         providerKey: provider.instanceId,
         providerLabel,
@@ -215,7 +222,7 @@ export function buildModelOptions(
       });
       options.set(key, {
         key,
-        label: model?.name ?? fallbackModelSelection.model,
+        label: modelDisplayLabel(providerDriver, fallbackModelSelection.model, model?.name),
         subtitle: model?.subProvider ?? "",
         providerKey: fallbackModelSelection.instanceId,
         providerLabel,

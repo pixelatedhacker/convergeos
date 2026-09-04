@@ -250,6 +250,39 @@ describe("derivePendingApprovals", () => {
 });
 
 describe("derivePendingUserInputs", () => {
+  it("keeps free-text prompts that explicitly allow a custom answer", () => {
+    const activities = [
+      makeActivity({
+        id: "free-text-user-input",
+        kind: "user-input.requested",
+        summary: "User input requested",
+        payload: {
+          requestId: "req-free-text",
+          questions: [
+            {
+              id: "details",
+              header: "Details",
+              question: "What should the agent use?",
+              options: [],
+              allowCustomAnswer: true,
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([
+      {
+        id: "details",
+        header: "Details",
+        question: "What should the agent use?",
+        options: [],
+        allowCustomAnswer: true,
+        multiSelect: false,
+      },
+    ]);
+  });
+
   it("preserves native choice values and the custom-answer restriction", () => {
     const question = {
       id: "interaction-result",

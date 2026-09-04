@@ -18,13 +18,13 @@ there, never in the client.
 ┌──────────────────▼─────────────────────────────┐
 │ apps/server                                    │
 │  orchestration engine (event-sourced)          │
-│  provider driver registry (6 built-in drivers) │
+│  provider driver registry (7 built-in drivers) │
 │  checkpointing, VCS, terminals, filesystem     │
 └──────────────────┬─────────────────────────────┘
                    │ per-driver transport
 ┌──────────────────▼─────────────────────────────┐
 │ Agent CLIs: Codex, Claude, Cursor, Grok,       │
-│ OpenCode, Antigravity                          │
+│ OpenCode, Oh My Pi, Antigravity                │
 └────────────────────────────────────────────────┘
 ```
 
@@ -123,11 +123,11 @@ build production behavior on receipts.
 
 ## Provider drivers
 
-Six drivers ship built in, registered in [`builtInDrivers.ts`][drivers] as `BUILT_IN_DRIVERS`:
-Codex, Claude, Cursor, Grok, OpenCode, and Antigravity. A driver declares its kind and config schema and creates a
-scoped adapter; `ProviderInstanceRegistry` owns live instances and `ProviderAdapterRegistry` resolves
-an instance to its adapter, so `ProviderService` routes session and turn operations without knowing
-which agent is behind them. See [providers.md](./providers.md).
+Seven drivers ship built in, registered in [`builtInDrivers.ts`][drivers] as `BUILT_IN_DRIVERS`:
+Codex, Claude, Cursor, Grok, OpenCode, Oh My Pi, and Antigravity. A driver declares its kind and
+config schema and creates a scoped adapter. `ProviderInstanceRegistry` owns live instances and
+`ProviderAdapterRegistry` resolves an instance to its adapter, so `ProviderService` routes session
+and turn operations without knowing which agent is behind them. See [providers.md](./providers.md).
 
 ## Checkpointing
 

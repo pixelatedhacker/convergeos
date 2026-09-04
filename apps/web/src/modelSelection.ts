@@ -56,7 +56,7 @@ function readInstanceCustomModels(
   instanceId: ProviderInstanceId,
   driverKind: ProviderDriverKind,
 ): ReadonlyArray<string> {
-  if (driverKind === "antigravity") return [];
+  if (driverKind === "antigravity" || driverKind === "ohMyPi") return [];
   const instance = settings.providerInstances?.[instanceId];
   const config = instance?.config;
   if (config !== null && typeof config === "object") {
@@ -69,11 +69,13 @@ function readInstanceCustomModels(
   if (instanceId !== defaultInstanceId) {
     return [];
   }
-  const legacyProviders = settings.providers as Record<
-    string,
-    { readonly customModels: ReadonlyArray<string> } | undefined
-  >;
-  return legacyProviders[driverKind]?.customModels ?? [];
+  const legacyProviders = settings.providers as unknown as Readonly<Record<string, unknown>>;
+  const legacyProvider = legacyProviders[driverKind];
+  if (legacyProvider === null || typeof legacyProvider !== "object") return [];
+  if (!("customModels" in legacyProvider)) return [];
+  const customModels = legacyProvider.customModels;
+  if (!Array.isArray(customModels)) return [];
+  return customModels.filter((model): model is string => typeof model === "string");
 }
 
 export interface AppModelOption {
@@ -96,7 +98,9 @@ function appendUnavailableDynamicModelSelection(
   selectedModel: string | null | undefined,
   hiddenModels: ReadonlyArray<string>,
 ): AppModelOption[] {
-  if (provider !== "opencode" && provider !== "antigravity") return options;
+  if (provider !== "opencode" && provider !== "antigravity" && provider !== "ohMyPi") {
+    return options;
+  }
   const slug = normalizeCustomModelSlug(selectedModel);
   if (!slug) return options;
   if (provider === "antigravity" && slug === ANTIGRAVITY_DEFAULT_MODEL) return options;
@@ -312,7 +316,9 @@ export function resolveAppModelSelectionForInstance(
   }
   if (
     resolutionOptions?.preserveUnavailableSelection &&
-    (entry.driverKind === "opencode" || entry.driverKind === "antigravity")
+    (entry.driverKind === "opencode" ||
+      entry.driverKind === "antigravity" ||
+      entry.driverKind === "ohMyPi")
   ) {
     const unavailableSelection = normalizeCustomModelSlug(selectedModel);
     const hiddenModels = readInstanceModelPreferences(settings, entry.instanceId).hiddenModels;

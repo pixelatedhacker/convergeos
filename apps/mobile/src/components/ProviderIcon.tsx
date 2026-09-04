@@ -50,6 +50,17 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
+  if (props.provider === "ohMyPi") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          fill={mono}
+          d="M4 5.5h16v3h-2.25v8.08c0 1.18.32 1.77.96 1.77.43 0 .86-.14 1.29-.43v2.82c-.66.34-1.4.51-2.22.51-2.36 0-3.53-1.43-3.53-4.28V8.5H9.5V21H6V8.5H4v-3Z"
+        />
+      </Svg>
+    );
+  }
+
   if (props.provider === "cursor") {
     return (
       <Svg width={size} height={size} viewBox="0 0 466.73 532.09" fill="none">

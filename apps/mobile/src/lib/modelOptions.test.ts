@@ -13,6 +13,38 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
+  it("labels the built-in Oh My Pi instance and default model", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "ohMyPi",
+          driver: "ohMyPi",
+          enabled: true,
+          installed: true,
+          auth: { status: "unknown" },
+          models: [
+            {
+              slug: "default",
+              name: "default",
+              isCustom: false,
+              isDefault: true,
+              capabilities: null,
+            },
+          ],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    expect(buildModelOptions(config, null)).toMatchObject([
+      {
+        label: "Default",
+        providerLabel: "Oh My Pi",
+        providerDriver: "ohMyPi",
+        isDefault: true,
+      },
+    ]);
+  });
+
   it("groups models by provider and flags legacy entries", () => {
     const config = {
       providers: [

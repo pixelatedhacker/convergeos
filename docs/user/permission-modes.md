@@ -18,7 +18,7 @@ without prompting; commands and anything else still stop for approval.
 **Auto**: routine actions proceed without you; risky ones still ask. How this is enforced depends
 on the provider: Codex delegates routine approvals to an AI reviewer, Claude uses its own auto
 permission mode, Cursor uses Smart Auto review, and providers without an equivalent (such as
-OpenCode and Antigravity) fall back to asking, like Supervised.
+OpenCode, Oh My Pi, and Antigravity) fall back to asking, like Supervised.
 
 **Full access**: allow commands and edits without prompts. The default. The agent runs
 unattended until it finishes or asks a question of its own.
@@ -33,6 +33,9 @@ Antigravity uses its own permission policy for each mode. T3 Code still shows an
 question the official agent sends in **Full access**. A remembered approval is available only
 when the agent offers it for that action. Fixed-choice questions require one of the offered
 answers and do not accept custom text.
+
+Oh My Pi maps **Supervised** and **Auto** to `always-ask`, **Auto-accept edits** to `write`, and
+**Full access** to `yolo`. T3 Code still shows any permission request or form that Oh My Pi sends.
 
 ## Choosing a Mode
 

@@ -477,7 +477,9 @@ export function ProviderInstanceCard({
   const visibleTab = driverOption === undefined ? "configuration" : activeTab;
 
   const customModels =
-    instance.driver === "antigravity" ? [] : readConfigStringArray(instance.config, "customModels");
+    instance.driver === "antigravity" || instance.driver === "ohMyPi"
+      ? []
+      : readConfigStringArray(instance.config, "customModels");
   // Server-returned models may lag behind settings writes. Treat probe
   // models as the source for built-ins only; custom rows come directly
   // from the current instance config so add/remove reflects immediately.
