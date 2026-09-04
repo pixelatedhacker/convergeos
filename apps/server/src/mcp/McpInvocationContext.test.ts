@@ -62,3 +62,20 @@ it.effect("denies agent mesh operations without their explicit capability", () =
     });
   });
 });
+
+it.effect("denies subscription usage without the explicit capability", () =>
+  Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireUsageCapability().pipe(Effect.flip);
+    expect(error._tag).toBe("SubscriptionQuotaMcpUnavailableError");
+    expect(error.capability).toBe("usage.read");
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, {
+      environmentId: EnvironmentId.make("environment-usage"),
+      threadId: ThreadId.make("thread-usage"),
+      providerSessionId: "provider-session-mcp-test",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      capabilities: new Set(["preview"] as const),
+      issuedAt: 1,
+    }),
+  ),
+);

@@ -207,6 +207,7 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import { SubscriptionQuotaReadInput, SubscriptionQuotaReport } from "./subscriptionQuota.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -315,6 +316,7 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetSubscriptionQuota: "server.getSubscriptionQuota",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
   // Cloud environment methods
@@ -546,6 +548,12 @@ export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSumm
   payload: UsageSummaryInput,
   success: UsageSummary,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
+});
+
+export const WsServerGetSubscriptionQuotaRpc = Rpc.make(WS_METHODS.serverGetSubscriptionQuota, {
+  payload: SubscriptionQuotaReadInput,
+  success: SubscriptionQuotaReport,
+  error: EnvironmentAuthorizationError,
 });
 
 /**
@@ -1178,6 +1186,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetSubscriptionQuotaRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,

@@ -3,13 +3,19 @@ import {
   type AgentMeshOperation,
   type EnvironmentId,
   PreviewAutomationUnavailableError,
+  SubscriptionQuotaMcpUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview" | "agents.read" | "agents.send" | "agents.control";
+export type McpCapability =
+  | "preview"
+  | "usage.read"
+  | "agents.read"
+  | "agents.send"
+  | "agents.control";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
@@ -51,6 +57,20 @@ export const requireAgentCapability = Effect.fn("mcp.requireAgentCapability")(fu
       operation,
       reason: "capabilityDenied",
       targetThreadId: null,
+    });
+  }
+  return invocation;
+});
+
+export const requireUsageCapability = Effect.fn("mcp.requireUsageCapability")(function* () {
+  const invocation = yield* McpInvocationContext;
+  if (!invocation.capabilities.has("usage.read")) {
+    return yield* new SubscriptionQuotaMcpUnavailableError({
+      capability: "usage.read",
+      environmentId: invocation.environmentId,
+      threadId: invocation.threadId,
+      providerSessionId: invocation.providerSessionId,
+      providerInstanceId: invocation.providerInstanceId,
     });
   }
   return invocation;

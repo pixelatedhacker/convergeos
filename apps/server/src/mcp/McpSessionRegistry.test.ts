@@ -39,16 +39,18 @@ it.effect("stores only a token hash, resolves the bearer token, and revokes by t
     const issued = yield* registry.issue({
       threadId,
       providerInstanceId: ProviderInstanceId.make("codex"),
-      capabilities: new Set(["preview", "agents.read"]),
+      capabilities: new Set(["preview", "usage.read", "agents.read"]),
     });
     expect(issued.config.endpoint).toBe("http://127.0.0.1:43123/mcp");
-    expect(issued.config.capabilities).toEqual(new Set(["preview", "agents.read"]));
+    expect(issued.config.capabilities).toEqual(
+      new Set(["preview", "usage.read", "agents.read"]),
+    );
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
     expect(token.length).toBeGreaterThan(20);
 
     const resolved = yield* registry.resolve(token);
     expect(resolved?.threadId).toBe(threadId);
-    expect(resolved?.capabilities).toEqual(new Set(["preview", "agents.read"]));
+    expect(resolved?.capabilities).toEqual(new Set(["preview", "usage.read", "agents.read"]));
 
     yield* registry.revokeThread(threadId);
     expect(yield* registry.resolve(token)).toBeUndefined();

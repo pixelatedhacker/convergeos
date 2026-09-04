@@ -2705,7 +2705,7 @@ describe("agent MCP access", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("grants only preview when agent browser access is on", () =>
+  it.effect("grants preview and usage when agent browser access is on", () =>
     Effect.gen(function* () {
       const threadId = asThreadId("thread-browser-on");
 
@@ -2715,7 +2715,7 @@ describe("agent MCP access", () => {
       );
 
       assert.equal(issued[0]?.threadId, threadId);
-      assert.deepEqual(issued[0]?.capabilities, new Set(["preview"]));
+      assert.deepEqual(issued[0]?.capabilities, new Set(["preview", "usage.read"]));
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -2742,7 +2742,7 @@ describe("agent MCP access", () => {
 
       assert.deepEqual(
         issued[0]?.capabilities,
-        new Set(["preview", "agents.read", "agents.send", "agents.control"]),
+        new Set(["preview", "usage.read", "agents.read", "agents.send", "agents.control"]),
       );
     }).pipe(Effect.provide(NodeServices.layer)),
   );
