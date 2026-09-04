@@ -41,9 +41,10 @@ describe("splitSharedServerPatch", () => {
       sidebarAutoSettleAfterDays: 7,
       sidebarAutoSettleOnMerge: false,
       enableAgentBrowserAccess: false,
+      enableAgentMeshAccess: true,
     });
     expect(sharedPatch).toEqual({ sidebarAutoSettleAfterDays: 7, sidebarAutoSettleOnMerge: false });
-    expect(localPatch).toEqual({ enableAgentBrowserAccess: false });
+    expect(localPatch).toEqual({ enableAgentBrowserAccess: false, enableAgentMeshAccess: true });
   });
 });
 

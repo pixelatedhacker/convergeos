@@ -583,6 +583,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
         ? ["Agent browser access"]
         : []),
+      ...(settings.enableAgentMeshAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess
+        ? ["Agent mesh access"]
+        : []),
     ],
     [
       isTextGenerationModelDirty,
@@ -595,6 +598,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.browserAutoShowFloatingPreview,
       settings.appearanceContrast,
       settings.enableAgentBrowserAccess,
+      settings.enableAgentMeshAccess,
       settings.confirmQuit,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
@@ -744,6 +748,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       // name, so a user restoring defaults is told the agent regains access
       // rather than discovering it later.
       enableAgentBrowserAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess,
+      enableAgentMeshAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess,
     });
     onRestored?.();
   }, [

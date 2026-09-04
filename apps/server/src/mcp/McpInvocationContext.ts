@@ -1,4 +1,6 @@
 import {
+  AgentMeshError,
+  type AgentMeshOperation,
   type EnvironmentId,
   PreviewAutomationUnavailableError,
   SubscriptionQuotaMcpUnavailableError,
@@ -8,7 +10,12 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview" | "usage.read";
+export type McpCapability =
+  | "preview"
+  | "usage.read"
+  | "agents.read"
+  | "agents.send"
+  | "agents.control";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
@@ -35,6 +42,21 @@ export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function*
       threadId: invocation.threadId,
       providerSessionId: invocation.providerSessionId,
       providerInstanceId: invocation.providerInstanceId,
+    });
+  }
+  return invocation;
+});
+
+export const requireAgentCapability = Effect.fn("mcp.requireAgentCapability")(function* (
+  capability: "agents.read" | "agents.send" | "agents.control",
+  operation: AgentMeshOperation,
+) {
+  const invocation = yield* McpInvocationContext;
+  if (!invocation.capabilities.has(capability)) {
+    return yield* new AgentMeshError({
+      operation,
+      reason: "capabilityDenied",
+      targetThreadId: null,
     });
   }
   return invocation;

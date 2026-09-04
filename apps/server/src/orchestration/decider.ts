@@ -1,10 +1,12 @@
 import {
   EventId,
+  PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
+import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -17,7 +19,9 @@ import {
 } from "./Errors.ts";
 import {
   listThreadsByProjectId,
+  requireActiveProject,
   requireActiveProjectWorkspaceRootAbsent,
+  requireActiveThread,
   requireProject,
   requireProjectAbsent,
   requireThread,
@@ -897,6 +901,140 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
+    }
+
+    case "thread.peer-turn.start": {
+      const sourceThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      const targetThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (sourceThread.id === targetThread.id) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer turn source and target are both '${targetThread.id}'`,
+        });
+      }
+      if (sourceThread.projectId !== targetThread.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer turn target '${targetThread.id}' belongs to another project`,
+        });
+      }
+      const project = yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: sourceThread.projectId,
+      });
+      const sourceWorkspace = normalizeProjectPathForComparison(
+        sourceThread.worktreePath ?? project.workspaceRoot,
+      );
+      const targetWorkspace = normalizeProjectPathForComparison(
+        targetThread.worktreePath ?? project.workspaceRoot,
+      );
+      if (sourceWorkspace === targetWorkspace) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer turn target '${targetThread.id}' shares the source workspace`,
+        });
+      }
+      const targetSessionBusy =
+        targetThread.session?.status === "starting" || targetThread.session?.status === "running";
+      const createdAt = yield* nowIso;
+      if (
+        targetSessionBusy ||
+        targetThread.session?.status === "error" ||
+        targetThread.latestTurn?.state === "running" ||
+        targetThread.latestTurn?.state === "error" ||
+        hasOpenBlockingRequest(targetThread) ||
+        hasQueuedTurnStartForThread(targetThread, createdAt)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer turn target '${targetThread.id}' is busy or waiting for input`,
+        });
+      }
+      const sourceTitle = sourceThread.title.replace(/\s+/g, " ").trim();
+      const sourceLabel = `"${sourceTitle}" (${sourceThread.id})`;
+      const peerMessage = `Peer agent request from ${sourceLabel}:\n\n${command.message}`;
+      if (peerMessage.length > PROVIDER_SEND_TURN_MAX_INPUT_CHARS) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer turn message exceeds the ${PROVIDER_SEND_TURN_MAX_INPUT_CHARS}-character provider limit after provenance is added`,
+        });
+      }
+      return yield* decideOrchestrationCommand({
+        readModel,
+        command: {
+          type: "thread.turn.start",
+          commandId: command.commandId,
+          threadId: targetThread.id,
+          message: {
+            messageId: command.messageId,
+            role: "user",
+            text: peerMessage,
+            attachments: [],
+          },
+          runtimeMode: targetThread.runtimeMode,
+          interactionMode: targetThread.interactionMode,
+          createdAt,
+        },
+      });
+    }
+
+    case "thread.peer-turn.interrupt": {
+      const sourceThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      const targetThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (sourceThread.id === targetThread.id) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer interrupt source and target are both '${targetThread.id}'`,
+        });
+      }
+      if (sourceThread.projectId !== targetThread.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer interrupt target '${targetThread.id}' belongs to another project`,
+        });
+      }
+      yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: sourceThread.projectId,
+      });
+      if (
+        targetThread.latestTurn?.state !== "running" ||
+        targetThread.latestTurn.turnId !== command.observedTurnId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `peer interrupt target '${targetThread.id}' is not running observed turn '${command.observedTurnId}'`,
+        });
+      }
+      const createdAt = yield* nowIso;
+      return yield* decideOrchestrationCommand({
+        readModel,
+        command: {
+          type: "thread.turn.interrupt",
+          commandId: command.commandId,
+          threadId: targetThread.id,
+          turnId: command.observedTurnId,
+          createdAt,
+        },
+      });
     }
 
     case "thread.turn.start": {

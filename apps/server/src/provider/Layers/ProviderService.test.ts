@@ -65,6 +65,7 @@ import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
+import type * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import {
   makeSqlitePersistenceLive,
   SqlitePersistenceMemory,
@@ -2616,12 +2617,18 @@ boundedListing.layer("ProviderServiceLive session listing", (it) => {
   );
 });
 
-describe("agent browser access", () => {
+describe("agent MCP access", () => {
   const revokedThreads: Array<ThreadId> = [];
 
-  const startSessionWith = (enableAgentBrowserAccess: boolean, threadId: ThreadId) =>
+  const startSessionWith = (
+    settings: {
+      readonly enableAgentBrowserAccess: boolean;
+      readonly enableAgentMeshAccess: boolean;
+    },
+    threadId: ThreadId,
+  ) =>
     Effect.gen(function* () {
-      const issued: Array<ThreadId> = [];
+      const issued: Array<McpSessionRegistry.McpCredentialRequest> = [];
       const codex = makeFakeCodexAdapter();
       const providerAdapterLayer = Layer.succeed(
         ProviderAdapterRegistry.ProviderAdapterRegistry,
@@ -2636,14 +2643,14 @@ describe("agent browser access", () => {
       const providerLayer = makeProviderServiceLive({
         issueMcpCredential: (request) =>
           Effect.sync(() => {
-            issued.push(request.threadId);
+            issued.push(request);
             return undefined;
           }),
         revokeMcpCredential: (revoked) => Effect.sync(() => void revokedThreads.push(revoked)),
       }).pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
-        Layer.provide(ServerSettings.ServerSettingsService.layerTest({ enableAgentBrowserAccess })),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest(settings)),
         Layer.provide(serverConfigTestLayer),
         Layer.provide(AnalyticsService.layerTest),
         Layer.provide(
@@ -2670,9 +2677,12 @@ describe("agent browser access", () => {
   // Credential issuance is the observable that matters: it is the only place a
   // credential is minted, and `/mcp` accepts nothing else, so withholding it is
   // what actually denies every provider and external MCP client.
-  it.effect("requests no MCP credential when agent browser access is off", () =>
+  it.effect("requests no MCP credential when all agent MCP access is off", () =>
     Effect.gen(function* () {
-      const issued = yield* startSessionWith(false, asThreadId("thread-browser-off"));
+      const issued = yield* startSessionWith(
+        { enableAgentBrowserAccess: false, enableAgentMeshAccess: false },
+        asThreadId("thread-mcp-off"),
+      );
 
       assert.deepEqual(issued, []);
     }).pipe(Effect.provide(NodeServices.layer)),
@@ -2683,7 +2693,10 @@ describe("agent browser access", () => {
       const threadId = asThreadId("thread-browser-revoke");
       revokedThreads.length = 0;
 
-      yield* startSessionWith(false, threadId);
+      yield* startSessionWith(
+        { enableAgentBrowserAccess: false, enableAgentMeshAccess: false },
+        threadId,
+      );
 
       // Clearing the in-memory map is not enough: a token issued before the
       // toggle flipped stays valid against `/mcp` for its whole liveness
@@ -2692,13 +2705,45 @@ describe("agent browser access", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("requests an MCP credential when agent browser access is on", () =>
+  it.effect("grants preview and usage when agent browser access is on", () =>
     Effect.gen(function* () {
       const threadId = asThreadId("thread-browser-on");
 
-      const issued = yield* startSessionWith(true, threadId);
+      const issued = yield* startSessionWith(
+        { enableAgentBrowserAccess: true, enableAgentMeshAccess: false },
+        threadId,
+      );
 
-      assert.deepEqual(issued, [threadId]);
+      assert.equal(issued[0]?.threadId, threadId);
+      assert.deepEqual(issued[0]?.capabilities, new Set(["preview", "usage.read"]));
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants mesh tools independently from browser access", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(
+        { enableAgentBrowserAccess: false, enableAgentMeshAccess: true },
+        asThreadId("thread-mesh-on"),
+      );
+
+      assert.deepEqual(
+        issued[0]?.capabilities,
+        new Set(["agents.read", "agents.send", "agents.control"]),
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("combines browser and mesh capabilities when both are enabled", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(
+        { enableAgentBrowserAccess: true, enableAgentMeshAccess: true },
+        asThreadId("thread-all-mcp-on"),
+      );
+
+      assert.deepEqual(
+        issued[0]?.capabilities,
+        new Set(["preview", "usage.read", "agents.read", "agents.send", "agents.control"]),
+      );
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
