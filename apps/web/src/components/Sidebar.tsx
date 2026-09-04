@@ -47,6 +47,7 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   ClockIcon,
+  Columns3Icon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
@@ -2156,6 +2157,19 @@ export default function Sidebar() {
     },
     [openProjectSettings],
   );
+  const handleProjectKanban = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, projectGroup: SidebarProjectSnapshot) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchProjectScopeMenu({ type: "project-settings-opened" });
+      if (isMobile) setOpenMobile(false);
+      void router.navigate({
+        to: "/kanban/$projectKey",
+        params: { projectKey: projectGroup.projectKey },
+      });
+    },
+    [isMobile, router, setOpenMobile],
+  );
 
   // Settled threads stay in the live shell stream (settled ≠ archived), so
   // the partition works directly off live shells: no archived-snapshot
@@ -3772,19 +3786,32 @@ export default function Sidebar() {
                             )}
                             <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
                             {project ? (
-                              <Button
-                                size="icon-xs"
-                                variant="ghost-muted"
-                                aria-label={`Project settings for ${project.displayName}`}
-                                title={`Project settings for ${project.displayName}`}
-                                className="ml-auto size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  void handleProjectSettings(event, project);
-                                }}
-                              >
-                                <SettingsIcon className="size-3.5" />
-                              </Button>
+                              <span className="ml-auto flex items-center gap-0.5">
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  aria-label={`Kanban board for ${project.displayName}`}
+                                  title={`Kanban board for ${project.displayName}`}
+                                  className="size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => handleProjectKanban(event, project)}
+                                >
+                                  <Columns3Icon className="size-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  aria-label={`Project settings for ${project.displayName}`}
+                                  title={`Project settings for ${project.displayName}`}
+                                  className="size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    void handleProjectSettings(event, project);
+                                  }}
+                                >
+                                  <SettingsIcon className="size-3.5" />
+                                </Button>
+                              </span>
                             ) : null}
                           </ComboboxItem>
                         );

@@ -40,6 +40,39 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("reads one project's active Kanban board in canonical order", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      if (snapshotQuery.getKanbanBoard === undefined) {
+        throw new Error("Kanban board query is unavailable");
+      }
+
+      yield* sql`DELETE FROM projection_kanban_cards`;
+      yield* sql`
+        INSERT INTO projection_kanban_cards (
+          card_id, project_id, title, description, status, order_key,
+          assignee_thread_id, revision, created_at, updated_at, deleted_at
+        ) VALUES
+          ('card-b', 'project-kanban', 'Second', '', 'ready', 't', NULL, 1,
+           '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:00.000Z', NULL),
+          ('card-a', 'project-kanban', 'First', '', 'ready', 'n', NULL, 2,
+           '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z', NULL),
+          ('card-deleted', 'project-kanban', 'Deleted', '', 'backlog', 'n', NULL, 2,
+           '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z',
+           '2026-02-24T00:00:01.000Z'),
+          ('card-other', 'project-other', 'Other project', '', 'backlog', 'n', NULL, 1,
+           '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:00.000Z', NULL)
+      `;
+
+      const board = yield* snapshotQuery.getKanbanBoard(asProjectId("project-kanban"));
+      assert.deepEqual(
+        board.cards.map((card) => card.id),
+        ["card-a", "card-b"],
+      );
+    }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;

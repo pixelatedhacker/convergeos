@@ -44,3 +44,6 @@ visible in the normal conversation.
 
 Choose **Disable bot** before archiving or deleting its inbox. Disabling removes the reusable bot
 identity but keeps the thread and its history.
+
+Project Kanban cards can name an active bot as their assignee. Assignment does not automatically
+start a turn; open the bot thread or use agent mesh when the task is ready to run.

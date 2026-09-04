@@ -70,6 +70,7 @@ import {
   ReviewDiffPreviewResult,
 } from "./review.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
+import { KanbanBoardInput, KanbanBoardStreamItem } from "./kanban.ts";
 import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
@@ -230,6 +231,9 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+
+  // Project Kanban
+  kanbanSubscribeBoard: "kanban.subscribeBoard",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -1150,6 +1154,13 @@ export const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeReso
   stream: true,
 });
 
+export const WsKanbanSubscribeBoardRpc = Rpc.make(WS_METHODS.kanbanSubscribeBoard, {
+  payload: KanbanBoardInput,
+  success: KanbanBoardStreamItem,
+  error: Schema.Union([EnvironmentAuthorizationError, OrchestrationGetSnapshotError]),
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
@@ -1259,6 +1270,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeAuthAccessRpc,
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeResourceTelemetryRpc,
+  WsKanbanSubscribeBoardRpc,
   WsOrchestrationDispatchCommandRpc,
   WsOrchestrationGetWorkflowScriptRpc,
   WsOrchestrationGetTurnDiffRpc,

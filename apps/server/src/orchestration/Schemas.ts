@@ -1,4 +1,8 @@
 import {
+  KanbanCardCreatedPayload as ContractsKanbanCardCreatedPayloadSchema,
+  KanbanCardDeletedPayload as ContractsKanbanCardDeletedPayloadSchema,
+  KanbanCardMovedPayload as ContractsKanbanCardMovedPayloadSchema,
+  KanbanCardUpdatedPayload as ContractsKanbanCardUpdatedPayloadSchema,
   ProjectCreatedPayload as ContractsProjectCreatedPayloadSchema,
   ProjectMetaUpdatedPayload as ContractsProjectMetaUpdatedPayloadSchema,
   ProjectDeletedPayload as ContractsProjectDeletedPayloadSchema,
@@ -35,6 +39,11 @@ import {
 export const ProjectCreatedPayload = ContractsProjectCreatedPayloadSchema;
 export const ProjectMetaUpdatedPayload = ContractsProjectMetaUpdatedPayloadSchema;
 export const ProjectDeletedPayload = ContractsProjectDeletedPayloadSchema;
+
+export const KanbanCardCreatedPayload = ContractsKanbanCardCreatedPayloadSchema;
+export const KanbanCardUpdatedPayload = ContractsKanbanCardUpdatedPayloadSchema;
+export const KanbanCardMovedPayload = ContractsKanbanCardMovedPayloadSchema;
+export const KanbanCardDeletedPayload = ContractsKanbanCardDeletedPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;

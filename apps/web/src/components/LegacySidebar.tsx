@@ -2218,6 +2218,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
+          { id: "project-kanban", label: "Project Kanban" },
           { id: "project-settings", label: "Project settings" },
           {
             id: "delete",
@@ -2234,6 +2235,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         if (isMobile) setOpenMobile(false);
         void router.navigate({
           to: "/projects/$projectKey",
+          params: { projectKey: project.projectKey },
+        });
+        return;
+      }
+
+      if (clicked === "project-kanban") {
+        if (isMobile) setOpenMobile(false);
+        void router.navigate({
+          to: "/kanban/$projectKey",
           params: { projectKey: project.projectKey },
         });
         return;

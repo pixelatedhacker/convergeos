@@ -2,6 +2,7 @@ import type {
   OrchestrationClientOrigin,
   OrchestrationEvent,
   OrchestrationReadModel,
+  KanbanCardId,
   ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -62,8 +63,8 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "thread";
-  readonly aggregateId: ProjectId | ThreadId;
+  readonly aggregateKind: "project" | "thread" | "kanban-card";
+  readonly aggregateId: ProjectId | ThreadId | KanbanCardId;
 } {
   switch (command.type) {
     case "project.create":
@@ -72,6 +73,14 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "project",
         aggregateId: command.projectId,
+      };
+    case "kanban.card.create":
+    case "kanban.card.update":
+    case "kanban.card.move":
+    case "kanban.card.delete":
+      return {
+        aggregateKind: "kanban-card",
+        aggregateId: command.cardId,
       };
     default:
       return {

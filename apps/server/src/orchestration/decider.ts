@@ -1,5 +1,7 @@
 import {
   EventId,
+  type KanbanCard,
+  type KanbanPlacement,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type OrchestrationCommand,
   type OrchestrationEvent,
@@ -33,6 +35,90 @@ import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
+
+const KANBAN_ORDER_DIGITS = "abcdefghijklmnopqrstuvwxyz";
+
+function isValidKanbanOrderKey(key: string): boolean {
+  return (
+    key.length > 0 &&
+    [...key].every((character) => KANBAN_ORDER_DIGITS.includes(character)) &&
+    key.at(-1) !== KANBAN_ORDER_DIGITS[0]
+  );
+}
+
+function kanbanOrderMidpoint(before: string, after: string): string {
+  if (after !== "" && before >= after) {
+    throw new Error("kanban order bounds are invalid");
+  }
+  if (after !== "") {
+    let shared = 0;
+    while ((before.charAt(shared) || KANBAN_ORDER_DIGITS[0]) === after.charAt(shared)) {
+      shared += 1;
+    }
+    if (shared > 0) {
+      return (
+        after.slice(0, shared) + kanbanOrderMidpoint(before.slice(shared), after.slice(shared))
+      );
+    }
+  }
+  const beforeDigit = before === "" ? 0 : KANBAN_ORDER_DIGITS.indexOf(before.charAt(0));
+  const afterDigit =
+    after === "" ? KANBAN_ORDER_DIGITS.length : KANBAN_ORDER_DIGITS.indexOf(after.charAt(0));
+  if (beforeDigit < 0 || afterDigit < 0) throw new Error("kanban order key is invalid");
+  if (afterDigit - beforeDigit > 1) {
+    return KANBAN_ORDER_DIGITS.charAt(Math.round((beforeDigit + afterDigit) / 2));
+  }
+  if (after.length > 1) return after.charAt(0);
+  return KANBAN_ORDER_DIGITS.charAt(beforeDigit) + kanbanOrderMidpoint(before.slice(1), "");
+}
+
+function kanbanOrderKeyBetween(before: string | null, after: string | null): string | null {
+  const lower = before ?? "";
+  const upper = after ?? "";
+  if (lower !== "" && !isValidKanbanOrderKey(lower)) return null;
+  if (upper !== "" && !isValidKanbanOrderKey(upper)) return null;
+  if (upper !== "" && lower >= upper) return null;
+  return kanbanOrderMidpoint(lower, upper);
+}
+
+function orderKeyForPlacement(input: {
+  readonly cards: ReadonlyArray<KanbanCard>;
+  readonly projectId: KanbanCard["projectId"];
+  readonly movingCardId: KanbanCard["id"] | null;
+  readonly placement: KanbanPlacement;
+}): string | null {
+  const cards = input.cards
+    .filter(
+      (card) =>
+        card.projectId === input.projectId &&
+        card.deletedAt === null &&
+        card.status === input.placement.status &&
+        card.id !== input.movingCardId,
+    )
+    .sort(
+      (left, right) =>
+        left.orderKey.localeCompare(right.orderKey) || left.id.localeCompare(right.id),
+    );
+  let before: string | null = null;
+  let after: string | null = null;
+  if (input.placement.relation === "first") {
+    after = cards[0]?.orderKey ?? null;
+  } else if (input.placement.relation === "last") {
+    before = cards.at(-1)?.orderKey ?? null;
+  } else if ("cardId" in input.placement) {
+    const targetCardId = input.placement.cardId;
+    const targetIndex = cards.findIndex((card) => card.id === targetCardId);
+    if (targetIndex < 0) return null;
+    if (input.placement.relation === "before") {
+      before = targetIndex > 0 ? (cards[targetIndex - 1]?.orderKey ?? null) : null;
+      after = cards[targetIndex]?.orderKey ?? null;
+    } else {
+      before = cards[targetIndex]?.orderKey ?? null;
+      after = cards[targetIndex + 1]?.orderKey ?? null;
+    }
+  }
+  return kanbanOrderKeyBetween(before, after);
+}
 
 /**
  * Blocked-on-you work derived from the thread's retained activities: an
@@ -941,6 +1027,216 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           threadId: command.threadId,
           previousRevision: thread.botProfile.revision,
           disabledAt,
+        },
+      };
+    }
+
+    case "kanban.card.create": {
+      yield* requireActiveProject({ readModel, command, projectId: command.projectId });
+      const cards = readModel.kanbanCards ?? [];
+      if (cards.some((card) => card.id === command.cardId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} already exists`,
+        });
+      }
+      if (command.assigneeThreadId !== null) {
+        const assignee = readModel.threads.find(
+          (thread) =>
+            thread.id === command.assigneeThreadId &&
+            thread.projectId === command.projectId &&
+            thread.deletedAt === null &&
+            thread.archivedAt === null &&
+            thread.botProfile != null,
+        );
+        if (assignee === undefined) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `kanban assignee ${command.assigneeThreadId} is not an active bot in project ${command.projectId}`,
+          });
+        }
+      }
+      const orderKey = orderKeyForPlacement({
+        cards,
+        projectId: command.projectId,
+        movingCardId: null,
+        placement: command.placement,
+      });
+      if (orderKey === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "kanban placement target is unavailable in the requested column",
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        id: command.cardId,
+        projectId: command.projectId,
+        title: command.title,
+        description: command.description,
+        status: command.placement.status,
+        orderKey,
+        assigneeThreadId: command.assigneeThreadId,
+        revision: 1,
+        createdAt: command.createdAt,
+        updatedAt,
+        deletedAt: null,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-created",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.update": {
+      const cards = readModel.kanbanCards ?? [];
+      const current = cards.find((card) => card.id === command.cardId && card.deletedAt === null);
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} revision changed`,
+        });
+      }
+      if (command.assigneeThreadId !== undefined && command.assigneeThreadId !== null) {
+        const assignee = readModel.threads.find(
+          (thread) =>
+            thread.id === command.assigneeThreadId &&
+            thread.projectId === current.projectId &&
+            thread.deletedAt === null &&
+            thread.archivedAt === null &&
+            thread.botProfile != null,
+        );
+        if (assignee === undefined) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `kanban assignee ${command.assigneeThreadId} is not an active bot in project ${current.projectId}`,
+          });
+        }
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        ...(command.title === undefined ? {} : { title: command.title }),
+        ...(command.description === undefined ? {} : { description: command.description }),
+        ...(command.assigneeThreadId === undefined
+          ? {}
+          : { assigneeThreadId: command.assigneeThreadId }),
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-updated",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.move": {
+      const cards = readModel.kanbanCards ?? [];
+      const current = cards.find((card) => card.id === command.cardId && card.deletedAt === null);
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} revision changed`,
+        });
+      }
+      if (
+        (command.placement.relation === "before" || command.placement.relation === "after") &&
+        command.placement.cardId === command.cardId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "a kanban card cannot be placed relative to itself",
+        });
+      }
+      const orderKey = orderKeyForPlacement({
+        cards,
+        projectId: current.projectId,
+        movingCardId: current.id,
+        placement: command.placement,
+      });
+      if (orderKey === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "kanban placement target is unavailable in the requested column",
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        status: command.placement.status,
+        orderKey,
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-moved",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.delete": {
+      const current = (readModel.kanbanCards ?? []).find(
+        (card) => card.id === command.cardId && card.deletedAt === null,
+      );
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} revision changed`,
+        });
+      }
+      const deletedAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: deletedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-deleted",
+        payload: {
+          projectId: current.projectId,
+          cardId: current.id,
+          previousRevision: current.revision,
+          deletedAt,
         },
       };
     }

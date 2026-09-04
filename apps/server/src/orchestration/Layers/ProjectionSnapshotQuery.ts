@@ -3,6 +3,8 @@ import {
   ChatAttachment,
   CheckpointRef,
   IsoDateTime,
+  KanbanBoardSnapshot,
+  KanbanCard,
   MessageId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
@@ -104,6 +106,7 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
     botProfile: Schema.NullOr(Schema.fromJsonString(BotProfile)),
   }),
 );
+const ProjectionKanbanCardDbRowSchema = KanbanCard;
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
   Struct.assign({
     payload: Schema.fromJsonString(Schema.Unknown),
@@ -494,6 +497,52 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           deleted_at AS "deletedAt"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
+      `,
+  });
+
+  const listKanbanCardRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionKanbanCardDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          card_id AS "id",
+          project_id AS "projectId",
+          title,
+          description,
+          status,
+          order_key AS "orderKey",
+          assignee_thread_id AS "assigneeThreadId",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          deleted_at AS "deletedAt"
+        FROM projection_kanban_cards
+        ORDER BY project_id ASC, status ASC, order_key ASC, card_id ASC
+      `,
+  });
+
+  const listActiveKanbanCardsByProject = SqlSchema.findAll({
+    Request: ProjectId,
+    Result: ProjectionKanbanCardDbRowSchema,
+    execute: (projectId) =>
+      sql`
+        SELECT
+          card_id AS "id",
+          project_id AS "projectId",
+          title,
+          description,
+          status,
+          order_key AS "orderKey",
+          assignee_thread_id AS "assigneeThreadId",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          deleted_at AS "deletedAt"
+        FROM projection_kanban_cards
+        WHERE project_id = ${projectId}
+          AND deleted_at IS NULL
+        ORDER BY status ASC, order_key ASC, card_id ASC
       `,
   });
 
@@ -1726,6 +1775,14 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listKanbanCardRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listKanbanCards:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listKanbanCards:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -1747,6 +1804,7 @@ pending_approval_requests AS (
             sessionRows,
             checkpointRows,
             latestTurnRows,
+            kanbanCards,
             stateRows,
           ]) =>
             Effect.gen(function* () {
@@ -1767,6 +1825,9 @@ pending_approval_requests AS (
               }
               for (const row of stateRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const card of kanbanCards) {
+                updatedAt = maxIso(updatedAt, card.updatedAt);
               }
 
               for (const row of messageRows) {
@@ -1941,6 +2002,7 @@ pending_approval_requests AS (
                 snapshotSequence: computeSnapshotSequence(stateRows),
                 projects,
                 threads,
+                kanbanCards,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
 
@@ -2003,6 +2065,14 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listKanbanCardRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listKanbanCards:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listKanbanCards:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2015,7 +2085,15 @@ pending_approval_requests AS (
       )
       .pipe(
         Effect.flatMap(
-          ([projectRows, threadRows, proposedPlanRows, sessionRows, latestTurnRows, stateRows]) =>
+          ([
+            projectRows,
+            threadRows,
+            proposedPlanRows,
+            sessionRows,
+            latestTurnRows,
+            kanbanCards,
+            stateRows,
+          ]) =>
             Effect.sync(() => {
               let updatedAt: string | null = null;
               const projects: OrchestrationProject[] = [];
@@ -2075,6 +2153,9 @@ pending_approval_requests AS (
                 if (row.completedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.completedAt);
                 }
+              }
+              for (const card of kanbanCards) {
+                updatedAt = maxIso(updatedAt, card.updatedAt);
               }
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
@@ -2156,6 +2237,7 @@ pending_approval_requests AS (
                 snapshotSequence: computeSnapshotSequence(stateRows),
                 projects,
                 threads,
+                kanbanCards,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               } satisfies OrchestrationReadModel;
             }),
@@ -3161,7 +3243,25 @@ pending_approval_requests AS (
         ),
       );
 
+  const getKanbanBoard: ProjectionSnapshotQueryShape["getKanbanBoard"] = (projectId) =>
+    listActiveKanbanCardsByProject(projectId).pipe(
+      Effect.map(
+        (cards) =>
+          ({
+            projectId,
+            cards,
+          }) satisfies KanbanBoardSnapshot,
+      ),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getKanbanBoard:query",
+          "ProjectionSnapshotQuery.getKanbanBoard:decodeRows",
+        ),
+      ),
+    );
+
   return {
+    getKanbanBoard,
     getCommandReadModel,
     getSnapshot,
     getShellSnapshot,

@@ -15,6 +15,8 @@ import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import { AgentsToolkitHandlersLive } from "./toolkits/agents/handlers.ts";
 import { AgentsToolkit } from "./toolkits/agents/tools.ts";
+import { KanbanToolkitHandlersLive } from "./toolkits/kanban/handlers.ts";
+import { KanbanToolkit } from "./toolkits/kanban/tools.ts";
 import {
   PreviewSnapshotToolkitHandlersLive,
   PreviewStandardToolkitHandlersLive,
@@ -221,6 +223,10 @@ export const AgentsToolkitRegistrationLive = McpServer.toolkit(AgentsToolkit).pi
   Layer.provide(AgentsToolkitHandlersLive),
 );
 
+export const KanbanToolkitRegistrationLive = McpServer.toolkit(KanbanToolkit).pipe(
+  Layer.provide(KanbanToolkitHandlersLive),
+);
+
 const McpTransportLive = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
@@ -231,4 +237,5 @@ const McpTransportLive = McpServer.layerHttp({
 export const layer = Layer.mergeAll(
   PreviewToolkitRegistrationLive,
   AgentsToolkitRegistrationLive,
+  KanbanToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));

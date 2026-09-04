@@ -3,13 +3,20 @@ import {
   type AgentMeshOperation,
   type EnvironmentId,
   PreviewAutomationUnavailableError,
+  KanbanMcpError,
   type ProviderInstanceId,
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview" | "agents.read" | "agents.send" | "agents.control";
+export type McpCapability =
+  | "preview"
+  | "agents.read"
+  | "agents.send"
+  | "agents.control"
+  | "kanban.read"
+  | "kanban.write";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
@@ -51,6 +58,21 @@ export const requireAgentCapability = Effect.fn("mcp.requireAgentCapability")(fu
       operation,
       reason: "capabilityDenied",
       targetThreadId: null,
+    });
+  }
+  return invocation;
+});
+
+export const requireKanbanCapability = Effect.fn("mcp.requireKanbanCapability")(function* (
+  capability: "kanban.read" | "kanban.write",
+  operation: "read" | "create" | "update" | "move" | "delete",
+) {
+  const invocation = yield* McpInvocationContext;
+  if (!invocation.capabilities.has(capability)) {
+    return yield* new KanbanMcpError({
+      operation,
+      reason: "capabilityDenied",
+      detail: "MCP credential does not grant Kanban access.",
     });
   }
   return invocation;

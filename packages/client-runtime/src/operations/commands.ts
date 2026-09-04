@@ -45,6 +45,10 @@ export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
 export type UpdateThreadMetadataInput = CommandInput<"thread.meta.update">;
 export type ConfigureThreadBotInput = CommandInput<"thread.bot.configure">;
 export type DisableThreadBotInput = CommandInput<"thread.bot.disable">;
+export type CreateKanbanCardInput = CommandInput<"kanban.card.create">;
+export type UpdateKanbanCardInput = CommandInput<"kanban.card.update">;
+export type MoveKanbanCardInput = CommandInput<"kanban.card.move">;
+export type DeleteKanbanCardInput = CommandInput<"kanban.card.delete">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
 export type StartThreadTurnInput = CommandInput<"thread.turn.start">;
@@ -261,6 +265,54 @@ export const disableThreadBot: (input: DisableThreadBotInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "thread.bot.disable",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const createKanbanCard: (input: CreateKanbanCardInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.createKanbanCard",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "kanban.card.create",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const updateKanbanCard: (input: UpdateKanbanCardInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.updateKanbanCard",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "kanban.card.update",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const moveKanbanCard: (input: MoveKanbanCardInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.moveKanbanCard",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "kanban.card.move",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const deleteKanbanCard: (input: DeleteKanbanCardInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.deleteKanbanCard",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "kanban.card.delete",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });
