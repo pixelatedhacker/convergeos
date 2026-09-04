@@ -254,7 +254,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const agentMcpCapabilities = serverSettings.getSettings.pipe(
     Effect.map((settings) => {
       const capabilities = new Set<McpCapability>();
-      if (settings.enableAgentBrowserAccess) capabilities.add("preview");
+      if (settings.enableAgentBrowserAccess) {
+        capabilities.add("preview");
+        capabilities.add("usage.read");
+      }
       if (settings.enableAgentMeshAccess) {
         capabilities.add("agents.read");
         capabilities.add("agents.send");

@@ -4,6 +4,7 @@ import {
   type EnvironmentId,
   PreviewAutomationUnavailableError,
   KanbanMcpError,
+  SubscriptionQuotaMcpUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -12,6 +13,7 @@ import * as Effect from "effect/Effect";
 
 export type McpCapability =
   | "preview"
+  | "usage.read"
   | "agents.read"
   | "agents.send"
   | "agents.control"
@@ -73,6 +75,20 @@ export const requireKanbanCapability = Effect.fn("mcp.requireKanbanCapability")(
       operation,
       reason: "capabilityDenied",
       detail: "MCP credential does not grant Kanban access.",
+    });
+  }
+  return invocation;
+});
+
+export const requireUsageCapability = Effect.fn("mcp.requireUsageCapability")(function* () {
+  const invocation = yield* McpInvocationContext;
+  if (!invocation.capabilities.has("usage.read")) {
+    return yield* new SubscriptionQuotaMcpUnavailableError({
+      capability: "usage.read",
+      environmentId: invocation.environmentId,
+      threadId: invocation.threadId,
+      providerSessionId: invocation.providerSessionId,
+      providerInstanceId: invocation.providerInstanceId,
     });
   }
   return invocation;
