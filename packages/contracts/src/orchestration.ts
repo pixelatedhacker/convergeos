@@ -12,6 +12,7 @@ import {
   CommandId,
   EventId,
   IsoDateTime,
+  KanbanCardId,
   MessageId,
   NonNegativeInt,
   PositiveInt,
@@ -23,6 +24,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import { KanbanCard, KanbanCardDescription, KanbanCardTitle, KanbanPlacement } from "./kanban.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -553,6 +555,7 @@ export const OrchestrationReadModel = Schema.Struct({
   snapshotSequence: NonNegativeInt,
   projects: Schema.Array(OrchestrationProject),
   threads: Schema.Array(OrchestrationThread),
+  kanbanCards: Schema.optional(Schema.Array(KanbanCard)),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
@@ -944,6 +947,46 @@ const ThreadBotDisableCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const KanbanCardCreateCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.create"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  projectId: ProjectId,
+  title: KanbanCardTitle,
+  description: KanbanCardDescription,
+  placement: KanbanPlacement,
+  assigneeThreadId: Schema.NullOr(ThreadId),
+  createdAt: IsoDateTime,
+});
+
+const KanbanCardUpdateCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.update"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  expectedRevision: PositiveInt,
+  title: Schema.optional(KanbanCardTitle),
+  description: Schema.optional(KanbanCardDescription),
+  assigneeThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  createdAt: IsoDateTime,
+});
+
+const KanbanCardMoveCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.move"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  expectedRevision: PositiveInt,
+  placement: KanbanPlacement,
+  createdAt: IsoDateTime,
+});
+
+const KanbanCardDeleteCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.delete"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  expectedRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1116,6 +1159,10 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadBotConfigureCommand,
   ThreadBotDisableCommand,
+  KanbanCardCreateCommand,
+  KanbanCardUpdateCommand,
+  KanbanCardMoveCommand,
+  KanbanCardDeleteCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1146,6 +1193,10 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadBotConfigureCommand,
   ThreadBotDisableCommand,
+  KanbanCardCreateCommand,
+  KanbanCardUpdateCommand,
+  KanbanCardMoveCommand,
+  KanbanCardDeleteCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1283,10 +1334,14 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
   "thread.activity-appended",
+  "kanban.card-created",
+  "kanban.card-updated",
+  "kanban.card-moved",
+  "kanban.card-deleted",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
-export const OrchestrationAggregateKind = Schema.Literals(["project", "thread"]);
+export const OrchestrationAggregateKind = Schema.Literals(["project", "thread", "kanban-card"]);
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
 
@@ -1431,6 +1486,16 @@ export const ThreadBotDisabledPayload = Schema.Struct({
   disabledAt: IsoDateTime,
 });
 
+export const KanbanCardCreatedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardUpdatedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardMovedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardDeletedPayload = Schema.Struct({
+  projectId: ProjectId,
+  cardId: KanbanCardId,
+  previousRevision: PositiveInt,
+  deletedAt: IsoDateTime,
+});
+
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
   threadId: ThreadId,
   runtimeMode: RuntimeMode,
@@ -1558,7 +1623,7 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId]),
+  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -1721,6 +1786,26 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.activity-appended"),
     payload: ThreadActivityAppendedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-created"),
+    payload: KanbanCardCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-updated"),
+    payload: KanbanCardUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-moved"),
+    payload: KanbanCardMovedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-deleted"),
+    payload: KanbanCardDeletedPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

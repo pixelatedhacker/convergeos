@@ -2,6 +2,7 @@ import { expect, it } from "@effect/vitest";
 import {
   AgentMeshError,
   EnvironmentId,
+  KanbanMcpError,
   PreviewAutomationUnavailableError,
   ProviderInstanceId,
   ThreadId,
@@ -35,6 +36,27 @@ it.effect("reports the scoped credential context when preview capability is unav
       providerInstanceId: invocation.providerInstanceId,
     });
     expect(error.message).toBe("MCP credential does not grant the preview capability.");
+  });
+});
+
+it.effect("denies Kanban mutations without their explicit capability", () => {
+  const invocation: McpInvocationContext.McpInvocationScope = {
+    environmentId: EnvironmentId.make("environment-1"),
+    threadId: ThreadId.make("thread-1"),
+    providerSessionId: "provider-session-1",
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    capabilities: new Set(["agents.read"]),
+    issuedAt: 1,
+  };
+
+  return Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireKanbanCapability("kanban.write", "move").pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.flip,
+    );
+
+    expect(error).toBeInstanceOf(KanbanMcpError);
+    expect(error).toMatchObject({ operation: "move", reason: "capabilityDenied" });
   });
 });
 

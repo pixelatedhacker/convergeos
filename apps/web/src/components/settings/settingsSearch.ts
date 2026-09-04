@@ -336,6 +336,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["agents threads delegate message interrupt mcp collaboration"],
   },
   {
+    id: "agent-kanban-access",
+    title: "Agent Kanban access",
+    to: "/settings/integrations",
+    searchTerms: ["agents bots board tasks cards mcp project workflow"],
+  },
+  {
     id: "browser-profiles",
     title: "Browser profiles",
     to: "/settings/integrations",

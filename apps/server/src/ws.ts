@@ -29,6 +29,7 @@ import {
   type OrchestrationCommand,
   type GitActionProgressEvent,
   type GitManagerServiceError,
+  type KanbanBoardStreamItem,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
   type OrchestrationShellStreamEvent,
@@ -149,6 +150,43 @@ const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchComma
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
+
+type KanbanCardEvent = Extract<
+  OrchestrationEvent,
+  {
+    type:
+      | "kanban.card-created"
+      | "kanban.card-updated"
+      | "kanban.card-moved"
+      | "kanban.card-deleted";
+  }
+>;
+
+function isKanbanCardEvent(event: OrchestrationEvent): event is KanbanCardEvent {
+  return (
+    event.type === "kanban.card-created" ||
+    event.type === "kanban.card-updated" ||
+    event.type === "kanban.card-moved" ||
+    event.type === "kanban.card-deleted"
+  );
+}
+
+function kanbanEventProjectId(event: KanbanCardEvent): ProjectId {
+  return event.type === "kanban.card-deleted"
+    ? event.payload.projectId
+    : event.payload.card.projectId;
+}
+
+function projectKanbanCardEvent(event: KanbanCardEvent): KanbanBoardStreamItem {
+  return event.type === "kanban.card-deleted"
+    ? {
+        kind: "card-removed",
+        sequence: event.sequence,
+        projectId: event.payload.projectId,
+        cardId: event.payload.cardId,
+      }
+    : { kind: "card-upserted", sequence: event.sequence, card: event.payload.card };
+}
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -1400,6 +1438,42 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "orchestration" },
+          ),
+        [WS_METHODS.kanbanSubscribeBoard]: (input) =>
+          observeRpcStreamEffect(
+            WS_METHODS.kanbanSubscribeBoard,
+            Effect.gen(function* () {
+              const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+              const snapshot = yield* (
+                projectionSnapshotQuery.getKanbanBoard?.(input.projectId) ??
+                projectionSnapshotQuery.getCommandReadModel().pipe(
+                  Effect.map((readModel) => ({
+                    projectId: input.projectId,
+                    cards: (readModel.kanbanCards ?? []).filter(
+                      (card) => card.projectId === input.projectId && card.deletedAt === null,
+                    ),
+                  })),
+                )
+              ).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new OrchestrationGetSnapshotError({
+                      message: `Failed to load Kanban board for project ${input.projectId}`,
+                      cause,
+                    }),
+                ),
+              );
+              const liveBoardEvents = liveEvents.pipe(
+                Stream.filter(isKanbanCardEvent),
+                Stream.filter((event) => kanbanEventProjectId(event) === input.projectId),
+                Stream.map(projectKanbanCardEvent),
+              );
+              return Stream.concat(
+                Stream.make({ kind: "snapshot" as const, snapshot }),
+                liveBoardEvents,
+              );
+            }),
+            { "rpc.aggregate": "kanban" },
           ),
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input) =>
           observeRpcStreamEffect(

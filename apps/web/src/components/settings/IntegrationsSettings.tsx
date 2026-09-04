@@ -590,6 +590,41 @@ function AgentMeshAccessSetting() {
   );
 }
 
+function AgentKanbanAccessSetting() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("agent-kanban-access")}
+      description="Let agents read and update the Kanban board for their own project. Card assignments remain limited to active project bots."
+      status="Applies to sessions started from now on; running agents keep their current tools."
+      resetAction={
+        settings.enableAgentKanbanAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess ? (
+          <SettingResetButton
+            label="agent Kanban access"
+            onClick={() =>
+              updateSettings({
+                enableAgentKanbanAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <Switch
+          checked={settings.enableAgentKanbanAccess}
+          onCheckedChange={(checked) =>
+            updateSettings({ enableAgentKanbanAccess: Boolean(checked) })
+          }
+          aria-label="Allow agent Kanban access"
+        />
+      }
+    />
+  );
+}
+
 function BrowserAutoShowFloatingPreviewSetting({ disabled }: { readonly disabled: boolean }) {
   const autoShow = useClientSettings((settings) => settings.browserAutoShowFloatingPreview);
   const updateSettings = useUpdatePrimarySettings();
@@ -963,6 +998,7 @@ export function IntegrationsSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="agents" title="Agents">
         <AgentMeshAccessSetting />
+        <AgentKanbanAccessSetting />
       </SettingsSection>
       <SettingsSection id="browser" title="Browser">
         {/* Server-authoritative, so it stays editable on any client anchored to

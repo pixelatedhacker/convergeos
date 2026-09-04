@@ -74,4 +74,6 @@ remote, relay, web, desktop, and mobile clients share the same state. `agents_li
 `onlyBots` and includes profile metadata in results. Sends still target the underlying thread and
 therefore keep every agent-mesh authorization and workspace invariant above.
 
-Kanban may later schedule work onto bot inboxes. It must not bypass these orchestration invariants.
+Kanban cards may name bot inboxes as assignees, but assignment is planning metadata rather than an
+automatic dispatch. Work still starts through the normal thread or mesh path, preserving these
+orchestration invariants.

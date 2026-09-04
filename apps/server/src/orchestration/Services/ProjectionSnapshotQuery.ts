@@ -8,6 +8,7 @@
  */
 import type {
   CheckpointRef,
+  KanbanBoardSnapshot,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
   OrchestrationProjectShell,
@@ -72,6 +73,11 @@ export interface ProjectionThreadDetailQuery {
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
 export interface ProjectionSnapshotQueryShape {
+  /** Read one project's active Kanban cards without loading thread detail. */
+  readonly getKanbanBoard?: (
+    projectId: ProjectId,
+  ) => Effect.Effect<KanbanBoardSnapshot, ProjectionRepositoryError>;
+
   /**
    * Read the lightweight command snapshot used to bootstrap the in-memory
    * orchestration engine without hydrating message/activity/checkpoint bodies.

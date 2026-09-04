@@ -2624,6 +2624,7 @@ describe("agent MCP access", () => {
     settings: {
       readonly enableAgentBrowserAccess: boolean;
       readonly enableAgentMeshAccess: boolean;
+      readonly enableAgentKanbanAccess?: boolean;
     },
     threadId: ThreadId,
   ) =>
@@ -2730,6 +2731,21 @@ describe("agent MCP access", () => {
         issued[0]?.capabilities,
         new Set(["agents.read", "agents.send", "agents.control"]),
       );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants project Kanban tools independently", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentMeshAccess: false,
+          enableAgentKanbanAccess: true,
+        },
+        asThreadId("thread-kanban-on"),
+      );
+
+      assert.deepEqual(issued[0]?.capabilities, new Set(["kanban.read", "kanban.write"]));
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

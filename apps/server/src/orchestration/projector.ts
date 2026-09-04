@@ -11,6 +11,10 @@ import * as Schema from "effect/Schema";
 import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "./Errors.ts";
 import {
   MessageSentPayloadSchema,
+  KanbanCardCreatedPayload,
+  KanbanCardDeletedPayload,
+  KanbanCardMovedPayload,
+  KanbanCardUpdatedPayload,
   ProjectCreatedPayload,
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
@@ -192,6 +196,7 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     snapshotSequence: 0,
     projects: [],
     threads: [],
+    kanbanCards: [],
     updatedAt: nowIso,
   };
 }
@@ -844,6 +849,43 @@ export function projectEvent(
             }),
           };
         }),
+      );
+
+    case "kanban.card-created":
+    case "kanban.card-updated":
+    case "kanban.card-moved": {
+      const payloadSchema =
+        event.type === "kanban.card-created"
+          ? KanbanCardCreatedPayload
+          : event.type === "kanban.card-updated"
+            ? KanbanCardUpdatedPayload
+            : KanbanCardMovedPayload;
+      return decodeForEvent(payloadSchema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          kanbanCards: [
+            ...(nextBase.kanbanCards ?? []).filter((card) => card.id !== payload.card.id),
+            payload.card,
+          ],
+        })),
+      );
+    }
+
+    case "kanban.card-deleted":
+      return decodeForEvent(KanbanCardDeletedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          kanbanCards: (nextBase.kanbanCards ?? []).map((card) =>
+            card.id === payload.cardId
+              ? {
+                  ...card,
+                  revision: payload.previousRevision + 1,
+                  updatedAt: payload.deletedAt,
+                  deletedAt: payload.deletedAt,
+                }
+              : card,
+          ),
+        })),
       );
 
     default:

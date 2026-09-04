@@ -65,6 +65,7 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   threadTurns: "projection.thread-turns",
   checkpoints: "projection.checkpoints",
   pendingApprovals: "projection.pending-approvals",
+  kanbanCards: "projection.kanban-cards",
 } as const;
 
 type ProjectorName =
@@ -1759,6 +1760,69 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       }
     });
 
+    const applyKanbanCardsProjection: ProjectorDefinition["apply"] = Effect.fn(
+      "applyKanbanCardsProjection",
+    )(function* (event) {
+      switch (event.type) {
+        case "kanban.card-created":
+        case "kanban.card-updated":
+        case "kanban.card-moved": {
+          const card = event.payload.card;
+          yield* sql`
+            INSERT INTO projection_kanban_cards (
+              card_id,
+              project_id,
+              title,
+              description,
+              status,
+              order_key,
+              assignee_thread_id,
+              revision,
+              created_at,
+              updated_at,
+              deleted_at
+            ) VALUES (
+              ${card.id},
+              ${card.projectId},
+              ${card.title},
+              ${card.description},
+              ${card.status},
+              ${card.orderKey},
+              ${card.assigneeThreadId},
+              ${card.revision},
+              ${card.createdAt},
+              ${card.updatedAt},
+              ${card.deletedAt}
+            )
+            ON CONFLICT(card_id) DO UPDATE SET
+              project_id = excluded.project_id,
+              title = excluded.title,
+              description = excluded.description,
+              status = excluded.status,
+              order_key = excluded.order_key,
+              assignee_thread_id = excluded.assignee_thread_id,
+              revision = excluded.revision,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at,
+              deleted_at = excluded.deleted_at
+          `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.kanbanCards:upsert")));
+          return;
+        }
+        case "kanban.card-deleted":
+          yield* sql`
+            UPDATE projection_kanban_cards
+            SET
+              revision = ${event.payload.previousRevision + 1},
+              updated_at = ${event.payload.deletedAt},
+              deleted_at = ${event.payload.deletedAt}
+            WHERE card_id = ${event.payload.cardId}
+          `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.kanbanCards:delete")));
+          return;
+        default:
+          return;
+      }
+    });
+
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -1791,6 +1855,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.pendingApprovals,
         apply: applyPendingApprovalsProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.kanbanCards,
+        apply: applyKanbanCardsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,

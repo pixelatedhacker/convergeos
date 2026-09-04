@@ -586,6 +586,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAgentMeshAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess
         ? ["Agent mesh access"]
         : []),
+      ...(settings.enableAgentKanbanAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess
+        ? ["Agent Kanban access"]
+        : []),
     ],
     [
       isTextGenerationModelDirty,
@@ -599,6 +602,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.appearanceContrast,
       settings.enableAgentBrowserAccess,
       settings.enableAgentMeshAccess,
+      settings.enableAgentKanbanAccess,
       settings.confirmQuit,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
@@ -749,6 +753,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       // rather than discovering it later.
       enableAgentBrowserAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess,
       enableAgentMeshAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentMeshAccess,
+      enableAgentKanbanAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess,
     });
     onRestored?.();
   }, [

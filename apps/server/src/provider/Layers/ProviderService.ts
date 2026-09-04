@@ -263,6 +263,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         capabilities.add("agents.send");
         capabilities.add("agents.control");
       }
+      if (settings.enableAgentKanbanAccess) {
+        capabilities.add("kanban.read");
+        capabilities.add("kanban.write");
+      }
       return capabilities;
     }),
     Effect.catch((cause) =>
