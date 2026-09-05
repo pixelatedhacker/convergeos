@@ -23,7 +23,7 @@ describe("hasCloudPublicConfig", () => {
     vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
     expect(hasCloudPublicConfig()).toBe(false);
 
-    vi.stubEnv("VITE_T3CODE_RELAY_URL", "https://relay.example.test");
+    vi.stubEnv("VITE_CONVERGEOS_RELAY_URL", "https://relay.example.test");
     expect(hasCloudPublicConfig()).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe("hasCloudPublicConfig", () => {
     vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "");
 
     expect(() => resolveRelayClerkTokenOptions()).toThrowError(
-      new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" }),
+      new CloudPublicConfigMissingError({ key: "CONVERGEOS_CLERK_JWT_TEMPLATE" }),
     );
   });
 });

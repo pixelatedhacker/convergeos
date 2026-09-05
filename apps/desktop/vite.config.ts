@@ -3,10 +3,11 @@ import { defineConfig } from "vite-plus";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
-const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
+const shouldLaunchElectronAfterPack =
+  (process.env.CONVERGEOS_DESKTOP_DEV ?? process.env.T3CODE_DESKTOP_DEV) === "1";
 const publicConfigDefine = {
-  __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
-    repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
+  __CONVERGEOS_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
+    repoEnv.CONVERGEOS_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),
 };
 

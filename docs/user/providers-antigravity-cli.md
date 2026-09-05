@@ -19,13 +19,13 @@ interactive approvals. See [Antigravity setup](./providers-antigravity.md).
 5. Select an Antigravity CLI model in the thread's model picker.
 6. Select **Full access** before sending your message.
 
-The provider is off by default. T3 Code does not install, update, or sign in to the CLI for you.
+The provider is off by default. ConvergeOS does not install, update, or sign in to the CLI for you.
 A successful model list confirms model discovery. Your first successful conversation confirms
 that the CLI account can run the selected model.
 
 ## Permission and conversation limits
 
-Antigravity CLI supports **Full access** in T3 Code. Its headless interface cannot send interactive
+Antigravity CLI supports **Full access** in ConvergeOS. Its headless interface cannot send interactive
 approval requests back to the client. **Supervised**, **Auto-accept edits**, and **Auto** are
 unavailable. A thread with one of those modes keeps its selection until you change it.
 
@@ -41,7 +41,7 @@ same environment. You can select a different model for the next turn. Models wit
 appear as separate choices, using the names returned by the CLI.
 Deleting the native CLI conversation or moving to a different environment prevents that resume.
 
-The CLI uses its configured MCP servers. T3 Code does not automatically add its project tools or
+The CLI uses its configured MCP servers. ConvergeOS does not automatically add its project tools or
 agent mesh to the CLI's configuration.
 
 ## Troubleshoot a connection

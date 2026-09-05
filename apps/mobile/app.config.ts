@@ -67,26 +67,26 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
-    scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
+    appName: "ConvergeOS Dev",
+    scheme: ["convergeos-dev", "t3code-dev"],
+    iosBundleIdentifier: "com.convergeos.app.dev",
+    androidPackage: "com.convergeos.app.dev",
     relyingParty: "clerk.t3.codes",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
-    scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
+    appName: "ConvergeOS Preview",
+    scheme: ["convergeos-preview", "t3code-preview"],
+    iosBundleIdentifier: "com.convergeos.app.preview",
+    androidPackage: "com.convergeos.app.preview",
     relyingParty: "clerk.t3.codes",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
-    scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
+    appName: "ConvergeOS",
+    scheme: ["convergeos", "t3code"],
+    iosBundleIdentifier: "com.convergeos.app",
+    androidPackage: "com.convergeos.app",
     relyingParty: "clerk.t3.codes",
     assets: RELEASE_ASSETS,
   },
@@ -127,7 +127,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active ConvergeOS agents.",
         supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
       },
     ],
@@ -166,9 +166,9 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: "convergeos",
   platforms: ["ios", "android"],
-  scheme: variant.scheme,
+  scheme: [...variant.scheme],
   version: "1.0.4",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
@@ -205,8 +205,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+        "Allow ConvergeOS to connect to ConvergeOS servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow ConvergeOS to save images to your photo library.",
       ITSAppUsesNonExemptEncryption: false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
@@ -300,7 +300,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow ConvergeOS to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -309,7 +309,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow ConvergeOS to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,

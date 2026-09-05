@@ -1,6 +1,6 @@
 # Assistant citations
 
-> For maintainers. Using T3 Code? See [Quote an assistant response](../user/composer.md#quote-an-assistant-response).
+> For maintainers. Using ConvergeOS? See [Quote an assistant response](../user/composer.md#quote-an-assistant-response).
 
 Assistant citations store a selected excerpt and its source in ordinary message text. They need
 no database migration, citation table, or sidecar draft metadata. The saved excerpt remains

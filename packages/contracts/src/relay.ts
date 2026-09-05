@@ -1090,7 +1090,7 @@ export const RelayApi = HttpApi.make("RelayApi")
     RelayDpopClientGroup,
     RelayServerGroup,
   )
-  .annotate(OpenApi.Title, "T3 Code Relay API")
+  .annotate(OpenApi.Title, "ConvergeOS Relay API")
   .annotate(OpenApi.Version, "1.0.0")
   .annotate(
     OpenApi.Description,

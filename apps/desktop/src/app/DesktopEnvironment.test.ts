@@ -13,9 +13,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/ConvergeOS.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/ConvergeOS.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -68,8 +68,8 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
-      assert.equal(environment.linuxWmClass, "t3code-dev");
+      assert.equal(environment.appUserModelId, "com.convergeos.app.dev");
+      assert.equal(environment.linuxWmClass, "convergeos-dev");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -125,8 +125,8 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
-      assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(development.stateDir, "/Users/alice/.convergeos/dev");
+      assert.equal(production.stateDir, "/Users/alice/.convergeos/userdata");
     }),
   );
 
@@ -135,12 +135,12 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_DESKTOP_APP_USER_MODEL_ID: " com.t3tools.t3code.dev.local ",
+          CONVERGEOS_DESKTOP_APP_USER_MODEL_ID: " com.convergeos.app.dev.local ",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
         },
       );
 
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev.local");
+      assert.equal(environment.appUserModelId, "com.convergeos.app.dev.local");
     }),
   );
 

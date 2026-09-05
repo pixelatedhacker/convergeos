@@ -2,6 +2,8 @@ import * as Config from "effect/Config";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Option from "effect/Option";
 
+import { withConvergeOsEnvironmentAliases } from "@t3tools/shared/convergeOsEnvironment";
+
 const trimNonEmptyOption = (value: string): Option.Option<string> => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? Option.some(trimmed) : Option.none();
@@ -57,4 +59,6 @@ export const DesktopConfig = Config.all({
 });
 
 export const layerTest = (env: Readonly<Record<string, string | undefined>>) =>
-  ConfigProvider.layer(ConfigProvider.fromEnv({ env: compactEnv(env) }));
+  ConfigProvider.layer(
+    ConfigProvider.fromEnv({ env: compactEnv(withConvergeOsEnvironmentAliases(env)) }),
+  );

@@ -20,6 +20,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
 
 import { type DevShareError, shareDevServer, unshareDevServer } from "./lib/dev-share.ts";
+import { applyConvergeOsEnvironmentAliases } from "@t3tools/shared/convergeOsEnvironment";
 import { loadRepoEnv } from "./lib/public-config.ts";
 
 Object.assign(process.env, loadRepoEnv());
@@ -68,7 +69,7 @@ export function isProxiableBindHost(host: string): boolean {
 }
 
 export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(NodeOS.homedir(), ".t3"),
+  path.join(NodeOS.homedir(), ".convergeos"),
 );
 
 const MODE_ARGS = {
@@ -304,6 +305,23 @@ interface CreateDevRunnerEnvInput {
   readonly devUrl: URL | undefined;
 }
 
+function setConvergeOsEnvironmentVariable(
+  environment: NodeJS.ProcessEnv,
+  suffix: string,
+  value: string,
+): void {
+  environment[`CONVERGEOS_${suffix}`] = value;
+  environment[`T3CODE_${suffix}`] = value;
+}
+
+function deleteConvergeOsEnvironmentVariable(
+  environment: NodeJS.ProcessEnv,
+  suffix: string,
+): void {
+  delete environment[`CONVERGEOS_${suffix}`];
+  delete environment[`T3CODE_${suffix}`];
+}
+
 export function createDevRunnerEnv({
   mode,
   baseEnv,
@@ -335,21 +353,21 @@ export function createDevRunnerEnv({
     };
 
     if (configuredBaseDir !== undefined) {
-      output.T3CODE_HOME = resolvedBaseDir;
+      setConvergeOsEnvironmentVariable(output, "HOME", resolvedBaseDir);
     } else {
-      delete output.T3CODE_HOME;
+      deleteConvergeOsEnvironmentVariable(output, "HOME");
     }
 
     // A dev-runner server is never launcher-managed. When the shell that runs
     // this script was itself spawned by the machine's managed t3 service (an
-    // agent working inside T3 Code), these leak through and the child server
+    // agent working inside ConvergeOS), these leak through and the child server
     // fails startup with "The service launcher started a different t3 version"
     // (serviceLauncherClient.ts resolveStartup).
     delete output.T3_SERVICE_LAUNCHER_CONTEXT;
     delete output.T3_BOOT_SERVICE_UNIT;
 
     if (!isDesktopMode) {
-      output.T3CODE_PORT = String(serverPort);
+      setConvergeOsEnvironmentVariable(output, "PORT", String(serverPort));
       // HOST is Vite's own bind address, and the desktop branch below is the
       // only place we set it. An inherited one (an exported HOST, a container,
       // a `HOST=0.0.0.0 npm start` habit) would otherwise reach Vite and pin
@@ -372,59 +390,64 @@ export function createDevRunnerEnv({
         // with either URL in their `.env` would get it back and silently lose
         // single-origin mode. This states the intent positively so Vite can
         // ignore those values rather than infer from their absence.
-        output.T3CODE_SINGLE_ORIGIN_DEV = "1";
+        setConvergeOsEnvironmentVariable(output, "SINGLE_ORIGIN_DEV", "1");
       } else {
         output.VITE_HTTP_URL = `http://localhost:${serverPort}`;
         output.VITE_WS_URL = `ws://localhost:${serverPort}`;
-        delete output.T3CODE_SINGLE_ORIGIN_DEV;
+        deleteConvergeOsEnvironmentVariable(output, "SINGLE_ORIGIN_DEV");
       }
     } else {
-      output.T3CODE_PORT = String(serverPort);
+      setConvergeOsEnvironmentVariable(output, "PORT", String(serverPort));
       output.VITE_HTTP_URL = `http://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
       output.VITE_WS_URL = `ws://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
       // Desktop pins the renderer to loopback on purpose; an ambient marker
       // must not make Vite drop those URLs.
-      delete output.T3CODE_SINGLE_ORIGIN_DEV;
-      delete output.T3CODE_MODE;
-      delete output.T3CODE_NO_BROWSER;
-      delete output.T3CODE_HOST;
+      deleteConvergeOsEnvironmentVariable(output, "SINGLE_ORIGIN_DEV");
+      deleteConvergeOsEnvironmentVariable(output, "MODE");
+      deleteConvergeOsEnvironmentVariable(output, "NO_BROWSER");
+      deleteConvergeOsEnvironmentVariable(output, "HOST");
     }
 
     if (!isDesktopMode && host !== undefined) {
-      output.T3CODE_HOST = host;
+      setConvergeOsEnvironmentVariable(output, "HOST", host);
     }
 
     if (!isDesktopMode) {
-      output.T3CODE_NO_BROWSER = browser === true ? "0" : "1";
+      setConvergeOsEnvironmentVariable(output, "NO_BROWSER", browser === true ? "0" : "1");
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
-      output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
+      setConvergeOsEnvironmentVariable(
+        output,
+        "AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
+        autoBootstrapProjectFromCwd ? "1" : "0",
+      );
     } else {
-      delete output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
+      deleteConvergeOsEnvironmentVariable(output, "AUTO_BOOTSTRAP_PROJECT_FROM_CWD");
     }
 
     if (logWebSocketEvents !== undefined) {
-      output.T3CODE_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
+      setConvergeOsEnvironmentVariable(output, "LOG_WS_EVENTS", logWebSocketEvents ? "1" : "0");
     } else {
-      delete output.T3CODE_LOG_WS_EVENTS;
+      deleteConvergeOsEnvironmentVariable(output, "LOG_WS_EVENTS");
     }
 
     if (mode === "dev") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      setConvergeOsEnvironmentVariable(output, "MODE", "web");
+      deleteConvergeOsEnvironmentVariable(output, "DESKTOP_WS_URL");
     }
 
     if (mode === "dev:server" || mode === "dev:web") {
-      output.T3CODE_MODE = "web";
-      delete output.T3CODE_DESKTOP_WS_URL;
+      setConvergeOsEnvironmentVariable(output, "MODE", "web");
+      deleteConvergeOsEnvironmentVariable(output, "DESKTOP_WS_URL");
     }
 
     if (isDesktopMode) {
       output.HOST = DESKTOP_DEV_LOOPBACK_HOST;
-      delete output.T3CODE_DESKTOP_WS_URL;
+      deleteConvergeOsEnvironmentVariable(output, "DESKTOP_WS_URL");
     }
 
+    applyConvergeOsEnvironmentAliases(output);
     return output;
   });
 }
@@ -684,7 +707,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     const resolvedT3Home =
       (input.t3Home?.trim() || undefined) ??
       worktreeHome ??
-      (hostEnvironment.T3CODE_HOME?.trim() || undefined);
+      (hostEnvironment.CONVERGEOS_HOME?.trim() || hostEnvironment.T3CODE_HOME?.trim() || undefined);
     const env = yield* createDevRunnerEnv({
       mode: input.mode,
       baseEnv: hostEnvironment,
@@ -703,7 +726,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
         : "";
-    const baseDir = env.T3CODE_HOME ?? (yield* DEFAULT_T3_HOME);
+    const baseDir = env.CONVERGEOS_HOME ?? env.T3CODE_HOME ?? (yield* DEFAULT_T3_HOME);
 
     yield* Effect.logInfo(
       `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${baseDir}`,
@@ -860,7 +883,7 @@ const devRunnerCli = Command.make("dev-runner", {
   ),
   t3Home: Flag.string("home-dir").pipe(
     Flag.withDescription(
-      "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME). Inside a git worktree this defaults to that worktree's own .t3 so dev state stays off the shared home.",
+      "Explicit ConvergeOS data directory; runtime state is stored under userdata (equivalent to CONVERGEOS_HOME). Inside a git worktree this defaults to that worktree's own .t3 so dev state stays off the shared home.",
     ),
     Flag.optional,
     Flag.map(Option.getOrUndefined),
@@ -870,22 +893,22 @@ const devRunnerCli = Command.make("dev-runner", {
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
     Flag.withDescription(
-      "Auto-bootstrap toggle (equivalent to T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
+      "Auto-bootstrap toggle (equivalent to CONVERGEOS_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
     ),
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
   ),
   logWebSocketEvents: Flag.boolean("log-websocket-events").pipe(
-    Flag.withDescription("WebSocket event logging toggle (equivalent to T3CODE_LOG_WS_EVENTS)."),
+    Flag.withDescription("WebSocket event logging toggle (equivalent to CONVERGEOS_LOG_WS_EVENTS)."),
     Flag.withAlias("log-ws-events"),
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_LOG_WS_EVENTS")),
   ),
   host: Flag.string("host").pipe(
-    Flag.withDescription("Server host/interface override (forwards to T3CODE_HOST)."),
+    Flag.withDescription("Server host/interface override (forwards to CONVERGEOS_HOST)."),
     Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOST")),
   ),
   port: Flag.integer("port").pipe(
     Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-    Flag.withDescription("Server port override (forwards to T3CODE_PORT)."),
+    Flag.withDescription("Server port override (forwards to CONVERGEOS_PORT)."),
     Flag.withFallbackConfig(optionalPortConfig("T3CODE_PORT")),
   ),
   devUrl: Flag.string("dev-url").pipe(

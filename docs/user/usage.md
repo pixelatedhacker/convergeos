@@ -17,11 +17,11 @@ pricing update.
 ## Subscription quota
 
 Subscription quota is a separate live signal. It reports provider allowance windows, utilization,
-and reset times instead of estimating spend from session transcripts. T3 Code can collect this data
+and reset times instead of estimating spend from session transcripts. ConvergeOS can collect this data
 when CodexBar is installed on the environment host. CodexBar remains optional, and a missing or
 failed collector is reported as unavailable rather than as zero usage.
 
-Connected clients can read the environment-wide quota snapshot. Agents with an active T3 Code MCP
+Connected clients can read the environment-wide quota snapshot. Agents with an active ConvergeOS MCP
 session can use `usage_snapshot` to read only quota that can be safely associated with their own
 provider instance. Account labels are omitted from the agent-facing result. If several configured
 instances use the same provider subscription and the account cannot be proven, the quota remains

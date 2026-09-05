@@ -59,7 +59,7 @@ export class DesktopAppUnreachableError extends Schema.TaggedErrorClass<DesktopA
   },
 ) {
   override get message(): string {
-    return "Could not reach the T3 Code desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running T3 Code server is not enough.";
+    return "Could not reach the ConvergeOS desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running ConvergeOS server is not enough.";
   }
 }
 
@@ -73,7 +73,7 @@ export class DesktopAppRequestFailedError extends Schema.TaggedErrorClass<Deskto
   },
 ) {
   override get message(): string {
-    return `T3 Code could not open ${this.workspaceRoot} (${this.code}).`;
+    return `ConvergeOS could not open ${this.workspaceRoot} (${this.code}).`;
   }
 }
 
@@ -178,7 +178,11 @@ export function sendDesktopAppActivationRequest(input: {
 }
 
 const appEnvironment = Config.all({
-  t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  t3Home: Config.string("CONVERGEOS_HOME").pipe(
+    Config.orElse(() => Config.string("T3CODE_HOME")),
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
   sshConnection: Config.string("SSH_CONNECTION").pipe(Config.option),
   sshTty: Config.string("SSH_TTY").pipe(Config.option),
 });
@@ -246,7 +250,7 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     });
   }
 
-  yield* Console.log(`Opened ${workspaceRoot} in T3 Code.`);
+  yield* Console.log(`Opened ${workspaceRoot} in ConvergeOS.`);
 });
 
 export const appCommand = Command.make("app", {
@@ -256,6 +260,6 @@ export const appCommand = Command.make("app", {
     Argument.optional,
   ),
 }).pipe(
-  Command.withDescription("Open a project in the running T3 Code desktop app."),
+  Command.withDescription("Open a project in the running ConvergeOS desktop app."),
   Command.withHandler(runAppCommand),
 );

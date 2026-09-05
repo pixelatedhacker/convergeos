@@ -33,8 +33,8 @@ import {
 
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 const MOBILE_ROOT = NodePath.join(REPO_ROOT, "apps/mobile");
-const ANDROID_PACKAGE = "com.t3tools.t3code";
-const APP_SCHEME = "t3code";
+const ANDROID_PACKAGE = "com.convergeos.app";
+const APP_SCHEME = "convergeos";
 const IOS_READY_FILENAME = "T3ShowcaseReadyScene";
 const SERVER_HOST = "0.0.0.0";
 const IOS_SIMULATOR_ARCH = NodeProcess.arch === "arm64" ? "arm64" : "x86_64";

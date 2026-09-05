@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./convergeOsEnvironment": {
+      "types": "./src/convergeOsEnvironment.ts",
+      "import": "./src/convergeOsEnvironment.ts"
+    },
     "./themePalettes": {
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"

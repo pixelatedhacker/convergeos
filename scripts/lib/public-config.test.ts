@@ -107,13 +107,16 @@ describe("loadRepoEnv", () => {
     expect(
       loadRepoEnv({
         baseEnv: {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "relay-client-traces",
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "relay-client-token",
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_DATASET: "relay-client-traces",
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_TOKEN: "relay-client-token",
         },
         repoRoot: makeTemporaryDirectory(),
       }),
-    ).toEqual({
+    ).toMatchObject({
+      CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
+      CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_DATASET: "relay-client-traces",
+      CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_TOKEN: "relay-client-token",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "relay-client-traces",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "relay-client-token",
@@ -127,14 +130,18 @@ describe("loadRepoEnv", () => {
     expect(
       loadRepoEnv({
         baseEnv: {
-          T3CODE_RELAY_URL: "https://relay.example.test",
-          T3CODE_MOBILE_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
-          T3CODE_MOBILE_OTLP_TRACES_DATASET: "mobile-traces",
-          T3CODE_MOBILE_OTLP_TRACES_TOKEN: "mobile-token",
+          CONVERGEOS_RELAY_URL: "https://relay.example.test",
+          CONVERGEOS_MOBILE_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
+          CONVERGEOS_MOBILE_OTLP_TRACES_DATASET: "mobile-traces",
+          CONVERGEOS_MOBILE_OTLP_TRACES_TOKEN: "mobile-token",
         },
         repoRoot: makeTemporaryDirectory(),
       }),
-    ).toEqual({
+    ).toMatchObject({
+      CONVERGEOS_RELAY_URL: "https://relay.example.test",
+      CONVERGEOS_MOBILE_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
+      CONVERGEOS_MOBILE_OTLP_TRACES_DATASET: "mobile-traces",
+      CONVERGEOS_MOBILE_OTLP_TRACES_TOKEN: "mobile-token",
       T3CODE_RELAY_URL: "https://relay.example.test",
       VITE_T3CODE_RELAY_URL: "https://relay.example.test",
       T3CODE_MOBILE_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",

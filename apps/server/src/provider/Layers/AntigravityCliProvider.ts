@@ -153,7 +153,7 @@ export const buildInitialAntigravityCliProviderSnapshot = Effect.fn(
     status: "warning",
     message: settings.enabled
       ? "Checking Antigravity CLI availability..."
-      : "Antigravity CLI is disabled in T3 Code settings.",
+      : "Antigravity CLI is disabled in ConvergeOS settings.",
   });
 });
 
@@ -170,7 +170,7 @@ export const checkAntigravityCliProviderStatus = Effect.fn("checkAntigravityCliP
         ...base,
         installed: false,
         status: "warning",
-        message: "Antigravity CLI is disabled in T3 Code settings.",
+        message: "Antigravity CLI is disabled in ConvergeOS settings.",
       });
     }
 
