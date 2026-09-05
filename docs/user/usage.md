@@ -21,6 +21,13 @@ and reset times instead of estimating spend from session transcripts. ConvergeOS
 when CodexBar is installed on the environment host. CodexBar remains optional, and a missing or
 failed collector is reported as unavailable rather than as zero usage.
 
+The **Subscription limits** section appears above historical activity. Each provider window shows
+the percentage remaining, a remaining-allowance meter, and its reset time. Connected environments
+stay in separate groups so subscriptions from different machines are never combined. Stale or
+partially failed snapshots remain visible with their status, while an unavailable percentage is
+shown as unknown rather than zero. The page-level refresh updates both subscription limits and the
+selected activity window.
+
 Connected clients can read the environment-wide quota snapshot. Agents with an active ConvergeOS MCP
 session can use `usage_snapshot` to read only quota that can be safely associated with their own
 provider instance. Account labels are omitted from the agent-facing result. If several configured
