@@ -45,11 +45,12 @@ A bot is an isolated thread with a name and a durable inbox. Create a worktree-b
 its thread menu, and choose **Make this thread a bot**. The bot initially uses the thread title as
 its name. Rename the thread and choose **Use thread title as bot name** when you want to update it.
 
-Open the **Bots** pane with the robot icon in the web or desktop sidebar, or search for **Open
-bots** in the command palette. The pane lists bot inboxes across connected projects and lets you
-open an inbox, edit or disable its profile, or promote an eligible isolated thread. Mobile shows
-bot identity in thread lists and Kanban assignments; profile management currently lives in the web
-and desktop pane.
+Open **Bots** from the named workspace entry in the web or desktop sidebar, or search for **Open
+bots** in the command palette. The workspace keeps the fleet roster beside the selected bot's
+status, project, worktree, and MCP connection. You can dispatch a task directly, open the full
+conversation, edit or disable the profile, or promote an eligible isolated thread. If no isolated
+thread is ready, **New bot** starts one in a project you choose. Mobile shows bot identity in thread
+lists and Kanban assignments; fleet management currently lives in the web and desktop workspace.
 
 Other agents can list only bots when choosing a destination. Messages still land in the bot's
 original thread, so its provider settings, history, approvals, checkpoints, and worktree remain

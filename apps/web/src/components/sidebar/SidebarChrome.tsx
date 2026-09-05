@@ -1,6 +1,5 @@
 import {
   ArrowLeftIcon,
-  BotIcon,
   ChartNoAxesColumnIcon,
   GitPullRequestIcon,
   SettingsIcon,
@@ -176,11 +175,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
 
-  const handleBotsClick = useCallback(() => {
-    closeMobileSidebar();
-    void navigate({ to: "/bots" });
-  }, [closeMobileSidebar, navigate]);
-
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
     if (canGoBack) {
@@ -206,7 +200,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Settings"
             onClick={handleSettingsClick}
           />
-          <SidebarUtilityItem icon={<BotIcon />} label="Bots" onClick={handleBotsClick} />
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<GitPullRequestIcon />}

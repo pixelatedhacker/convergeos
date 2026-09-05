@@ -60,3 +60,56 @@ export function sortBotThreads<T extends NamedBotInput>(threads: ReadonlyArray<T
     return leftName.localeCompare(rightName) || right.updatedAt.localeCompare(left.updatedAt);
   });
 }
+
+export function reconcileSelectedBotKey<T extends { readonly key: string }>(
+  selectedKey: string | null,
+  bots: ReadonlyArray<T>,
+): string | null {
+  if (selectedKey !== null && bots.some((bot) => bot.key === selectedKey)) return selectedKey;
+  return bots[0]?.key ?? null;
+}
+
+export function botFleetSummary(bots: ReadonlyArray<BotStatusInput>): {
+  readonly attention: number;
+  readonly working: number;
+  readonly available: number;
+} {
+  let attention = 0;
+  let working = 0;
+  let available = 0;
+
+  for (const bot of bots) {
+    const availability = resolveBotAvailability(bot);
+    if (availability === "attention" || availability === "failed") attention += 1;
+    else if (availability === "working") working += 1;
+    else available += 1;
+  }
+
+  return { attention, working, available };
+}
+
+export function canDispatchToBot(availability: BotAvailability): boolean {
+  return availability === "available" || availability === "failed";
+}
+
+export function updateBotDispatchDraft(
+  drafts: ReadonlyMap<string, string>,
+  botKey: string,
+  message: string,
+): ReadonlyMap<string, string> {
+  const next = new Map(drafts);
+  if (message.length === 0) next.delete(botKey);
+  else next.set(botKey, message);
+  return next;
+}
+
+export function updateBusyBotKeys(
+  keys: ReadonlySet<string>,
+  botKey: string,
+  busy: boolean,
+): ReadonlySet<string> {
+  const next = new Set(keys);
+  if (busy) next.add(botKey);
+  else next.delete(botKey);
+  return next;
+}
