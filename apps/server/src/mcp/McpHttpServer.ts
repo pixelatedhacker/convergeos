@@ -234,7 +234,7 @@ export const UsageToolkitRegistrationLive = McpServer.toolkit(UsageToolkit).pipe
 );
 
 const McpTransportLive = McpServer.layerHttp({
-  name: "T3 Code",
+  name: "ConvergeOS",
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],

@@ -29,13 +29,13 @@ there.
 For Grok, **Always allow this session** remembers the matching command or tool input. Other
 actions still ask for approval. It does not change the thread to **Full access**.
 
-Antigravity uses its own permission policy for each mode. T3 Code still shows any approval or
+Antigravity uses its own permission policy for each mode. ConvergeOS still shows any approval or
 question the official agent sends in **Full access**. A remembered approval is available only
 when the agent offers it for that action. Fixed-choice questions require one of the offered
 answers and do not accept custom text.
 
 Oh My Pi maps **Supervised** and **Auto** to `always-ask`, **Auto-accept edits** to `write`, and
-**Full access** to `yolo`. T3 Code still shows any permission request or form that Oh My Pi sends.
+**Full access** to `yolo`. ConvergeOS still shows any permission request or form that Oh My Pi sends.
 
 The separate **Antigravity CLI** provider supports only **Full access**. Its headless interface
 cannot show interactive approval requests. Select the Antigravity ACP provider for supervised
@@ -63,5 +63,5 @@ describe what you get; the exact per-provider translation is internal and may ch
 Mobile uses the same mode labels and descriptions. Providers can limit which modes are available.
 
 Antigravity's native `/plan` command requests a plan. It does not change the permission mode.
-T3 Code's separate Plan mode control is not available for Antigravity. See
+ConvergeOS's separate Plan mode control is not available for Antigravity. See
 [Antigravity](./providers-antigravity.md) for setup and thread limits.

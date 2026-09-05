@@ -143,7 +143,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
         auth: { status: "unknown" },
         message: settings.enabled
           ? "Checking Antigravity availability."
-          : "Antigravity is disabled in T3 Code settings.",
+          : "Antigravity is disabled in ConvergeOS settings.",
       },
     }),
     setup: { canAuthenticate: true, canInstall: true },

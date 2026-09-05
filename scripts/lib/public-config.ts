@@ -4,7 +4,9 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
-export interface T3CodePublicConfig {
+import { withConvergeOsEnvironmentAliases } from "@t3tools/shared/convergeOsEnvironment";
+
+export interface ConvergeOsPublicConfig {
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
   readonly clerkCliOAuthClientId: string | undefined;
@@ -16,6 +18,9 @@ export interface T3CodePublicConfig {
   readonly relayClientOtlpTracesDataset: string | undefined;
   readonly relayClientOtlpTracesToken: string | undefined;
 }
+
+/** @deprecated Use ConvergeOsPublicConfig. */
+export type T3CodePublicConfig = ConvergeOsPublicConfig;
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -34,122 +39,139 @@ export function loadRepoEnv({
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const config = resolvePublicConfig(baseEnv, localEnv, rootEnv);
 
-  return {
+  return withConvergeOsEnvironmentAliases({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
     ...(config.clerkPublishableKey
       ? {
-          T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
+          CONVERGEOS_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           VITE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
         }
       : {}),
     ...(config.clerkJwtTemplate
       ? {
-          T3CODE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
+          CONVERGEOS_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           VITE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
           EXPO_PUBLIC_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
         }
       : {}),
     ...(config.clerkCliOAuthClientId
       ? {
-          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
+          CONVERGEOS_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
           VITE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
         }
       : {}),
     ...(config.relayUrl
       ? {
-          T3CODE_RELAY_URL: config.relayUrl,
+          CONVERGEOS_RELAY_URL: config.relayUrl,
+          VITE_CONVERGEOS_RELAY_URL: config.relayUrl,
           VITE_T3CODE_RELAY_URL: config.relayUrl,
         }
       : {}),
     ...(config.mobileOtlpTracesUrl
       ? {
-          T3CODE_MOBILE_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
+          CONVERGEOS_MOBILE_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
           EXPO_PUBLIC_OTLP_TRACES_URL: config.mobileOtlpTracesUrl,
         }
       : {}),
     ...(config.mobileOtlpTracesDataset
       ? {
-          T3CODE_MOBILE_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
+          CONVERGEOS_MOBILE_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
           EXPO_PUBLIC_OTLP_TRACES_DATASET: config.mobileOtlpTracesDataset,
         }
       : {}),
     ...(config.mobileOtlpTracesToken
       ? {
-          T3CODE_MOBILE_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
+          CONVERGEOS_MOBILE_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
           EXPO_PUBLIC_OTLP_TRACES_TOKEN: config.mobileOtlpTracesToken,
         }
       : {}),
     ...(config.relayClientOtlpTracesUrl
       ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
           VITE_RELAY_OTLP_TRACES_URL: config.relayClientOtlpTracesUrl,
         }
       : {}),
     ...(config.relayClientOtlpTracesDataset
       ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
           VITE_RELAY_OTLP_TRACES_DATASET: config.relayClientOtlpTracesDataset,
         }
       : {}),
     ...(config.relayClientOtlpTracesToken
       ? {
-          T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
+          CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
           VITE_RELAY_OTLP_TRACES_TOKEN: config.relayClientOtlpTracesToken,
         }
       : {}),
-  };
+  });
 }
 
-export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
+export function resolvePublicConfig(...sources: readonly Environment[]): ConvergeOsPublicConfig {
+  const normalizedSources = sources.map(withConvergeOsEnvironmentAliases);
   return {
     clerkPublishableKey: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_CLERK_PUBLISHABLE_KEY",
       "T3CODE_CLERK_PUBLISHABLE_KEY",
       "VITE_CLERK_PUBLISHABLE_KEY",
       "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
     ),
     clerkJwtTemplate: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_CLERK_JWT_TEMPLATE",
       "T3CODE_CLERK_JWT_TEMPLATE",
       "VITE_CLERK_JWT_TEMPLATE",
       "EXPO_PUBLIC_CLERK_JWT_TEMPLATE",
     ),
     clerkCliOAuthClientId: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_CLERK_CLI_OAUTH_CLIENT_ID",
       "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID",
       "VITE_CLERK_CLI_OAUTH_CLIENT_ID",
     ),
-    relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
+    relayUrl: firstNonEmpty(
+      normalizedSources,
+      "CONVERGEOS_RELAY_URL",
+      "T3CODE_RELAY_URL",
+      "VITE_CONVERGEOS_RELAY_URL",
+      "VITE_T3CODE_RELAY_URL",
+    ),
     mobileOtlpTracesUrl: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_MOBILE_OTLP_TRACES_URL",
       "T3CODE_MOBILE_OTLP_TRACES_URL",
       "EXPO_PUBLIC_OTLP_TRACES_URL",
     ),
     mobileOtlpTracesDataset: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_MOBILE_OTLP_TRACES_DATASET",
       "T3CODE_MOBILE_OTLP_TRACES_DATASET",
       "EXPO_PUBLIC_OTLP_TRACES_DATASET",
     ),
     mobileOtlpTracesToken: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_MOBILE_OTLP_TRACES_TOKEN",
       "T3CODE_MOBILE_OTLP_TRACES_TOKEN",
       "EXPO_PUBLIC_OTLP_TRACES_TOKEN",
     ),
     relayClientOtlpTracesUrl: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_URL",
       "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL",
       "VITE_RELAY_OTLP_TRACES_URL",
     ),
     relayClientOtlpTracesDataset: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_DATASET",
       "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET",
       "VITE_RELAY_OTLP_TRACES_DATASET",
     ),
     relayClientOtlpTracesToken: firstNonEmpty(
-      sources,
+      normalizedSources,
+      "CONVERGEOS_RELAY_CLIENT_OTLP_TRACES_TOKEN",
       "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN",
       "VITE_RELAY_OTLP_TRACES_TOKEN",
     ),

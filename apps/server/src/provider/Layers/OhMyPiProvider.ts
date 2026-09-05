@@ -262,7 +262,7 @@ export function buildInitialOhMyPiProviderSnapshot(
       status: "warning",
       message: settings.enabled
         ? "Checking Oh My Pi availability..."
-        : "Oh My Pi is disabled in T3 Code settings.",
+        : "Oh My Pi is disabled in ConvergeOS settings.",
     });
   });
 }
@@ -281,7 +281,7 @@ export const checkOhMyPiProviderStatus = Effect.fn("checkOhMyPiProviderStatus")(
       installed: false,
       version: null,
       status: "warning",
-      message: "Oh My Pi is disabled in T3 Code settings.",
+      message: "Oh My Pi is disabled in ConvergeOS settings.",
     });
   }
 
@@ -417,7 +417,7 @@ export const checkOhMyPiProviderStatus = Effect.fn("checkOhMyPiProviderStatus")(
     });
   }
   if (parsed.catalog.ignoredEntries > 0 || parsed.catalog.truncatedEntries) {
-    yield* Effect.logWarning("Oh My Pi model catalog contained entries T3 Code could not use.", {
+    yield* Effect.logWarning("Oh My Pi model catalog contained entries ConvergeOS could not use.", {
       ignoredEntries: parsed.catalog.ignoredEntries,
       truncatedEntries: parsed.catalog.truncatedEntries,
     });

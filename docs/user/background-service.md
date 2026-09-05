@@ -1,11 +1,11 @@
-# Running T3 Code in the Background
+# Running ConvergeOS in the Background
 
-On Linux and macOS, T3 Code can run as a background service for your user, so it is ready without
+On Linux and macOS, ConvergeOS can run as a background service for your user, so it is ready without
 keeping a terminal open.
 
 ## Manage the Service
 
-Install it with the latest T3 Code release:
+Install it with the latest ConvergeOS release:
 
 ```sh
 npx t3@latest service install
@@ -23,7 +23,7 @@ Update or repair it:
 npx t3@latest service update
 ```
 
-The service uses the same T3 Code version as the CLI you run. To install a nightly or an exact
+The service uses the same ConvergeOS version as the CLI you run. To install a nightly or an exact
 version, use that version of the CLI:
 
 ```sh
@@ -45,10 +45,10 @@ Stop it and remove it from startup:
 npx t3@latest service uninstall
 ```
 
-Updating restarts T3 Code briefly. Let active agent work and terminal commands finish first.
+Updating restarts ConvergeOS briefly. Let active agent work and terminal commands finish first.
 If a remote update is already in progress, wait for it to finish before retrying a local update.
 
-The service runs a small stable launcher. Exact T3 Code versions are installed separately, so a
+The service runs a small stable launcher. Exact ConvergeOS versions are installed separately, so a
 failed remote candidate can return to the previous version without rewriting the service
 definition. The launcher snapshots the database before a remote candidate starts, so database
 updates roll back with the server version. An older launcher may require one local
@@ -86,4 +86,4 @@ T3 Connect may offer to install the service during setup so the host stays reach
 background. This is only an onboarding shortcut: the service and T3 Connect are managed separately.
 
 Signing out of T3 Connect does not remove the service. Use `t3 service uninstall` when you no longer
-want T3 Code to start in the background.
+want ConvergeOS to start in the background.

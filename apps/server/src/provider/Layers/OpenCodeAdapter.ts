@@ -1202,7 +1202,7 @@ export function makeOpenCodeAdapter(
         return;
       }
       const detail =
-        "OpenCode accepted the prompt, but T3 Code could not confirm its message or session status.";
+        "OpenCode accepted the prompt, but ConvergeOS could not confirm its message or session status.";
       const abortExit = yield* Effect.exit(
         runOpenCodeSdk("session.abort", (signal) =>
           context.client.session.abort({ sessionID: context.openCodeSessionId }, { signal }),
