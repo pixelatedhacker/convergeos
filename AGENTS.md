@@ -112,6 +112,9 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Pull requests
 
+- Agent-authored changes, commits, and pull requests are allowed in this fork. There is no blanket
+  prohibition on AI-assisted contributions; follow the same verification and review requirements
+  as any other change.
 - Submit a PR after the requested work is verified unless the developer asks you to keep the work local.
 - Commit each completed, verified feature as its own conventional commit. Do not batch unrelated features into one commit.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
