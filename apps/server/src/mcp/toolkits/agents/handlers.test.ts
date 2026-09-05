@@ -37,7 +37,9 @@ const TestLayer = McpHttpServer.AgentsToolkitRegistrationLive.pipe(
       AgentMesh.AgentMesh.of({
         list: (scope, input) => list(scope, input),
         read: () => Effect.die("unused"),
+        spawn: () => Effect.die("unused"),
         send: () => Effect.die("unused"),
+        wait: () => Effect.die("unused"),
         interrupt: () => Effect.die("unused"),
       }),
     ),

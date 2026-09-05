@@ -441,6 +441,28 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
   }),
 );
 
+it.effect("strips server-only delegation ownership from client turn starts", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeClientOrchestrationCommand({
+      type: "thread.turn.start",
+      commandId: "cmd-client-delegation-spoof",
+      threadId: "thread-1",
+      delegationId: "delegation-private",
+      message: {
+        messageId: "msg-client-delegation-spoof",
+        role: "user",
+        text: "supersede reserved work",
+        attachments: [],
+      },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.strictEqual("delegationId" in parsed, false);
+  }),
+);
+
 it.effect("decodes thread.created runtime mode for historical events", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadCreatedPayload({

@@ -31,6 +31,13 @@ const ProviderSessionStatus = Schema.Literals([
   "closed",
 ]);
 
+export const ProviderSessionMcpAttachment = Schema.Literals([
+  "attached",
+  "notRequested",
+  "leafOnly",
+]);
+export type ProviderSessionMcpAttachment = typeof ProviderSessionMcpAttachment.Type;
+
 export const ProviderSession = Schema.Struct({
   provider: ProviderDriverKind,
   // Optional during the driver/instance migration. Once every producer
@@ -44,6 +51,9 @@ export const ProviderSession = Schema.Struct({
   threadId: ThreadId,
   resumeCursor: Schema.optional(Schema.Unknown),
   activeTurnId: Schema.optional(TurnId),
+  // Optional so sessions persisted by builds predating MCP attachment reporting
+  // remain decodable. New built-in provider sessions always populate it.
+  mcpAttachment: Schema.optional(ProviderSessionMcpAttachment),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   lastError: Schema.optional(TrimmedNonEmptyString),

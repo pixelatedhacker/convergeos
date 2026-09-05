@@ -1,11 +1,11 @@
 import {
+  type Delegation,
   EventId,
   type KanbanCard,
   type KanbanPlacement,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type OrchestrationCommand,
   type OrchestrationEvent,
-  type OrchestrationReadModel,
   type OrchestrationThread,
 } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
@@ -33,6 +33,7 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
+import type { DelegationDecisionReadModel } from "../delegation/commandReadModel.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -238,12 +239,41 @@ type DecideOrchestrationCommandResult =
   | PlannedOrchestrationEvent
   | ReadonlyArray<PlannedOrchestrationEvent>;
 
+function sameDelegationRequester(
+  left: Delegation["requester"],
+  right: Delegation["requester"],
+): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "thread" && right.kind === "thread") {
+    return left.threadId === right.threadId && left.requestId === right.requestId;
+  }
+  if (left.kind === "kanban" && right.kind === "kanban") {
+    return left.cardId === right.cardId && left.cardRevision === right.cardRevision;
+  }
+  return false;
+}
+
+function findDelegation(
+  readModel: DelegationDecisionReadModel,
+  delegationId: Delegation["id"],
+): Delegation | undefined {
+  return readModel.delegations?.find((delegation) => delegation.id === delegationId);
+}
+
+function isTerminalDelegation(delegation: Delegation): boolean {
+  return (
+    delegation.state === "completed" ||
+    delegation.state === "failed" ||
+    delegation.state === "interrupted"
+  );
+}
+
 const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
   commands,
   readModel,
 }: {
   readonly commands: ReadonlyArray<OrchestrationCommand>;
-  readonly readModel: OrchestrationReadModel;
+  readonly readModel: DelegationDecisionReadModel;
 }): Effect.fn.Return<
   ReadonlyArray<PlannedOrchestrationEvent>,
   OrchestrationCommandRejection | PlatformError.PlatformError,
@@ -262,10 +292,16 @@ const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
     for (const nextEvent of nextEvents) {
       plannedEvents.push(nextEvent);
       nextSequence += 1;
-      nextReadModel = yield* projectEvent(nextReadModel, {
+      const projected = yield* projectEvent(nextReadModel, {
         ...nextEvent,
         sequence: nextSequence,
       }).pipe(Effect.orDie);
+      nextReadModel = {
+        ...projected,
+        ...(nextReadModel.delegations === undefined
+          ? {}
+          : { delegations: nextReadModel.delegations }),
+      };
     }
   }
 
@@ -277,7 +313,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
   readModel,
 }: {
   readonly command: OrchestrationCommand;
-  readonly readModel: OrchestrationReadModel;
+  readonly readModel: DelegationDecisionReadModel;
 }): Effect.fn.Return<
   DecideOrchestrationCommandResult,
   OrchestrationCommandRejection | PlatformError.PlatformError,
@@ -1077,6 +1113,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         status: command.placement.status,
         orderKey,
         assigneeThreadId: command.assigneeThreadId,
+        delegationId: null,
         revision: 1,
         createdAt: command.createdAt,
         updatedAt,
@@ -1125,6 +1162,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: `kanban assignee ${command.assigneeThreadId} is not an active bot in project ${current.projectId}`,
           });
         }
+      }
+      const linkedDelegation =
+        current.delegationId === null ? undefined : findDelegation(readModel, current.delegationId);
+      const changesCard =
+        (command.title !== undefined && command.title !== current.title) ||
+        (command.description !== undefined && command.description !== current.description) ||
+        (command.assigneeThreadId !== undefined &&
+          command.assigneeThreadId !== current.assigneeThreadId);
+      if (
+        linkedDelegation !== undefined &&
+        !isTerminalDelegation(linkedDelegation) &&
+        changesCard
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} has active delegated work`,
+        });
+      }
+      if (
+        current.delegationId !== null &&
+        command.assigneeThreadId !== undefined &&
+        command.assigneeThreadId !== current.assigneeThreadId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} has linked delegation ${current.delegationId}; retry it before changing assignee`,
+        });
       }
       const updatedAt = yield* nowIso;
       const card: KanbanCard = {
@@ -1187,10 +1251,35 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       const updatedAt = yield* nowIso;
+      const linkedDelegation =
+        current.delegationId === null ? undefined : findDelegation(readModel, current.delegationId);
+      const changesColumn = command.placement.status !== current.status;
+      if (
+        changesColumn &&
+        (linkedDelegation?.state === "failed" || linkedDelegation?.state === "interrupted")
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} must be retried explicitly`,
+        });
+      }
+      if (
+        changesColumn &&
+        linkedDelegation !== undefined &&
+        linkedDelegation.state !== "completed" &&
+        linkedDelegation.state !== "failed" &&
+        linkedDelegation.state !== "interrupted"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} has active delegated work`,
+        });
+      }
       const card: KanbanCard = {
         ...current,
         status: command.placement.status,
         orderKey,
+        ...(changesColumn && linkedDelegation?.state === "completed" ? { delegationId: null } : {}),
         revision: current.revision + 1,
         updatedAt,
       };
@@ -1223,6 +1312,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `kanban card ${command.cardId} revision changed`,
         });
       }
+      const linkedDelegation =
+        current.delegationId === null ? undefined : findDelegation(readModel, current.delegationId);
+      if (linkedDelegation !== undefined && !isTerminalDelegation(linkedDelegation)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} has active delegated work`,
+        });
+      }
       const deletedAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -1238,6 +1335,182 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           previousRevision: current.revision,
           deletedAt,
         },
+      };
+    }
+
+    case "kanban.card.retry": {
+      const current = (readModel.kanbanCards ?? []).find(
+        (card) => card.id === command.cardId && card.deletedAt === null,
+      );
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} revision changed`,
+        });
+      }
+      if (current.delegationId === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} has no delegation to retry`,
+        });
+      }
+      const delegation = findDelegation(readModel, current.delegationId);
+      if (
+        delegation === undefined ||
+        (delegation.state !== "failed" && delegation.state !== "interrupted")
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} delegation is not retryable`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        status: "ready",
+        delegationId: null,
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-retried",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.delegation.link": {
+      const current = (readModel.kanbanCards ?? []).find(
+        (card) => card.id === command.cardId && card.deletedAt === null,
+      );
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (current === undefined || delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "kanban card or delegation is unavailable",
+        });
+      }
+      if (current.revision !== command.expectedRevision || current.delegationId !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `kanban card ${command.cardId} is no longer available for delegation`,
+        });
+      }
+      if (
+        current.status !== "ready" ||
+        current.assigneeThreadId === null ||
+        delegation.projectId !== current.projectId ||
+        delegation.requester.kind !== "kanban" ||
+        delegation.requester.cardId !== current.id ||
+        delegation.requester.cardRevision !== current.revision ||
+        delegation.target.kind !== "existingThread" ||
+        delegation.target.threadId !== current.assigneeThreadId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not match ready card ${command.cardId}`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        delegationId: delegation.id,
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-delegation-linked",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.delegation.complete": {
+      const current = (readModel.kanbanCards ?? []).find(
+        (card) => card.id === command.cardId && card.deletedAt === null,
+      );
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (
+        current === undefined ||
+        current.delegationId !== command.delegationId ||
+        delegation === undefined ||
+        (delegation.state !== "completed" &&
+          delegation.state !== "failed" &&
+          delegation.state !== "interrupted")
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `completed delegation ${command.delegationId} is not linked to card ${command.cardId}`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        status: delegation.state === "completed" ? "review" : "ready",
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-delegation-completed",
+        payload: { card },
+      };
+    }
+
+    case "kanban.card.delegation.start": {
+      const current = (readModel.kanbanCards ?? []).find(
+        (card) => card.id === command.cardId && card.deletedAt === null,
+      );
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (
+        current === undefined ||
+        current.delegationId !== command.delegationId ||
+        current.status !== "ready" ||
+        delegation?.state !== "running"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `running delegation ${command.delegationId} is not ready on card ${command.cardId}`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const card: KanbanCard = {
+        ...current,
+        status: "inProgress",
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: command.cardId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-delegation-started",
+        payload: { card },
       };
     }
 
@@ -1309,6 +1582,477 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: command.interactionMode,
           updatedAt: occurredAt,
         },
+      };
+    }
+
+    case "delegation.request": {
+      const project = yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      const delegations = readModel.delegations ?? [];
+      if (delegations.some((delegation) => delegation.id === command.delegationId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} already exists`,
+        });
+      }
+      const duplicateRequester = delegations.find((delegation) =>
+        sameDelegationRequester(delegation.requester, command.requester),
+      );
+      if (duplicateRequester !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `request already belongs to delegation ${duplicateRequester.id}`,
+        });
+      }
+
+      let kanbanRequesterCard: KanbanCard | null = null;
+      if (command.requester.kind === "thread") {
+        const requesterThread = yield* requireActiveThread({
+          readModel,
+          command,
+          threadId: command.requester.threadId,
+        });
+        if (requesterThread.projectId !== command.projectId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "requester thread belongs to another project",
+          });
+        }
+      } else {
+        const requester = command.requester;
+        const card = (readModel.kanbanCards ?? []).find(
+          (candidate) => candidate.id === requester.cardId && candidate.deletedAt === null,
+        );
+        if (card === undefined || card.projectId !== command.projectId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "requester Kanban card is not active in this project",
+          });
+        }
+        if (card.revision !== requester.cardRevision) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `requester Kanban card revision is ${card.revision}, expected ${requester.cardRevision}`,
+          });
+        }
+        if (
+          card.status !== "ready" ||
+          card.assigneeThreadId === null ||
+          card.delegationId !== null ||
+          command.target.kind !== "existingThread" ||
+          command.target.threadId !== card.assigneeThreadId
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "requester Kanban card is no longer ready for its assigned bot",
+          });
+        }
+        kanbanRequesterCard = card;
+      }
+
+      let targetThreadId = null;
+      if (command.target.kind === "existingThread") {
+        const targetThread = yield* requireActiveThread({
+          readModel,
+          command,
+          threadId: command.target.threadId,
+        });
+        if (targetThread.projectId !== command.projectId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "target thread belongs to another project",
+          });
+        }
+        if (
+          command.requester.kind === "thread" &&
+          command.requester.threadId === command.target.threadId
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "a thread cannot delegate work to itself",
+          });
+        }
+        if (targetThread.botProfile == null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "target thread is not an active bot",
+          });
+        }
+        if (
+          targetThread.worktreePath === null ||
+          normalizeProjectPathForComparison(targetThread.worktreePath) ===
+            normalizeProjectPathForComparison(project.workspaceRoot)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "target bot does not own an isolated worktree",
+          });
+        }
+        const targetSessionBusy =
+          targetThread.session?.status === "starting" ||
+          targetThread.session?.status === "running" ||
+          targetThread.session?.status === "error";
+        if (
+          targetSessionBusy ||
+          targetThread.latestTurn?.state === "running" ||
+          targetThread.latestTurn?.state === "error" ||
+          hasOpenBlockingRequest(targetThread) ||
+          hasQueuedTurnStartForThread(targetThread, command.createdAt)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "target bot is busy or waiting for input",
+          });
+        }
+        const openTargetDelegation = delegations.find(
+          (candidate) =>
+            candidate.targetThreadId === targetThread.id && !isTerminalDelegation(candidate),
+        );
+        if (openTargetDelegation !== undefined) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `target bot already owns delegation ${openTargetDelegation.id}`,
+          });
+        }
+        if (command.requester.kind === "thread") {
+          const requesterThread = yield* requireActiveThread({
+            readModel,
+            command,
+            threadId: command.requester.threadId,
+          });
+          const requesterWorkspace = normalizeProjectPathForComparison(
+            requesterThread.worktreePath ?? project.workspaceRoot,
+          );
+          const targetWorkspace = normalizeProjectPathForComparison(
+            targetThread.worktreePath ?? project.workspaceRoot,
+          );
+          if (requesterWorkspace === targetWorkspace) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: "target bot shares the requester's mutable workspace",
+            });
+          }
+        }
+        targetThreadId = command.target.threadId;
+      }
+
+      const delegation: Delegation = {
+        id: command.delegationId,
+        projectId: command.projectId,
+        requester: command.requester,
+        target: command.target,
+        title: command.title,
+        task: command.task,
+        state: "requested",
+        targetThreadId,
+        turnId: null,
+        assistantMessageId: null,
+        failure: null,
+        revision: 1,
+        createdAt: command.createdAt,
+        updatedAt: command.createdAt,
+      };
+      const requestedEvent: PlannedOrchestrationEvent = {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.requested",
+        payload: { delegation },
+      };
+      if (kanbanRequesterCard === null) return requestedEvent;
+
+      const linkedCard: KanbanCard = {
+        ...kanbanRequesterCard,
+        delegationId: delegation.id,
+        revision: kanbanRequesterCard.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      const linkedEvent: PlannedOrchestrationEvent = {
+        ...(yield* withEventBase({
+          aggregateKind: "kanban-card",
+          aggregateId: kanbanRequesterCard.id,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "kanban.card-delegation-linked",
+        payload: { card: linkedCard },
+      };
+      return [requestedEvent, linkedEvent];
+    }
+
+    case "delegation.provision.start": {
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not exist`,
+        });
+      }
+      if (delegation.state !== "requested" || delegation.target.kind !== "newThread") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} cannot start provisioning from ${delegation.state}`,
+        });
+      }
+      const next: Delegation = {
+        ...delegation,
+        state: "provisioning",
+        targetThreadId: command.targetThreadId,
+        revision: delegation.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.provision-started",
+        payload: { delegation: next },
+      };
+    }
+
+    case "delegation.target.bind": {
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not exist`,
+        });
+      }
+      if (
+        delegation.state !== "provisioning" ||
+        delegation.target.kind !== "newThread" ||
+        (delegation.targetThreadId !== null && delegation.targetThreadId !== command.targetThreadId)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} cannot bind a target from ${delegation.state}`,
+        });
+      }
+      const targetThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: command.targetThreadId,
+      });
+      if (targetThread.projectId !== delegation.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "target thread belongs to another project",
+        });
+      }
+      const project = yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: delegation.projectId,
+      });
+      if (
+        targetThread.worktreePath === null ||
+        normalizeProjectPathForComparison(targetThread.worktreePath) ===
+          normalizeProjectPathForComparison(project.workspaceRoot)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "spawned target does not own an isolated worktree",
+        });
+      }
+      const next: Delegation = {
+        ...delegation,
+        targetThreadId: command.targetThreadId,
+        revision: delegation.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.target-bound",
+        payload: { delegation: next },
+      };
+    }
+
+    case "delegation.turn.request": {
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not exist`,
+        });
+      }
+      const isReadyExisting =
+        delegation.state === "requested" && delegation.target.kind === "existingThread";
+      const isReadyNew =
+        delegation.state === "provisioning" &&
+        delegation.target.kind === "newThread" &&
+        delegation.targetThreadId !== null;
+      if ((!isReadyExisting && !isReadyNew) || delegation.targetThreadId === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} cannot request a turn from ${delegation.state}`,
+        });
+      }
+      const targetThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: delegation.targetThreadId,
+      });
+      if (delegation.target.kind === "existingThread") {
+        const project = yield* requireActiveProject({
+          readModel,
+          command,
+          projectId: delegation.projectId,
+        });
+        if (
+          targetThread.botProfile == null ||
+          targetThread.worktreePath === null ||
+          normalizeProjectPathForComparison(targetThread.worktreePath) ===
+            normalizeProjectPathForComparison(project.workspaceRoot)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `delegation ${command.delegationId} target is no longer an active isolated bot`,
+          });
+        }
+      } else {
+        const project = yield* requireActiveProject({
+          readModel,
+          command,
+          projectId: delegation.projectId,
+        });
+        if (
+          targetThread.worktreePath === null ||
+          normalizeProjectPathForComparison(targetThread.worktreePath) ===
+            normalizeProjectPathForComparison(project.workspaceRoot)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `delegation ${command.delegationId} worker is not ready in an isolated worktree`,
+          });
+        }
+      }
+      const next: Delegation = {
+        ...delegation,
+        state: "turnRequested",
+        revision: delegation.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.turn-requested",
+        payload: { delegation: next },
+      };
+    }
+
+    case "delegation.turn.bind": {
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not exist`,
+        });
+      }
+      if (delegation.state !== "turnRequested" || delegation.targetThreadId === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} cannot bind a turn from ${delegation.state}`,
+        });
+      }
+      const targetThread = yield* requireActiveThread({
+        readModel,
+        command,
+        threadId: delegation.targetThreadId,
+      });
+      if (targetThread.latestTurn?.turnId !== command.turnId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `turn ${command.turnId} is not the latest turn for delegation target ${delegation.targetThreadId}`,
+        });
+      }
+      if (
+        command.assistantMessageId !== null &&
+        targetThread.latestTurn.assistantMessageId !== command.assistantMessageId
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `assistant message ${command.assistantMessageId} does not belong to turn ${command.turnId}`,
+        });
+      }
+      const next: Delegation = {
+        ...delegation,
+        state: "running",
+        turnId: command.turnId,
+        assistantMessageId: command.assistantMessageId,
+        revision: delegation.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type: "delegation.turn-bound",
+        payload: { delegation: next },
+      };
+    }
+
+    case "delegation.complete": {
+      const delegation = findDelegation(readModel, command.delegationId);
+      if (delegation === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} does not exist`,
+        });
+      }
+      const terminal = ["completed", "failed", "interrupted"].includes(delegation.state);
+      const validCompleted = command.outcome === "completed" && delegation.state === "running";
+      const validInterrupted =
+        command.outcome === "interrupted" &&
+        (delegation.state === "turnRequested" || delegation.state === "running");
+      const validFailed = command.outcome === "failed" && !terminal;
+      if (!validCompleted && !validInterrupted && !validFailed) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `delegation ${command.delegationId} cannot become ${command.outcome} from ${delegation.state}`,
+        });
+      }
+      const next: Delegation = {
+        ...delegation,
+        state: command.outcome,
+        failure: command.failure,
+        revision: delegation.revision + 1,
+        updatedAt: command.createdAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "delegation",
+          aggregateId: command.delegationId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        type:
+          command.outcome === "completed"
+            ? "delegation.completed"
+            : command.outcome === "failed"
+              ? "delegation.failed"
+              : "delegation.interrupted",
+        payload: { delegation: next },
       };
     }
 
@@ -1389,6 +2133,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             text: peerMessage,
             attachments: [],
           },
+          ...(command.delegationId === undefined ? {} : { delegationId: command.delegationId }),
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           createdAt,
@@ -1452,6 +2197,35 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (command.delegationId !== undefined) {
+        const owner = findDelegation(readModel, command.delegationId);
+        const phaseAllowsTurnStart =
+          owner?.state === "turnRequested" ||
+          (owner?.state === "provisioning" && owner.target.kind === "newThread");
+        if (
+          owner === undefined ||
+          owner.targetThreadId !== targetThread.id ||
+          !phaseAllowsTurnStart
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `delegation ${command.delegationId} does not own an active turn reservation for thread ${targetThread.id}`,
+          });
+        }
+      }
+      const openTargetDelegation = (readModel.delegations ?? []).find(
+        (delegation) =>
+          delegation.targetThreadId === targetThread.id &&
+          delegation.state !== "completed" &&
+          delegation.state !== "failed" &&
+          delegation.state !== "interrupted",
+      );
+      if (openTargetDelegation !== undefined && command.delegationId !== openTargetDelegation.id) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${targetThread.id} is reserved by delegation ${openTargetDelegation.id}`,
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({

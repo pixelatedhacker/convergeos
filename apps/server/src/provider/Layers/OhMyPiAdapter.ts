@@ -42,6 +42,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
 import {
   ProviderAdapterRequestError,
   ProviderAdapterSessionClosedError,
@@ -753,14 +754,14 @@ export function makeOhMyPiAdapter(settings: OhMyPiSettings, options?: OhMyPiAdap
               ...(options?.environment ? { environment: options.environment } : {}),
               runtimeMode: input.runtimeMode,
               cwd,
-              clientInfo: { name: "t3-code", version: "0.0.0" },
+              clientInfo: { name: CONVERGEOS_MCP_SERVER_NAME, version: "0.0.0" },
               additionalDirectories: [serverConfig.attachmentsDir],
               ...(Option.isSome(cursor) ? { resumeSessionId: cursor.value.sessionId } : {}),
               mcpServers: mcp
                 ? [
                     {
                       type: "http",
-                      name: "t3-code",
+                      name: CONVERGEOS_MCP_SERVER_NAME,
                       url: mcp.endpoint,
                       headers: [{ name: "Authorization", value: mcp.authorizationHeader }],
                     },
@@ -806,6 +807,7 @@ export function makeOhMyPiAdapter(settings: OhMyPiSettings, options?: OhMyPiAdap
               threadId: input.threadId,
               cwd,
               status: "ready",
+              mcpAttachment: mcp ? "attached" : "notRequested",
               runtimeMode: input.runtimeMode,
               ...(input.modelSelection ? { model: input.modelSelection.model } : {}),
               resumeCursor: { schemaVersion: 1, sessionId: started.sessionId },

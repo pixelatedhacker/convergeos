@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import {
   CommandId,
+  DelegationId,
   IsoDateTime,
   MessageId,
   NonNegativeInt,
@@ -13,13 +14,23 @@ import {
 import {
   AgentMeshRequestId,
   BotProfile,
+  DelegationFailure,
+  DelegationState,
+  ModelSelection,
   OrchestrationLatestTurnState,
   OrchestrationSessionStatus,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
 } from "./orchestration.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
-export const AgentMeshOperation = Schema.Literals(["list", "read", "send", "interrupt"]);
+export const AgentMeshOperation = Schema.Literals([
+  "list",
+  "read",
+  "spawn",
+  "send",
+  "wait",
+  "interrupt",
+]);
 export type AgentMeshOperation = typeof AgentMeshOperation.Type;
 
 export const AgentMeshAgent = Schema.Struct({
@@ -29,6 +40,7 @@ export const AgentMeshAgent = Schema.Struct({
   latestTurnState: Schema.NullOr(OrchestrationLatestTurnState),
   activeTurnId: Schema.NullOr(TurnId),
   providerInstanceId: Schema.NullOr(ProviderInstanceId),
+  mcpAttachment: Schema.NullOr(Schema.Literals(["attached", "notRequested", "leafOnly"])),
   hasPendingApprovals: Schema.Boolean,
   hasPendingUserInput: Schema.Boolean,
   backgroundLiveness: Schema.NullOr(Schema.Literals(["working", "monitoring"])),
@@ -59,6 +71,21 @@ export const AgentMeshSendInput = Schema.Struct({
 });
 export type AgentMeshSendInput = typeof AgentMeshSendInput.Type;
 
+export const AgentMeshSpawnInput = Schema.Struct({
+  requestId: AgentMeshRequestId,
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+  task: TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
+  modelSelection: Schema.optional(ModelSelection),
+});
+export type AgentMeshSpawnInput = typeof AgentMeshSpawnInput.Type;
+
+export const AgentMeshWaitInput = Schema.Struct({
+  delegationIds: Schema.Array(DelegationId).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
+  timeoutMs: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 50_000 }))),
+  maxChars: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 256, maximum: 32_000 }))),
+});
+export type AgentMeshWaitInput = typeof AgentMeshWaitInput.Type;
+
 export const AgentMeshInterruptInput = Schema.Struct({
   requestId: AgentMeshRequestId,
   targetThreadId: ThreadId,
@@ -72,17 +99,18 @@ export const AgentMeshReadInput = Schema.Struct({
 });
 export type AgentMeshReadInput = typeof AgentMeshReadInput.Type;
 
+export const AgentMeshAssistantOutput = Schema.Struct({
+  messageId: MessageId,
+  turnId: Schema.NullOr(TurnId),
+  text: Schema.String,
+  truncated: Schema.Boolean,
+  updatedAt: IsoDateTime,
+});
+export type AgentMeshAssistantOutput = typeof AgentMeshAssistantOutput.Type;
+
 export const AgentMeshReadResult = Schema.Struct({
   agent: AgentMeshAgent,
-  latestAssistant: Schema.NullOr(
-    Schema.Struct({
-      messageId: MessageId,
-      turnId: Schema.NullOr(TurnId),
-      text: Schema.String,
-      truncated: Schema.Boolean,
-      updatedAt: IsoDateTime,
-    }),
-  ),
+  latestAssistant: Schema.NullOr(AgentMeshAssistantOutput),
 });
 export type AgentMeshReadResult = typeof AgentMeshReadResult.Type;
 
@@ -94,14 +122,50 @@ export const AgentMeshDispatchReceipt = Schema.Struct({
 });
 export type AgentMeshDispatchReceipt = typeof AgentMeshDispatchReceipt.Type;
 
+export const AgentMeshDelegationDispatchReceipt = Schema.Struct({
+  delegationId: DelegationId,
+  targetThreadId: Schema.NullOr(ThreadId),
+  commandId: CommandId,
+  messageId: MessageId,
+  sequence: NonNegativeInt,
+  state: DelegationState,
+});
+export type AgentMeshDelegationDispatchReceipt = typeof AgentMeshDelegationDispatchReceipt.Type;
+
+export const AgentMeshDelegationView = Schema.Struct({
+  delegationId: DelegationId,
+  targetThreadId: Schema.NullOr(ThreadId),
+  state: DelegationState,
+  turnId: Schema.NullOr(TurnId),
+  failure: Schema.NullOr(DelegationFailure),
+  hasPendingApprovals: Schema.Boolean,
+  hasPendingUserInput: Schema.Boolean,
+  latestAssistant: Schema.NullOr(AgentMeshAssistantOutput),
+  updatedAt: IsoDateTime,
+});
+export type AgentMeshDelegationView = typeof AgentMeshDelegationView.Type;
+
+export const AgentMeshWaitResult = Schema.Struct({
+  reason: Schema.Literals(["completed", "failed", "interrupted", "attention", "timeout"]),
+  delegations: Schema.Array(AgentMeshDelegationView),
+  cursor: NonNegativeInt,
+});
+export type AgentMeshWaitResult = typeof AgentMeshWaitResult.Type;
+
 export class AgentMeshError extends Schema.TaggedErrorClass<AgentMeshError>()("AgentMeshError", {
   operation: AgentMeshOperation,
   reason: Schema.Literals([
     "capabilityDenied",
     "callerUnavailable",
     "targetUnavailable",
+    "targetNotBot",
+    "targetBusy",
     "selfTarget",
     "workspaceShared",
+    "repositoryUnavailable",
+    "delegationUnavailable",
+    "provisionFailed",
+    "waitFailed",
     "dispatchFailed",
   ]),
   targetThreadId: Schema.NullOr(ThreadId),
@@ -114,10 +178,22 @@ export class AgentMeshError extends Schema.TaggedErrorClass<AgentMeshError>()("A
         return "The calling agent thread is unavailable.";
       case "targetUnavailable":
         return "The target agent is unavailable in this project.";
+      case "targetNotBot":
+        return "The target thread is not an active bot.";
+      case "targetBusy":
+        return "The target bot is already working or waiting for input.";
       case "selfTarget":
         return "An agent cannot target its own active thread.";
       case "workspaceShared":
         return "The target agent shares this thread's mutable workspace.";
+      case "repositoryUnavailable":
+        return "A new agent requires a Git-backed project with a resolvable base branch.";
+      case "delegationUnavailable":
+        return "The requested delegation is unavailable in this project.";
+      case "provisionFailed":
+        return "The delegated worker could not be provisioned.";
+      case "waitFailed":
+        return "Delegation state could not be read while waiting.";
       case "dispatchFailed":
         return `The agent ${this.operation} command could not be accepted.`;
     }

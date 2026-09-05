@@ -31,6 +31,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { ChildProcessHandle } from "effect/unstable/process/ChildProcessSpawner";
 import * as NodeCrypto from "node:crypto";
 
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { collectUint8StreamText } from "../../stream/collectUint8StreamText.ts";
 import {
   AntigravityCliResumeCursor,
@@ -530,6 +531,7 @@ export const makeAntigravityCliAdapter = Effect.fn("makeAntigravityCliAdapter")(
             "Stop the existing Antigravity CLI session before replacing it.",
           );
         const now = yield* nowIso;
+        const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
         const session: ProviderSession = {
           provider: PROVIDER,
           providerInstanceId: instanceId,
@@ -537,6 +539,7 @@ export const makeAntigravityCliAdapter = Effect.fn("makeAntigravityCliAdapter")(
           cwd,
           runtimeMode: input.runtimeMode,
           status: "ready",
+          mcpAttachment: mcpSession ? "leafOnly" : "notRequested",
           createdAt: now,
           updatedAt: now,
           ...(cursor ? { resumeCursor: cursor } : {}),

@@ -45,6 +45,16 @@ const handlers = {
         cards: (readModel.kanbanCards ?? []).filter(
           (card) => card.projectId === projectId && card.deletedAt === null,
         ),
+        delegations: (readModel.delegations ?? [])
+          .filter(
+            (delegation) =>
+              delegation.projectId === projectId && delegation.requester.kind === "kanban",
+          )
+          .map((delegation) => ({
+            id: delegation.id,
+            state: delegation.state,
+            targetThreadId: delegation.targetThreadId,
+          })),
       };
     }),
   kanban_write: (input) =>
@@ -91,13 +101,21 @@ const handlers = {
                   placement: input.placement,
                   createdAt,
                 }
-              : {
-                  type: "kanban.card.delete",
-                  commandId,
-                  cardId: input.cardId,
-                  expectedRevision: input.expectedRevision,
-                  createdAt,
-                };
+              : input.action === "retry"
+                ? {
+                    type: "kanban.card.retry",
+                    commandId,
+                    cardId: input.cardId,
+                    expectedRevision: input.expectedRevision,
+                    createdAt,
+                  }
+                : {
+                    type: "kanban.card.delete",
+                    commandId,
+                    cardId: input.cardId,
+                    expectedRevision: input.expectedRevision,
+                    createdAt,
+                  };
       const engine = yield* OrchestrationEngineService;
       const receipt = yield* engine
         .dispatch(command)

@@ -1,5 +1,6 @@
 import {
   CommandId,
+  DelegationId,
   EventId,
   IsoDateTime,
   KanbanCardId,
@@ -37,7 +38,7 @@ const EventMetadataFromJsonString = Schema.fromJsonString(OrchestrationEventMeta
 const AppendEventRequestSchema = Schema.Struct({
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  streamId: Schema.Union([ProjectId, ThreadId, KanbanCardId]),
+  streamId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId]),
   type: OrchestrationEventType,
   causationEventId: Schema.NullOr(EventId),
   correlationId: Schema.NullOr(CommandId),
@@ -53,7 +54,7 @@ const OrchestrationEventPersistedRowSchema = Schema.Struct({
   eventId: EventId,
   type: OrchestrationEventType,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId]),
+  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -76,7 +77,7 @@ const ReadFromSequenceRequestSchema = Schema.Struct({
 const DEFAULT_READ_FROM_SEQUENCE_LIMIT = 1_000;
 const READ_PAGE_SIZE = 500;
 
-function inferActorKind(
+export function inferActorKind(
   event: Omit<OrchestrationEvent, "sequence">,
 ): Schema.Schema.Type<typeof OrchestrationActorKind> {
   if (event.commandId !== null && event.commandId.startsWith("provider:")) {

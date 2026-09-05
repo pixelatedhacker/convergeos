@@ -319,7 +319,7 @@ const discoverGrokModelsViaAcpInitialize = (
       environment,
       childProcessSpawner,
       cwd: process.cwd(),
-      clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
+      clientInfo: { name: "convergeos-provider-probe", version: "0.0.0" },
     });
     const initialized = yield* acp.initialize();
     return buildGrokModelsFromSessionModelState(sessionModelStateFromInitialize(initialized));

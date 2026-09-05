@@ -10,6 +10,7 @@ import {
   CheckpointRef,
   ClientSurface,
   CommandId,
+  DelegationId,
   EventId,
   IsoDateTime,
   KanbanCardId,
@@ -402,6 +403,7 @@ export const OrchestrationSession = Schema.Struct({
   status: OrchestrationSessionStatus,
   providerName: Schema.NullOr(TrimmedNonEmptyString),
   providerInstanceId: Schema.optional(ProviderInstanceId),
+  mcpAttachment: Schema.optional(Schema.Literals(["attached", "notRequested", "leafOnly"])),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(TrimmedNonEmptyString),
@@ -987,6 +989,39 @@ const KanbanCardDeleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const KanbanCardRetryCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.retry"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  expectedRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+export const KanbanCardDelegationLinkCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.delegation.link"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  expectedRevision: PositiveInt,
+  delegationId: DelegationId,
+  createdAt: IsoDateTime,
+});
+
+export const KanbanCardDelegationCompleteCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.delegation.complete"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  delegationId: DelegationId,
+  createdAt: IsoDateTime,
+});
+
+export const KanbanCardDelegationStartCommand = Schema.Struct({
+  type: Schema.Literal("kanban.card.delegation.start"),
+  commandId: CommandId,
+  cardId: KanbanCardId,
+  delegationId: DelegationId,
+  createdAt: IsoDateTime,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1040,6 +1075,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     attachments: Schema.Array(ChatAttachment),
   }),
   modelSelection: Schema.optional(ModelSelection),
+  delegationId: Schema.optional(DelegationId),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   interactionMode: ProviderInteractionMode.pipe(
@@ -1122,12 +1158,135 @@ export const AgentMeshRequestId = TrimmedNonEmptyString.check(
 );
 export type AgentMeshRequestId = typeof AgentMeshRequestId.Type;
 
+export const DelegationRequester = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("thread"),
+    threadId: ThreadId,
+    requestId: AgentMeshRequestId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("kanban"),
+    cardId: KanbanCardId,
+    cardRevision: PositiveInt,
+  }),
+]);
+export type DelegationRequester = typeof DelegationRequester.Type;
+
+export const DelegationTarget = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("newThread"),
+    modelSelection: ModelSelection,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("existingThread"),
+    threadId: ThreadId,
+  }),
+]);
+export type DelegationTarget = typeof DelegationTarget.Type;
+
+export const DelegationState = Schema.Literals([
+  "requested",
+  "provisioning",
+  "turnRequested",
+  "running",
+  "completed",
+  "failed",
+  "interrupted",
+]);
+export type DelegationState = typeof DelegationState.Type;
+
+export const DelegationFailure = Schema.Struct({
+  code: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
+  detail: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
+});
+export type DelegationFailure = typeof DelegationFailure.Type;
+
+/** One durable unit of work assigned from a thread or Kanban card to a worker turn. */
+export const Delegation = Schema.Struct({
+  id: DelegationId,
+  projectId: ProjectId,
+  requester: DelegationRequester,
+  target: DelegationTarget,
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+  task: TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
+  state: DelegationState,
+  targetThreadId: Schema.NullOr(ThreadId),
+  turnId: Schema.NullOr(TurnId),
+  assistantMessageId: Schema.NullOr(MessageId),
+  failure: Schema.NullOr(DelegationFailure),
+  revision: PositiveInt,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type Delegation = typeof Delegation.Type;
+
+export const DelegationRequestCommand = Schema.Struct({
+  type: Schema.Literal("delegation.request"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  projectId: ProjectId,
+  requester: DelegationRequester,
+  target: DelegationTarget,
+  title: Delegation.fields.title,
+  task: Delegation.fields.task,
+  createdAt: IsoDateTime,
+});
+
+export const DelegationProvisionStartCommand = Schema.Struct({
+  type: Schema.Literal("delegation.provision.start"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  targetThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
+export const DelegationTargetBindCommand = Schema.Struct({
+  type: Schema.Literal("delegation.target.bind"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  targetThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
+export const DelegationTurnRequestCommand = Schema.Struct({
+  type: Schema.Literal("delegation.turn.request"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  createdAt: IsoDateTime,
+});
+
+export const DelegationTurnBindCommand = Schema.Struct({
+  type: Schema.Literal("delegation.turn.bind"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  turnId: TurnId,
+  assistantMessageId: Schema.NullOr(MessageId),
+  createdAt: IsoDateTime,
+});
+
+export const DelegationCompleteCommand = Schema.Struct({
+  type: Schema.Literal("delegation.complete"),
+  commandId: CommandId,
+  delegationId: DelegationId,
+  outcome: Schema.Literals(["completed", "failed", "interrupted"]),
+  failure: Schema.NullOr(DelegationFailure),
+  createdAt: IsoDateTime,
+}).check(
+  Schema.makeFilter(
+    (input) =>
+      (input.outcome === "failed" && input.failure !== null) ||
+      (input.outcome !== "failed" && input.failure === null) ||
+      "failure must be present exactly when outcome is failed",
+  ),
+);
+
 export const ThreadPeerTurnStartCommand = Schema.Struct({
   type: Schema.Literal("thread.peer-turn.start"),
   commandId: CommandId,
   requestId: AgentMeshRequestId,
   sourceThreadId: ThreadId,
   threadId: ThreadId,
+  delegationId: Schema.optional(DelegationId),
   messageId: MessageId,
   message: TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
 });
@@ -1163,6 +1322,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   KanbanCardUpdateCommand,
   KanbanCardMoveCommand,
   KanbanCardDeleteCommand,
+  KanbanCardRetryCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1197,6 +1357,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   KanbanCardUpdateCommand,
   KanbanCardMoveCommand,
   KanbanCardDeleteCommand,
+  KanbanCardRetryCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1282,6 +1443,15 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  KanbanCardDelegationLinkCommand,
+  KanbanCardDelegationStartCommand,
+  KanbanCardDelegationCompleteCommand,
+  DelegationRequestCommand,
+  DelegationProvisionStartCommand,
+  DelegationTargetBindCommand,
+  DelegationTurnRequestCommand,
+  DelegationTurnBindCommand,
+  DelegationCompleteCommand,
   ThreadPeerTurnStartCommand,
   ThreadPeerTurnInterruptCommand,
   ThreadAutoSettleCommand,
@@ -1338,10 +1508,27 @@ export const OrchestrationEventType = Schema.Literals([
   "kanban.card-updated",
   "kanban.card-moved",
   "kanban.card-deleted",
+  "kanban.card-retried",
+  "kanban.card-delegation-linked",
+  "kanban.card-delegation-started",
+  "kanban.card-delegation-completed",
+  "delegation.requested",
+  "delegation.provision-started",
+  "delegation.target-bound",
+  "delegation.turn-requested",
+  "delegation.turn-bound",
+  "delegation.completed",
+  "delegation.failed",
+  "delegation.interrupted",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
 
-export const OrchestrationAggregateKind = Schema.Literals(["project", "thread", "kanban-card"]);
+export const OrchestrationAggregateKind = Schema.Literals([
+  "project",
+  "thread",
+  "kanban-card",
+  "delegation",
+]);
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
 
@@ -1495,6 +1682,13 @@ export const KanbanCardDeletedPayload = Schema.Struct({
   previousRevision: PositiveInt,
   deletedAt: IsoDateTime,
 });
+export const KanbanCardRetriedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardDelegationLinkedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardDelegationStartedPayload = Schema.Struct({ card: KanbanCard });
+export const KanbanCardDelegationCompletedPayload = Schema.Struct({ card: KanbanCard });
+
+export const DelegationTransitionPayload = Schema.Struct({ delegation: Delegation });
+export type DelegationTransitionPayload = typeof DelegationTransitionPayload.Type;
 
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
   threadId: ThreadId,
@@ -1623,7 +1817,7 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId]),
+  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -1806,6 +2000,66 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("kanban.card-deleted"),
     payload: KanbanCardDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-retried"),
+    payload: KanbanCardRetriedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-delegation-linked"),
+    payload: KanbanCardDelegationLinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-delegation-started"),
+    payload: KanbanCardDelegationStartedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("kanban.card-delegation-completed"),
+    payload: KanbanCardDelegationCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.requested"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.provision-started"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.target-bound"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.turn-requested"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.turn-bound"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.completed"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.failed"),
+    payload: DelegationTransitionPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("delegation.interrupted"),
+    payload: DelegationTransitionPayload,
   }),
 ]);
 export type OrchestrationEvent = typeof OrchestrationEvent.Type;

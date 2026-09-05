@@ -1,9 +1,15 @@
-import type { SubscriptionQuotaScopedReport } from "@t3tools/contracts";
+import {
+  SubscriptionQuotaScopedReport,
+  UsageReadError,
+  type UsageMcpSummary,
+  type UsageSummary,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as SubscriptionQuotaService from "../../../subscriptionQuota/SubscriptionQuotaService.ts";
 import * as ProviderInstanceRegistry from "../../../provider/Services/ProviderInstanceRegistry.ts";
+import * as UsageService from "../../../usage/UsageService.ts";
 import { UsageToolkit } from "./tools.ts";
 
 export const sanitizeUsageSnapshot = (
@@ -12,6 +18,14 @@ export const sanitizeUsageSnapshot = (
   ...report,
   subjects: report.subjects.map((subject) => ({ ...subject, accountLabel: null })),
 });
+
+export const sanitizeUsageSummary = (summary: UsageSummary): UsageMcpSummary => ({
+  ...summary,
+  sources: summary.sources.map(({ fingerprint: _fingerprint, ...source }) => source),
+});
+
+export const sanitizeUsageReadError = (error: UsageReadError): UsageReadError =>
+  new UsageReadError({ reason: error.reason, detail: error.detail });
 
 const handlers = {
   usage_snapshot: () =>
@@ -30,6 +44,14 @@ const handlers = {
         })),
       });
       return sanitizeUsageSnapshot(report);
+    }),
+  usage_summary: (input) =>
+    Effect.gen(function* () {
+      yield* McpInvocationContext.requireUsageCapability();
+      const service = yield* UsageService.UsageService;
+      return yield* service
+        .readSummary(input)
+        .pipe(Effect.map(sanitizeUsageSummary), Effect.mapError(sanitizeUsageReadError));
     }),
 } satisfies Parameters<typeof UsageToolkit.toLayer>[0];
 

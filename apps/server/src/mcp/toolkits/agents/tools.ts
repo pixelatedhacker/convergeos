@@ -1,4 +1,5 @@
 import {
+  AgentMeshDelegationDispatchReceipt,
   AgentMeshDispatchReceipt,
   AgentMeshError,
   AgentMeshInterruptInput,
@@ -7,6 +8,9 @@ import {
   AgentMeshReadInput,
   AgentMeshReadResult,
   AgentMeshSendInput,
+  AgentMeshSpawnInput,
+  AgentMeshWaitInput,
+  AgentMeshWaitResult,
 } from "@t3tools/contracts";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
@@ -33,7 +37,7 @@ export const AgentsSendTool = Tool.make("agents_send", {
   description:
     "Send a delegated request to an idle agent in this project with an isolated workspace. Reuse requestId when retrying the same request.",
   parameters: AgentMeshSendInput,
-  success: AgentMeshDispatchReceipt,
+  success: AgentMeshDelegationDispatchReceipt,
   failure: AgentMeshError,
   dependencies,
 })
@@ -42,6 +46,34 @@ export const AgentsSendTool = Tool.make("agents_send", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, true);
+
+export const AgentsSpawnTool = Tool.make("agents_spawn", {
+  description:
+    "Create an isolated worker thread in this Git project and assign one durable delegation. The worker inherits the caller's model unless modelSelection is supplied. Reuse requestId when retrying the same request.",
+  parameters: AgentMeshSpawnInput,
+  success: AgentMeshDelegationDispatchReceipt,
+  failure: AgentMeshError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Spawn isolated project agent")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, true);
+
+export const AgentsWaitTool = Tool.make("agents_wait", {
+  description:
+    "Wait for one to eight delegations to complete, fail, be interrupted, or need user attention. Returns bounded latest assistant output and a state cursor; timeoutMs is capped at 50000.",
+  parameters: AgentMeshWaitInput,
+  success: AgentMeshWaitResult,
+  failure: AgentMeshError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Wait for delegated work")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
 
 export const AgentsInterruptTool = Tool.make("agents_interrupt", {
   description:
@@ -74,6 +106,8 @@ export const AgentsReadTool = Tool.make("agents_read", {
 export const AgentsToolkit = Toolkit.make(
   AgentsListTool,
   AgentsReadTool,
+  AgentsSpawnTool,
   AgentsSendTool,
+  AgentsWaitTool,
   AgentsInterruptTool,
 );

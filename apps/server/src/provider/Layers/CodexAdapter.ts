@@ -46,6 +46,11 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import {
+  CONVERGEOS_MCP_BEARER_TOKEN_ENV,
+  CONVERGEOS_MCP_SERVER_NAME,
+  LEGACY_CONVERGEOS_MCP_BEARER_TOKEN_ENV,
+} from "../../mcp/McpIdentity.ts";
 
 import {
   ProviderAdapterRequestError,
@@ -97,6 +102,7 @@ interface CodexAdapterSessionContext {
   readonly scope: Scope.Closeable;
   readonly runtime: CodexSessionRuntimeShape;
   readonly eventFiber: Fiber.Fiber<void, never>;
+  readonly mcpAttachment: "attached" | "notRequested";
   stopped: boolean;
 }
 
@@ -2015,13 +2021,20 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? {
                 environment: {
                   ...(options?.environment ?? process.env),
-                  T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
+                  [CONVERGEOS_MCP_BEARER_TOKEN_ENV]: mcpSession.authorizationHeader.replace(
+                    /^Bearer\s+/,
+                    "",
+                  ),
+                  [LEGACY_CONVERGEOS_MCP_BEARER_TOKEN_ENV]: mcpSession.authorizationHeader.replace(
+                    /^Bearer\s+/,
+                    "",
+                  ),
                 },
                 appServerArgs: [
                   "-c",
-                  `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
+                  `mcp_servers.${CONVERGEOS_MCP_SERVER_NAME}.url=${mcpSession.endpoint}`,
                   "-c",
-                  'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                  `mcp_servers.${CONVERGEOS_MCP_SERVER_NAME}.bearer_token_env_var="${CONVERGEOS_MCP_BEARER_TOKEN_ENV}"`,
                 ],
                 previewToolsAvailable: mcpSession.capabilities.has("preview"),
               }
@@ -2093,11 +2106,15 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           scope: sessionScope,
           runtime,
           eventFiber,
+          mcpAttachment: mcpSession ? "attached" : "notRequested",
           stopped: false,
         });
         sessionScopeTransferred = true;
 
-        return started;
+        return {
+          ...started,
+          mcpAttachment: mcpSession ? "attached" : "notRequested",
+        };
       }),
     );
 
@@ -2297,7 +2314,13 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   const listSessions: CodexAdapterShape["listSessions"] = () =>
     Effect.forEach(
       Array.from(sessions.values()).filter((session) => !session.stopped),
-      (session) => session.runtime.getSession,
+      (session) =>
+        session.runtime.getSession.pipe(
+          Effect.map((providerSession) => ({
+            ...providerSession,
+            mcpAttachment: session.mcpAttachment,
+          })),
+        ),
       { concurrency: 1 },
     );
 

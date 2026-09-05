@@ -3,11 +3,14 @@ import {
   CheckpointRef,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  DelegationId,
+  KanbanCardId,
   MessageId,
   ProjectId,
   ThreadId,
   TurnId,
   type OrchestrationEvent,
+  type OrchestrationCommand,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -322,6 +325,133 @@ describe("OrchestrationEngine", () => {
         resultSequence: sequence,
       });
       expect(yield* engine.latestSequence).toBe(sequence);
+    }).pipe(Effect.provide(makeOrchestrationLayer())),
+  );
+
+  effectIt.effect("accepts a recovered Kanban reservation under a fresh command receipt", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const receipts = yield* OrchestrationCommandReceipts.OrchestrationCommandReceiptRepository;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const projectId = ProjectId.make("project-kanban-receipt-recovery");
+      const threadId = ThreadId.make("thread-kanban-receipt-recovery");
+      const cardId = KanbanCardId.make("card-kanban-receipt-recovery");
+      const delegationId = DelegationId.make("delegation-kanban-receipt-recovery");
+      const firstAttempt = CommandId.make("kanban-receipt-attempt-one");
+      const secondAttempt = CommandId.make("kanban-receipt-attempt-two");
+      const createdAt = now();
+
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("kanban-receipt-project"),
+        projectId,
+        title: "Kanban receipts",
+        workspaceRoot: "/tmp/kanban-receipt-project",
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("kanban-receipt-thread"),
+        threadId,
+        projectId,
+        title: "Kanban bot",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        branch: "codex/kanban-receipt",
+        worktreePath: "/tmp/kanban-receipt-project-bot",
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.bot.configure",
+        commandId: CommandId.make("kanban-receipt-bot"),
+        threadId,
+        expectedRevision: null,
+        displayName: "Kanban bot",
+        description: "Runs queued cards.",
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "kanban.card.create",
+        commandId: CommandId.make("kanban-receipt-card"),
+        cardId,
+        projectId,
+        title: "Recover reservation",
+        description: "Retry with a fresh command receipt.",
+        assigneeThreadId: threadId,
+        placement: { status: "ready", relation: "last" },
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("kanban-receipt-session-busy"),
+        threadId,
+        session: {
+          threadId,
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      });
+
+      const request = (
+        commandId: CommandId,
+      ): Extract<OrchestrationCommand, { type: "delegation.request" }> => ({
+        type: "delegation.request",
+        commandId,
+        delegationId,
+        projectId,
+        requester: { kind: "kanban", cardId, cardRevision: 1 },
+        target: { kind: "existingThread", threadId },
+        title: "Recover reservation",
+        task: "Retry with a fresh command receipt.",
+        createdAt,
+      });
+      yield* engine.dispatch(request(firstAttempt)).pipe(Effect.flip);
+      expect(
+        Option.getOrNull(yield* receipts.getByCommandId({ commandId: firstAttempt })),
+      ).toMatchObject({
+        status: "rejected",
+      });
+
+      yield* engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("kanban-receipt-session-ready"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      });
+      yield* engine.dispatch(request(secondAttempt));
+      yield* engine.dispatch(request(secondAttempt));
+
+      const model = yield* snapshots.getCommandReadModel();
+      expect(model.delegations?.find((delegation) => delegation.id === delegationId)?.state).toBe(
+        "requested",
+      );
+      expect(model.kanbanCards?.find((card) => card.id === cardId)).toMatchObject({
+        delegationId,
+        revision: 2,
+      });
+      expect(
+        Option.getOrNull(yield* receipts.getByCommandId({ commandId: secondAttempt })),
+      ).toMatchObject({
+        status: "accepted",
+      });
     }).pipe(Effect.provide(makeOrchestrationLayer())),
   );
 

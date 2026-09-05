@@ -48,6 +48,7 @@ export type DisableThreadBotInput = CommandInput<"thread.bot.disable">;
 export type CreateKanbanCardInput = CommandInput<"kanban.card.create">;
 export type UpdateKanbanCardInput = CommandInput<"kanban.card.update">;
 export type MoveKanbanCardInput = CommandInput<"kanban.card.move">;
+export type RetryKanbanCardInput = CommandInput<"kanban.card.retry">;
 export type DeleteKanbanCardInput = CommandInput<"kanban.card.delete">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
@@ -301,6 +302,18 @@ export const moveKanbanCard: (input: MoveKanbanCardInput) => CommandEffect = Eff
   return yield* dispatch({
     ...input,
     type: "kanban.card.move",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const retryKanbanCard: (input: RetryKanbanCardInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.retryKanbanCard",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "kanban.card.retry",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

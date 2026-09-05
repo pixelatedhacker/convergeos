@@ -43,6 +43,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -545,13 +546,13 @@ export function makeCursorAdapter(
             cwd,
             runtimeMode: input.runtimeMode,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: CONVERGEOS_MCP_SERVER_NAME, version: "0.0.0" },
             ...(mcpSession
               ? {
                   mcpServers: [
                     {
                       type: "http" as const,
-                      name: "t3-code",
+                      name: CONVERGEOS_MCP_SERVER_NAME,
                       url: mcpSession.endpoint,
                       headers: [
                         {
@@ -762,6 +763,7 @@ export function makeCursorAdapter(
             provider: PROVIDER,
             providerInstanceId: boundInstanceId,
             status: "ready",
+            mcpAttachment: mcpSession ? "attached" : "notRequested",
             runtimeMode: input.runtimeMode,
             cwd,
             model: cursorModelSelection?.model,

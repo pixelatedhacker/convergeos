@@ -3,6 +3,7 @@ import {
   CommandId,
   CorrelationId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  DelegationId,
   EventId,
   MessageId,
   ProjectId,
@@ -134,6 +135,43 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         },
       });
 
+      yield* eventStore.append({
+        type: "delegation.requested",
+        eventId: EventId.make("evt-delegation-1"),
+        aggregateKind: "delegation",
+        aggregateId: DelegationId.make("delegation-1"),
+        occurredAt: now,
+        commandId: CommandId.make("cmd-delegation-1"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-delegation-1"),
+        metadata: {},
+        payload: {
+          delegation: {
+            id: DelegationId.make("delegation-1"),
+            projectId: ProjectId.make("project-1"),
+            requester: {
+              kind: "thread",
+              threadId: ThreadId.make("thread-1"),
+              requestId: "audit-1",
+            },
+            target: {
+              kind: "existingThread",
+              threadId: ThreadId.make("thread-1"),
+            },
+            title: "Audit",
+            task: "Audit the change.",
+            state: "requested",
+            targetThreadId: ThreadId.make("thread-1"),
+            turnId: null,
+            assistantMessageId: null,
+            failure: null,
+            revision: 1,
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      });
+
       yield* projectionPipeline.bootstrap;
 
       const projectRows = yield* sql<{
@@ -162,6 +200,21 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       `;
       assert.deepEqual(messageRows, [{ messageId: "message-1", text: "hello" }]);
 
+      const delegationRows = yield* sql<{
+        readonly delegationId: string;
+        readonly state: string;
+        readonly revision: number;
+      }>`
+        SELECT
+          delegation_id AS "delegationId",
+          state,
+          revision
+        FROM projection_delegations
+      `;
+      assert.deepEqual(delegationRows, [
+        { delegationId: "delegation-1", state: "requested", revision: 1 },
+      ]);
+
       const stateRows = yield* sql<{
         readonly projector: string;
         readonly lastAppliedSequence: number;
@@ -174,7 +227,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       `;
       assert.equal(stateRows.length, Object.keys(ORCHESTRATION_PROJECTOR_NAMES).length);
       for (const row of stateRows) {
-        assert.equal(row.lastAppliedSequence, 3);
+        assert.equal(row.lastAppliedSequence, 4);
       }
 
       yield* sql`CREATE TABLE thread_shell_updates (count INTEGER NOT NULL)`;

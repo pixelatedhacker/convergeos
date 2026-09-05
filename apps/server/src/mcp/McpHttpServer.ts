@@ -10,6 +10,7 @@ import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { CONVERGEOS_MCP_SERVER_NAME } from "./McpIdentity.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
@@ -81,7 +82,7 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
       const invocation = yield* registry.resolve(token);
       if (!invocation) {
         // Without this the only symptom of a dead credential is the agent
-        // quietly losing the whole `t3-code` toolkit for the rest of its
+        // quietly losing the whole ConvergeOS toolkit for the rest of its
         // session, with nothing on the server to explain why.
         yield* Effect.logWarning("rejected MCP request with an unusable credential", {
           reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
@@ -234,7 +235,7 @@ export const UsageToolkitRegistrationLive = McpServer.toolkit(UsageToolkit).pipe
 );
 
 const McpTransportLive = McpServer.layerHttp({
-  name: "ConvergeOS",
+  name: CONVERGEOS_MCP_SERVER_NAME,
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],

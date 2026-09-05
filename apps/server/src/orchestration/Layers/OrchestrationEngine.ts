@@ -1,7 +1,7 @@
 import type {
   OrchestrationClientOrigin,
   OrchestrationEvent,
-  OrchestrationReadModel,
+  DelegationId,
   KanbanCardId,
   ProjectId,
   ThreadId,
@@ -42,7 +42,11 @@ import {
   type OrchestrationProjectorDecodeError,
 } from "../Errors.ts";
 import { decideOrchestrationCommand } from "../decider.ts";
-import { createEmptyReadModel, projectEvent } from "../projector.ts";
+import { createEmptyReadModel } from "../projector.ts";
+import {
+  type DelegationCommandReadModel,
+  projectCommandEvent,
+} from "../../delegation/commandReadModel.ts";
 import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
@@ -63,8 +67,8 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "thread" | "kanban-card";
-  readonly aggregateId: ProjectId | ThreadId | KanbanCardId;
+  readonly aggregateKind: "project" | "thread" | "kanban-card" | "delegation";
+  readonly aggregateId: ProjectId | ThreadId | KanbanCardId | DelegationId;
 } {
   switch (command.type) {
     case "project.create":
@@ -78,9 +82,23 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "kanban.card.update":
     case "kanban.card.move":
     case "kanban.card.delete":
+    case "kanban.card.retry":
+    case "kanban.card.delegation.link":
+    case "kanban.card.delegation.start":
+    case "kanban.card.delegation.complete":
       return {
         aggregateKind: "kanban-card",
         aggregateId: command.cardId,
+      };
+    case "delegation.request":
+    case "delegation.provision.start":
+    case "delegation.target.bind":
+    case "delegation.turn.request":
+    case "delegation.turn.bind":
+    case "delegation.complete":
+      return {
+        aggregateKind: "delegation",
+        aggregateId: command.delegationId,
       };
     default:
       return {
@@ -100,19 +118,22 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
 
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-  let commandReadModel = createEmptyReadModel(yield* nowIso);
+  let commandReadModel: DelegationCommandReadModel = {
+    ...createEmptyReadModel(yield* nowIso),
+    delegations: [],
+  };
 
   const commandQueue = yield* Queue.unbounded<CommandEnvelope>();
   const eventPubSub = yield* PubSub.unbounded<OrchestrationEvent>();
 
   const projectEventsOntoReadModel = (
-    baseReadModel: OrchestrationReadModel,
+    baseReadModel: DelegationCommandReadModel,
     events: ReadonlyArray<OrchestrationEvent>,
-  ): Effect.Effect<OrchestrationReadModel, OrchestrationProjectorDecodeError, never> =>
+  ): Effect.Effect<DelegationCommandReadModel, OrchestrationProjectorDecodeError, never> =>
     Effect.gen(function* () {
       let nextReadModel = baseReadModel;
       for (const event of events) {
-        nextReadModel = yield* projectEvent(nextReadModel, event);
+        nextReadModel = yield* projectCommandEvent(nextReadModel, event);
       }
       return nextReadModel;
     });
@@ -248,7 +269,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
               for (const nextEvent of eventBases) {
                 const savedEvent = yield* eventStore.append(nextEvent);
-                nextCommandReadModel = yield* projectEvent(nextCommandReadModel, savedEvent);
+                nextCommandReadModel = yield* projectCommandEvent(nextCommandReadModel, savedEvent);
                 const cleanup = yield* projectionPipeline.projectEventDeferred(savedEvent);
                 attachmentCleanups.push(cleanup);
                 committedEvents.push(savedEvent);
@@ -264,8 +285,8 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
               yield* commandReceiptRepository.upsert({
                 commandId: envelope.command.commandId,
-                aggregateKind: lastSavedEvent.aggregateKind,
-                aggregateId: lastSavedEvent.aggregateId,
+                aggregateKind: aggregateRef.aggregateKind,
+                aggregateId: aggregateRef.aggregateId,
                 acceptedAt: lastSavedEvent.occurredAt,
                 resultSequence: lastSavedEvent.sequence,
                 status: "accepted",

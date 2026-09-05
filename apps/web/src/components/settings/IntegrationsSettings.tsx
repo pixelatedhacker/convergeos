@@ -553,6 +553,41 @@ function AgentBrowserAccessSetting() {
   );
 }
 
+function AgentUsageAccessSetting() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("agent-usage-access")}
+      description="Let agents read subscription quota and transcript-backed usage history for this environment. Raw transcript content and account labels are never exposed."
+      status="Applies to sessions started from now on; running agents keep their current tools."
+      resetAction={
+        settings.enableAgentUsageAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentUsageAccess ? (
+          <SettingResetButton
+            label="agent usage access"
+            onClick={() =>
+              updateSettings({
+                enableAgentUsageAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentUsageAccess,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <Switch
+          checked={settings.enableAgentUsageAccess}
+          onCheckedChange={(checked) =>
+            updateSettings({ enableAgentUsageAccess: Boolean(checked) })
+          }
+          aria-label="Allow agent usage access"
+        />
+      }
+    />
+  );
+}
+
 function AgentMeshAccessSetting() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
@@ -561,7 +596,7 @@ function AgentMeshAccessSetting() {
     <SettingsRow
       serverScoped
       {...searchableSetting("agent-mesh-access")}
-      description="Let agents discover, read, message, and interrupt other agent threads in the same project. Messages are allowed only between isolated workspaces."
+      description="Let agents discover, read, spawn, message, wait on, and interrupt agent threads in the same project. Work that can mutate files is isolated in worktrees."
       status={
         settings.enableAgentMeshAccess
           ? "Applies to sessions started from now on; running agents keep their current tools."
@@ -999,6 +1034,7 @@ export function IntegrationsSettingsPanel() {
       <SettingsSection id="agents" title="Agents">
         <AgentMeshAccessSetting />
         <AgentKanbanAccessSetting />
+        <AgentUsageAccessSetting />
       </SettingsSection>
       <SettingsSection id="browser" title="Browser">
         {/* Server-authoritative, so it stays editable on any client anchored to

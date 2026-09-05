@@ -265,3 +265,27 @@ describe("providerInstanceId routing key (slice-2 invariant)", () => {
     ).toThrow();
   });
 });
+
+describe("ProviderSession MCP attachment", () => {
+  const session = {
+    provider: "codex",
+    status: "ready",
+    runtimeMode: "full-access",
+    threadId: "thread-1",
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+  };
+
+  it.each(["attached", "notRequested", "leafOnly"] as const)(
+    "accepts the %s outcome",
+    (mcpAttachment) => {
+      expect(decodeProviderSession({ ...session, mcpAttachment }).mcpAttachment).toBe(
+        mcpAttachment,
+      );
+    },
+  );
+
+  it("rejects an unknown outcome", () => {
+    expect(() => decodeProviderSession({ ...session, mcpAttachment: "unsupported" })).toThrow();
+  });
+});

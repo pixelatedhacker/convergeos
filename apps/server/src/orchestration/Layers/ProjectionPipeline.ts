@@ -1,6 +1,9 @@
 import {
   ApprovalRequestId,
   type ChatAttachment,
+  DelegationFailure,
+  DelegationRequester,
+  DelegationTarget,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
   ThreadId,
@@ -10,6 +13,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -55,6 +59,10 @@ import {
   toSafeThreadAttachmentSegment,
 } from "../../attachmentStore.ts";
 
+const encodeDelegationRequester = Schema.encodeSync(Schema.fromJsonString(DelegationRequester));
+const encodeDelegationTarget = Schema.encodeSync(Schema.fromJsonString(DelegationTarget));
+const encodeDelegationFailure = Schema.encodeSync(Schema.fromJsonString(DelegationFailure));
+
 export const ORCHESTRATION_PROJECTOR_NAMES = {
   projects: "projection.projects",
   threads: "projection.threads",
@@ -66,6 +74,7 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   checkpoints: "projection.checkpoints",
   pendingApprovals: "projection.pending-approvals",
   kanbanCards: "projection.kanban-cards",
+  delegations: "projection.delegations",
 } as const;
 
 type ProjectorName =
@@ -1279,6 +1288,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         status: event.payload.session.status,
         providerName: event.payload.session.providerName,
         providerInstanceId: event.payload.session.providerInstanceId ?? null,
+        mcpAttachment: event.payload.session.mcpAttachment ?? null,
         runtimeMode: event.payload.session.runtimeMode,
         activeTurnId: event.payload.session.activeTurnId,
         lastError: event.payload.session.lastError,
@@ -1766,7 +1776,11 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       switch (event.type) {
         case "kanban.card-created":
         case "kanban.card-updated":
-        case "kanban.card-moved": {
+        case "kanban.card-moved":
+        case "kanban.card-retried":
+        case "kanban.card-delegation-linked":
+        case "kanban.card-delegation-started":
+        case "kanban.card-delegation-completed": {
           const card = event.payload.card;
           yield* sql`
             INSERT INTO projection_kanban_cards (
@@ -1777,6 +1791,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               status,
               order_key,
               assignee_thread_id,
+              delegation_id,
               revision,
               created_at,
               updated_at,
@@ -1789,6 +1804,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               ${card.status},
               ${card.orderKey},
               ${card.assigneeThreadId},
+              ${card.delegationId},
               ${card.revision},
               ${card.createdAt},
               ${card.updatedAt},
@@ -1801,6 +1817,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               status = excluded.status,
               order_key = excluded.order_key,
               assignee_thread_id = excluded.assignee_thread_id,
+              delegation_id = excluded.delegation_id,
               revision = excluded.revision,
               created_at = excluded.created_at,
               updated_at = excluded.updated_at,
@@ -1818,6 +1835,73 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             WHERE card_id = ${event.payload.cardId}
           `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.kanbanCards:delete")));
           return;
+        default:
+          return;
+      }
+    });
+
+    const applyDelegationsProjection: ProjectorDefinition["apply"] = Effect.fn(
+      "applyDelegationsProjection",
+    )(function* (event) {
+      switch (event.type) {
+        case "delegation.requested":
+        case "delegation.provision-started":
+        case "delegation.target-bound":
+        case "delegation.turn-requested":
+        case "delegation.turn-bound":
+        case "delegation.completed":
+        case "delegation.failed":
+        case "delegation.interrupted": {
+          const delegation = event.payload.delegation;
+          yield* sql`
+            INSERT INTO projection_delegations (
+              delegation_id,
+              project_id,
+              requester_json,
+              target_json,
+              title,
+              task,
+              state,
+              target_thread_id,
+              turn_id,
+              assistant_message_id,
+              failure_json,
+              revision,
+              created_at,
+              updated_at
+            ) VALUES (
+              ${delegation.id},
+              ${delegation.projectId},
+              ${encodeDelegationRequester(delegation.requester)},
+              ${encodeDelegationTarget(delegation.target)},
+              ${delegation.title},
+              ${delegation.task},
+              ${delegation.state},
+              ${delegation.targetThreadId},
+              ${delegation.turnId},
+              ${delegation.assistantMessageId},
+              ${delegation.failure === null ? null : encodeDelegationFailure(delegation.failure)},
+              ${delegation.revision},
+              ${delegation.createdAt},
+              ${delegation.updatedAt}
+            )
+            ON CONFLICT(delegation_id) DO UPDATE SET
+              project_id = excluded.project_id,
+              requester_json = excluded.requester_json,
+              target_json = excluded.target_json,
+              title = excluded.title,
+              task = excluded.task,
+              state = excluded.state,
+              target_thread_id = excluded.target_thread_id,
+              turn_id = excluded.turn_id,
+              assistant_message_id = excluded.assistant_message_id,
+              failure_json = excluded.failure_json,
+              revision = excluded.revision,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at
+          `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.delegations:upsert")));
+          return;
+        }
         default:
           return;
       }
@@ -1859,6 +1943,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.kanbanCards,
         apply: applyKanbanCardsProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.delegations,
+        apply: applyDelegationsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,

@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import {
   ANTIGRAVITY_CLI_DEFAULT_MODEL,
+  EnvironmentId,
   ProviderInstanceId,
   ProviderRuntimeEvent,
   ThreadId,
@@ -20,6 +21,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { makeAntigravityCliAdapter } from "./AntigravityCliAdapter.ts";
 
 const isRuntimeEvent = Schema.is(ProviderRuntimeEvent);
@@ -133,6 +135,32 @@ const decodeLog = Schema.decodeUnknownSync(
 describe.skipIf(HostProcessPlatform.defaultValue() === "win32")(
   "Antigravity CLI spawned adapter",
   () => {
+    it.effect("reports requested ConvergeOS tools as leaf-only without configuring the CLI", () =>
+      Effect.gen(function* () {
+        const { start, adapter, instanceId, threadId } = yield* fixture;
+        McpProviderSession.setMcpProviderSession({
+          environmentId: EnvironmentId.make("environment-test"),
+          threadId,
+          providerSessionId: "provider-session-test",
+          providerInstanceId: instanceId,
+          capabilities: new Set(["agents.read"]),
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer test-token",
+        });
+
+        const session = yield* start();
+
+        expect(session.mcpAttachment).toBe("leafOnly");
+        expect((yield* adapter.listSessions())[0]?.mcpAttachment).toBe("leafOnly");
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => McpProviderSession.clearMcpProviderSession(ThreadId.make("thread-1"))),
+        ),
+        Effect.scoped,
+        Effect.provide(NodeServices.layer),
+      ),
+    );
+
     it.effect("publishes the old ready state before a completion-triggered follow-up starts", () =>
       Effect.gen(function* () {
         const { start, adapter, observed, threadId } = yield* fixture;

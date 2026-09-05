@@ -37,6 +37,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
 import type { AntigravityAuth } from "../AntigravityAuth.ts";
 import {
   ProviderAdapterRequestError,
@@ -196,6 +197,27 @@ function isInsideRoot(path: Path.Path, root: string, candidate: string): boolean
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+const realPathFromExistingAncestor = Effect.fn("AntigravityAdapter.realPathFromExistingAncestor")(
+  function* (input: {
+    readonly fileSystem: FileSystem.FileSystem;
+    readonly path: Path.Path;
+    readonly candidate: string;
+  }) {
+    const suffix: Array<string> = [];
+    let cursor = input.candidate;
+    while (true) {
+      const canonical = yield* input.fileSystem.realPath(cursor).pipe(Effect.option);
+      if (Option.isSome(canonical)) {
+        return input.path.join(canonical.value, ...suffix);
+      }
+      const parent = input.path.dirname(cursor);
+      if (parent === cursor) return input.candidate;
+      suffix.unshift(input.path.basename(cursor));
+      cursor = parent;
+    }
+  },
+);
+
 /** Resolves an agent-supplied path and rejects anything outside the session roots. */
 const resolveClientFilePath = Effect.fn("AntigravityAdapter.resolveClientFilePath")(
   function* (input: {
@@ -206,13 +228,16 @@ const resolveClientFilePath = Effect.fn("AntigravityAdapter.resolveClientFilePat
   }) {
     const { path } = input;
     const resolved = path.resolve(input.requestPath);
-    // Follow symlinks on the parent so a link out of the workspace cannot escape it.
-    const parent = yield* input.fileSystem
-      .realPath(path.dirname(resolved))
-      .pipe(Effect.orElseSucceed(() => path.dirname(resolved)));
-    const real = path.join(parent, path.basename(resolved));
+    // Follow every existing ancestor. New nested paths still canonicalize the
+    // macOS `/var` alias, while an existing final symlink cannot redirect a
+    // write outside the workspace.
+    const real = yield* realPathFromExistingAncestor({
+      fileSystem: input.fileSystem,
+      path,
+      candidate: resolved,
+    });
     const roots = yield* Effect.forEach(input.allowedRoots, (root) =>
-      input.fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root)),
+      realPathFromExistingAncestor({ fileSystem: input.fileSystem, path, candidate: root }),
     );
     if (!roots.some((root) => isInsideRoot(path, root, real))) {
       return yield* EffectAcpErrors.AcpRequestError.invalidParams(
@@ -659,7 +684,7 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
               // leaf directory holding only uploads.
               const runtime = yield* options.makeRuntime({
                 cwd,
-                clientInfo: { name: "t3-code", version: "0.0.0" },
+                clientInfo: { name: CONVERGEOS_MCP_SERVER_NAME, version: "0.0.0" },
                 clientFileSystem: true,
                 additionalDirectories: [serverConfig.attachmentsDir],
                 ...(Option.isSome(cursor) ? { resumeSessionId: cursor.value.sessionId } : {}),
@@ -667,7 +692,7 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
                   ? [
                       {
                         type: "http",
-                        name: "t3-code",
+                        name: CONVERGEOS_MCP_SERVER_NAME,
                         url: mcp.endpoint,
                         headers: [{ name: "Authorization", value: mcp.authorizationHeader }],
                       },
@@ -721,6 +746,7 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
                 threadId: input.threadId,
                 cwd,
                 status: "ready",
+                mcpAttachment: mcp ? "attached" : "notRequested",
                 runtimeMode: input.runtimeMode,
                 ...(model ? { model } : {}),
                 resumeCursor: { schemaVersion: 1, sessionId: started.sessionId },
