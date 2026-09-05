@@ -72,7 +72,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { useParams, useRouter } from "@tanstack/react-router";
+import { useLocation, useParams, useRouter } from "@tanstack/react-router";
 
 import {
   isAtomCommandInterrupted,
@@ -1802,6 +1802,9 @@ export default function Sidebar() {
   const threads = useThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
+  const isBotsRoute = useLocation({
+    select: (location) => location.pathname === "/bots",
+  });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
@@ -3587,6 +3590,10 @@ export default function Sidebar() {
     shortcutLabelForCommand(keybindings, "chat.new") ??
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
+  const handleBotsClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({ to: "/bots" });
+  }, [isMobile, router, setOpenMobile]);
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3841,6 +3848,15 @@ export default function Sidebar() {
                 </Tooltip>
               </div>
             ) : null}
+            <SidebarMenuButton
+              aria-current={isBotsRoute ? "page" : undefined}
+              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+              isActive={isBotsRoute}
+              onClick={handleBotsClick}
+            >
+              <BotIcon className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Bots</span>
+            </SidebarMenuButton>
           </SidebarGroup>
         }
       >
