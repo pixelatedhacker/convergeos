@@ -82,7 +82,7 @@ credentials, MCP authorization, subprocesses, and protocol logs never leave the 
 
 `antigravityCli` runs the native `agy` executable. It is separate from the ACP `antigravity`
 driver, including its continuation identity and cursor format. The instance uses the host's CLI
-credentials and configuration. There is no T3-managed CLI installation or sign-in profile.
+credentials and configuration. There is no ConvergeOS-managed CLI installation or sign-in profile.
 
 The adapter owns one subprocess for each turn. It sends a single text prompt through NDJSON
 stdin, closes stdin, and consumes `init`, `step_update`, and `result` events. The native
@@ -107,7 +107,8 @@ never passed to `--model`.
 
 Images, Plan mode, conversation rollback, system text generation, and automatic project MCP
 injection are unsupported. The CLI can use MCP servers already present in its own configuration.
-The integration does not modify that configuration.
+The integration reports this runtime as leaf-only and does not modify shared user or workspace
+configuration with a thread credential.
 
 ## Antigravity ownership and protocol
 
@@ -263,7 +264,7 @@ session operations start. The response must contain a valid version at or above 
 owners cache this result for the lifetime of the spawned process. External actions check once when
 they create their server connection, not for each model or SDK request.
 
-Chat adapters keep their own server per thread. They register a thread-specific `t3-code` MCP
+Chat adapters keep their own server per thread. They register a thread-specific `convergeos` MCP
 connection, while OpenCode stores MCP connections by directory. Sharing these chat servers
 without changing MCP routing would let two threads in one directory replace each other's
 connection.

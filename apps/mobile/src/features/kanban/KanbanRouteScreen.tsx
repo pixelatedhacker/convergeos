@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { KanbanCardId, type KanbanStatus } from "@t3tools/contracts";
+import { deriveKanbanCardExecutionStatus } from "@t3tools/client-runtime/state/kanban";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -120,9 +121,21 @@ function MobileProjectBoard({
       ),
     [environmentId, projectId, threads],
   );
+  const botById = useMemo(
+    () =>
+      new Map(
+        threads
+          .filter(
+            (thread) => thread.environmentId === environmentId && thread.projectId === projectId,
+          )
+          .map((thread) => [thread.id, thread]),
+      ),
+    [environmentId, projectId, threads],
+  );
   const createCard = useAtomCommand(kanbanEnvironment.createCard, { reportFailure: false });
   const moveCard = useAtomCommand(kanbanEnvironment.moveCard, { reportFailure: false });
   const deleteCard = useAtomCommand(kanbanEnvironment.deleteCard, { reportFailure: false });
+  const retryCard = useAtomCommand(kanbanEnvironment.retryCard, { reportFailure: false });
   const [title, setTitle] = useState("");
 
   const report = async (
@@ -216,6 +229,47 @@ function MobileProjectBoard({
                           Bot · {botNameById.get(card.assigneeThreadId) ?? "Unavailable"}
                         </Text>
                       )}
+                      {(() => {
+                        const status = deriveKanbanCardExecutionStatus({
+                          card,
+                          delegation:
+                            board.delegations.find(
+                              (delegation) => delegation.id === card.delegationId,
+                            ) ?? null,
+                          assignee:
+                            card.assigneeThreadId === null
+                              ? null
+                              : (botById.get(card.assigneeThreadId) ?? null),
+                        });
+                        if (status === null) return null;
+                        return (
+                          <View className="mt-2 flex-row items-center gap-2">
+                            <Text className="text-xs capitalize text-foreground-muted">
+                              {status}
+                            </Text>
+                            {status === "failed" || status === "interrupted" ? (
+                              <Pressable
+                                accessibilityLabel={`Retry ${card.title}`}
+                                accessibilityRole="button"
+                                className="rounded-full border border-border px-2 py-1"
+                                onPress={() =>
+                                  void report(
+                                    retryCard({
+                                      environmentId,
+                                      input: {
+                                        cardId: card.id,
+                                        expectedRevision: card.revision,
+                                      },
+                                    }),
+                                  )
+                                }
+                              >
+                                <Text className="text-xs text-foreground">Retry</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        );
+                      })()}
                       <View className="mt-3 flex-row items-center border-t border-border-subtle pt-2">
                         <CardAction
                           icon="arrow.left"

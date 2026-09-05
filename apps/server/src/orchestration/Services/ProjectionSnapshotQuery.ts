@@ -8,6 +8,8 @@
  */
 import type {
   CheckpointRef,
+  Delegation,
+  DelegationId,
   KanbanBoardSnapshot,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
@@ -28,6 +30,7 @@ import type * as Option from "effect/Option";
 import type * as Effect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
+import type { DelegationCommandReadModel } from "../../delegation/commandReadModel.ts";
 
 export interface ProjectionSnapshotCounts {
   readonly projectCount: number;
@@ -83,9 +86,19 @@ export interface ProjectionSnapshotQueryShape {
    * orchestration engine without hydrating message/activity/checkpoint bodies.
    */
   readonly getCommandReadModel: () => Effect.Effect<
-    OrchestrationReadModel,
+    DelegationCommandReadModel,
     ProjectionRepositoryError
   >;
+
+  /** Read selected delegations without hydrating their target threads. */
+  readonly getDelegations?: (
+    delegationIds: ReadonlyArray<DelegationId>,
+  ) => Effect.Effect<ReadonlyArray<Delegation>, ProjectionRepositoryError>;
+
+  /** Read non-terminal work currently owned by one target thread. */
+  readonly getOpenDelegationsForTarget?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<Delegation>, ProjectionRepositoryError>;
 
   /**
    * Read the latest orchestration projection snapshot.

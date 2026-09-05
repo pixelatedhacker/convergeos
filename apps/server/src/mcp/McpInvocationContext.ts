@@ -4,6 +4,7 @@ import {
   type EnvironmentId,
   PreviewAutomationUnavailableError,
   KanbanMcpError,
+  type KanbanMcpOperation,
   SubscriptionQuotaMcpUnavailableError,
   type ProviderInstanceId,
   type ThreadId,
@@ -67,7 +68,7 @@ export const requireAgentCapability = Effect.fn("mcp.requireAgentCapability")(fu
 
 export const requireKanbanCapability = Effect.fn("mcp.requireKanbanCapability")(function* (
   capability: "kanban.read" | "kanban.write",
-  operation: "read" | "create" | "update" | "move" | "delete",
+  operation: KanbanMcpOperation,
 ) {
   const invocation = yield* McpInvocationContext;
   if (!invocation.capabilities.has(capability)) {

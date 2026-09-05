@@ -26,3 +26,9 @@ session can use `usage_snapshot` to read only quota that can be safely associate
 provider instance. Account labels are omitted from the agent-facing result. If several configured
 instances use the same provider subscription and the account cannot be proven, the quota remains
 visible at environment scope but is withheld from the instance-scoped MCP tool.
+
+Agents can use `usage_summary` for the same transcript-backed, pre-aggregated history shown on the
+Usage page. It returns token and API-equivalent cost buckets plus source and pricing health; it does
+not return transcript text, host identity, or transcript filesystem paths. Agent access to both
+tools is controlled independently under
+**Settings > Integrations > Agents > Agent usage access** and is off until you enable it.

@@ -24,3 +24,14 @@ request ID only when retrying the same write.
 
 A card can be assigned only to an active bot in that project. Disabling a bot does not erase old
 assignments, but new assignments require an active bot.
+
+## Bot dispatch
+
+An assigned card in **Ready** is queued for its bot. When the bot has an isolated worktree and is
+not already working or waiting for input, ConvergeOS starts one durable delegated turn using the
+card title and description. The card moves to **In progress** after the turn starts, then to
+**Review** when it completes.
+
+Failed or interrupted work returns to **Ready** and keeps its last result visible. Use **Retry** to
+clear that result and queue a new delegation. A bot accepts at most one open card at a time, so
+additional Ready cards wait without starting duplicate turns.

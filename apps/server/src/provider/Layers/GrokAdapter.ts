@@ -41,6 +41,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -993,13 +994,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             cwd,
             runtimeMode: input.runtimeMode,
             ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
+            clientInfo: { name: CONVERGEOS_MCP_SERVER_NAME, version: "0.0.0" },
             ...(mcpSession
               ? {
                   mcpServers: [
                     {
                       type: "http" as const,
-                      name: "t3-code",
+                      name: CONVERGEOS_MCP_SERVER_NAME,
                       url: mcpSession.endpoint,
                       headers: [
                         {
@@ -1257,6 +1258,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             provider: PROVIDER,
             providerInstanceId: boundInstanceId,
             status: "ready",
+            mcpAttachment: mcpSession ? "attached" : "notRequested",
             runtimeMode: input.runtimeMode,
             cwd,
             ...(boundModelId ? { model: resolveGrokAcpBaseModelId(boundModelId) } : {}),

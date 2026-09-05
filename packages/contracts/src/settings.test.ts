@@ -311,6 +311,7 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("keeps agent mesh access opt-in", () => {
     expect(DEFAULT_SERVER_SETTINGS.enableAgentMeshAccess).toBe(false);
     expect(DEFAULT_SERVER_SETTINGS.enableAgentKanbanAccess).toBe(false);
+    expect(DEFAULT_SERVER_SETTINGS.enableAgentUsageAccess).toBe(false);
   });
 
   it("defaults text generation to Luna at low reasoning effort", () => {

@@ -23,6 +23,18 @@ const handlers = {
       const mesh = yield* AgentMesh.AgentMesh;
       return yield* mesh.send({ threadId: invocation.threadId }, input);
     }),
+  agents_spawn: (input) =>
+    Effect.gen(function* () {
+      const invocation = yield* McpInvocationContext.requireAgentCapability("agents.send", "spawn");
+      const mesh = yield* AgentMesh.AgentMesh;
+      return yield* mesh.spawn({ threadId: invocation.threadId }, input);
+    }),
+  agents_wait: (input) =>
+    Effect.gen(function* () {
+      const invocation = yield* McpInvocationContext.requireAgentCapability("agents.read", "wait");
+      const mesh = yield* AgentMesh.AgentMesh;
+      return yield* mesh.wait({ threadId: invocation.threadId }, input);
+    }),
   agents_interrupt: (input) =>
     Effect.gen(function* () {
       const invocation = yield* McpInvocationContext.requireAgentCapability(

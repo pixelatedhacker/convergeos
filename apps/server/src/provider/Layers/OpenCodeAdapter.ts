@@ -33,6 +33,7 @@ import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterProcessError,
@@ -2469,7 +2470,7 @@ export function makeOpenCodeAdapter(
               if (mcpSession && !server.external) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
-                    name: "t3-code",
+                    name: CONVERGEOS_MCP_SERVER_NAME,
                     config: {
                       type: "remote",
                       url: mcpSession.endpoint,
@@ -2572,6 +2573,11 @@ export function makeOpenCodeAdapter(
                 client,
                 openCodeSession: resolved.openCodeSession,
                 created: resolved.created,
+                mcpAttachment: mcpSession
+                  ? server.external
+                    ? ("leafOnly" as const)
+                    : ("attached" as const)
+                  : ("notRequested" as const),
               };
             }).pipe(Effect.provideService(Scope.Scope, sessionScope)),
           );
@@ -2587,6 +2593,7 @@ export function makeOpenCodeAdapter(
           provider: PROVIDER,
           providerInstanceId: boundInstanceId,
           status: "connecting",
+          mcpAttachment: started.mcpAttachment,
           runtimeMode: input.runtimeMode,
           cwd: directory,
           ...(input.modelSelection ? { model: input.modelSelection.model } : {}),

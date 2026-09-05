@@ -1,5 +1,6 @@
 import {
   CheckpointRef,
+  DelegationId,
   EventId,
   MessageId,
   ProjectId,
@@ -49,19 +50,33 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       }
 
       yield* sql`DELETE FROM projection_kanban_cards`;
+      yield* sql`DELETE FROM projection_delegations`;
+      yield* sql`
+        INSERT INTO projection_delegations (
+          delegation_id, project_id, requester_json, target_json, title, task, state,
+          target_thread_id, turn_id, assistant_message_id, failure_json, revision,
+          created_at, updated_at
+        ) VALUES (
+          'delegation-card-a', 'project-kanban',
+          '{"kind":"kanban","cardId":"card-a","cardRevision":1}',
+          '{"kind":"existingThread","threadId":"bot-one"}',
+          'First', 'First', 'running', 'bot-one', NULL, NULL, NULL, 3,
+          '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z'
+        )
+      `;
       yield* sql`
         INSERT INTO projection_kanban_cards (
           card_id, project_id, title, description, status, order_key,
-          assignee_thread_id, revision, created_at, updated_at, deleted_at
+          assignee_thread_id, delegation_id, revision, created_at, updated_at, deleted_at
         ) VALUES
-          ('card-b', 'project-kanban', 'Second', '', 'ready', 't', NULL, 1,
+          ('card-b', 'project-kanban', 'Second', '', 'ready', 't', NULL, NULL, 1,
            '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:00.000Z', NULL),
-          ('card-a', 'project-kanban', 'First', '', 'ready', 'n', NULL, 2,
+          ('card-a', 'project-kanban', 'First', '', 'ready', 'n', 'bot-one', 'delegation-card-a', 2,
            '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z', NULL),
-          ('card-deleted', 'project-kanban', 'Deleted', '', 'backlog', 'n', NULL, 2,
+          ('card-deleted', 'project-kanban', 'Deleted', '', 'backlog', 'n', NULL, NULL, 2,
            '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:01.000Z',
            '2026-02-24T00:00:01.000Z'),
-          ('card-other', 'project-other', 'Other project', '', 'backlog', 'n', NULL, 1,
+          ('card-other', 'project-other', 'Other project', '', 'backlog', 'n', NULL, NULL, 1,
            '2026-02-24T00:00:00.000Z', '2026-02-24T00:00:00.000Z', NULL)
       `;
 
@@ -70,6 +85,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         board.cards.map((card) => card.id),
         ["card-a", "card-b"],
       );
+      assert.deepEqual(board.delegations, [
+        {
+          id: DelegationId.make("delegation-card-a"),
+          state: "running",
+          targetThreadId: ThreadId.make("bot-one"),
+        },
+      ]);
     }),
   );
 

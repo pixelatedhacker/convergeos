@@ -13,6 +13,7 @@
  * @module usage
  */
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
@@ -201,6 +202,17 @@ export const UsageSummary = Schema.Struct({
   scanDurationMs: NonNegativeInt,
 });
 export type UsageSummary = typeof UsageSummary.Type;
+
+/** Agent-facing usage source health with host and filesystem identity removed. */
+export const UsageMcpSource = Schema.Struct(Struct.omit(UsageSource.fields, ["fingerprint"]));
+export type UsageMcpSource = typeof UsageMcpSource.Type;
+
+/** Historical usage safe to expose to a provider-scoped MCP session. */
+export const UsageMcpSummary = Schema.Struct({
+  ...UsageSummary.fields,
+  sources: Schema.Array(UsageMcpSource),
+});
+export type UsageMcpSummary = typeof UsageMcpSummary.Type;
 
 export class UsageReadError extends Schema.TaggedErrorClass<UsageReadError>()("UsageReadError", {
   reason: Schema.Literals(["scanFailed", "invalidWindow"]),

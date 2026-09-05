@@ -701,6 +701,9 @@ const make = Effect.gen(function* () {
                 : mapProviderSessionStatusToOrchestrationStatus(session.status),
             providerName: session.provider,
             providerInstanceId: session.providerInstanceId,
+            ...(session.mcpAttachment !== undefined
+              ? { mcpAttachment: session.mcpAttachment }
+              : {}),
             runtimeMode: desiredRuntimeMode,
             // Provider turn ids are not orchestration turn ids.
             activeTurnId: null,

@@ -2,6 +2,11 @@ import {
   BotProfile,
   ChatAttachment,
   CheckpointRef,
+  Delegation,
+  DelegationFailure,
+  DelegationId,
+  DelegationRequester,
+  DelegationTarget,
   IsoDateTime,
   KanbanBoardSnapshot,
   KanbanCard,
@@ -107,6 +112,13 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   }),
 );
 const ProjectionKanbanCardDbRowSchema = KanbanCard;
+const ProjectionDelegationDbRowSchema = Delegation.mapFields(
+  Struct.assign({
+    requester: Schema.fromJsonString(DelegationRequester),
+    target: Schema.fromJsonString(DelegationTarget),
+    failure: Schema.NullOr(Schema.fromJsonString(DelegationFailure)),
+  }),
+);
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
   Struct.assign({
     payload: Schema.fromJsonString(Schema.Unknown),
@@ -165,6 +177,9 @@ const ProjectIdLookupInput = Schema.Struct({
 });
 const ThreadIdLookupInput = Schema.Struct({
   threadId: ThreadId,
+});
+const DelegationIdsLookupInput = Schema.Struct({
+  delegationIds: Schema.Array(DelegationId),
 });
 const ThreadActivityKindsLookupInput = Schema.Struct({
   threadId: ThreadId,
@@ -337,6 +352,7 @@ function mapSessionRow(
     status: row.status,
     providerName: row.providerName,
     ...(row.providerInstanceId !== null ? { providerInstanceId: row.providerInstanceId } : {}),
+    ...(row.mcpAttachment !== null ? { mcpAttachment: row.mcpAttachment } : {}),
     runtimeMode: row.runtimeMode,
     activeTurnId: row.activeTurnId,
     lastError: row.lastError,
@@ -513,12 +529,91 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           status,
           order_key AS "orderKey",
           assignee_thread_id AS "assigneeThreadId",
+          delegation_id AS "delegationId",
           revision,
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
         FROM projection_kanban_cards
         ORDER BY project_id ASC, status ASC, order_key ASC, card_id ASC
+      `,
+  });
+
+  const listDelegationRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          delegation_id AS "id",
+          project_id AS "projectId",
+          requester_json AS "requester",
+          target_json AS "target",
+          title,
+          task,
+          state,
+          target_thread_id AS "targetThreadId",
+          turn_id AS "turnId",
+          assistant_message_id AS "assistantMessageId",
+          failure_json AS "failure",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM projection_delegations
+        ORDER BY created_at ASC, delegation_id ASC
+      `,
+  });
+
+  const listDelegationRowsByIds = SqlSchema.findAll({
+    Request: DelegationIdsLookupInput,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: ({ delegationIds }) =>
+      sql`
+        SELECT
+          delegation_id AS "id",
+          project_id AS "projectId",
+          requester_json AS "requester",
+          target_json AS "target",
+          title,
+          task,
+          state,
+          target_thread_id AS "targetThreadId",
+          turn_id AS "turnId",
+          assistant_message_id AS "assistantMessageId",
+          failure_json AS "failure",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM projection_delegations
+        WHERE ${sql.in("delegation_id", delegationIds)}
+        ORDER BY created_at ASC, delegation_id ASC
+      `,
+  });
+
+  const listOpenDelegationRowsByTarget = SqlSchema.findAll({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionDelegationDbRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT
+          delegation_id AS "id",
+          project_id AS "projectId",
+          requester_json AS "requester",
+          target_json AS "target",
+          title,
+          task,
+          state,
+          target_thread_id AS "targetThreadId",
+          turn_id AS "turnId",
+          assistant_message_id AS "assistantMessageId",
+          failure_json AS "failure",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM projection_delegations
+        WHERE target_thread_id = ${threadId}
+          AND state IN ('requested', 'provisioning', 'turnRequested', 'running')
+        ORDER BY updated_at ASC, delegation_id ASC
       `,
   });
 
@@ -535,6 +630,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           status,
           order_key AS "orderKey",
           assignee_thread_id AS "assigneeThreadId",
+          delegation_id AS "delegationId",
           revision,
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -701,6 +797,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           status,
           provider_name AS "providerName",
           provider_instance_id AS "providerInstanceId",
+          mcp_attachment AS "mcpAttachment",
           provider_session_id AS "providerSessionId",
           provider_thread_id AS "providerThreadId",
           runtime_mode AS "runtimeMode",
@@ -722,6 +819,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           sessions.status,
           sessions.provider_name AS "providerName",
           sessions.provider_instance_id AS "providerInstanceId",
+          sessions.mcp_attachment AS "mcpAttachment",
           sessions.provider_session_id AS "providerSessionId",
           sessions.provider_thread_id AS "providerThreadId",
           sessions.runtime_mode AS "runtimeMode",
@@ -747,6 +845,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           sessions.status,
           sessions.provider_name AS "providerName",
           sessions.provider_instance_id AS "providerInstanceId",
+          sessions.mcp_attachment AS "mcpAttachment",
           sessions.provider_session_id AS "providerSessionId",
           sessions.provider_thread_id AS "providerThreadId",
           sessions.runtime_mode AS "runtimeMode",
@@ -1264,6 +1363,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           status,
           provider_name AS "providerName",
           provider_instance_id AS "providerInstanceId",
+          mcp_attachment AS "mcpAttachment",
           runtime_mode AS "runtimeMode",
           active_turn_id AS "activeTurnId",
           last_error AS "lastError",
@@ -1829,7 +1929,6 @@ pending_approval_requests AS (
               for (const card of kanbanCards) {
                 updatedAt = maxIso(updatedAt, card.updatedAt);
               }
-
               for (const row of messageRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
                 const threadMessages = messagesByThread.get(row.threadId) ?? [];
@@ -1937,6 +2036,7 @@ pending_approval_requests AS (
                   ...(row.providerInstanceId !== null
                     ? { providerInstanceId: row.providerInstanceId }
                     : {}),
+                  ...(row.mcpAttachment !== null ? { mcpAttachment: row.mcpAttachment } : {}),
                   runtimeMode: row.runtimeMode,
                   activeTurnId: row.activeTurnId,
                   lastError: row.lastError,
@@ -2073,6 +2173,14 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listDelegationRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listDelegations:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listDelegations:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2092,6 +2200,7 @@ pending_approval_requests AS (
             sessionRows,
             latestTurnRows,
             kanbanCards,
+            delegations,
             stateRows,
           ]) =>
             Effect.sync(() => {
@@ -2156,6 +2265,9 @@ pending_approval_requests AS (
               }
               for (const card of kanbanCards) {
                 updatedAt = maxIso(updatedAt, card.updatedAt);
+              }
+              for (const delegation of delegations) {
+                updatedAt = maxIso(updatedAt, delegation.updatedAt);
               }
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
@@ -2238,8 +2350,9 @@ pending_approval_requests AS (
                 projects,
                 threads,
                 kanbanCards,
+                delegations,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
-              } satisfies OrchestrationReadModel;
+              };
             }),
         ),
         Effect.mapError((error) => {
@@ -3244,24 +3357,65 @@ pending_approval_requests AS (
       );
 
   const getKanbanBoard: ProjectionSnapshotQueryShape["getKanbanBoard"] = (projectId) =>
-    listActiveKanbanCardsByProject(projectId).pipe(
-      Effect.map(
-        (cards) =>
-          ({
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const cards = yield* listActiveKanbanCardsByProject(projectId);
+          const delegationIds = cards.flatMap((card) =>
+            card.delegationId === null ? [] : [card.delegationId],
+          );
+          const delegations =
+            delegationIds.length === 0 ? [] : yield* listDelegationRowsByIds({ delegationIds });
+          return {
             projectId,
             cards,
-          }) satisfies KanbanBoardSnapshot,
-      ),
+            delegations: delegations.map((delegation) => ({
+              id: delegation.id,
+              state: delegation.state,
+              targetThreadId: delegation.targetThreadId,
+            })),
+          } satisfies KanbanBoardSnapshot;
+        }),
+      )
+      .pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.getKanbanBoard:query",
+            "ProjectionSnapshotQuery.getKanbanBoard:decodeRows",
+          ),
+        ),
+      );
+
+  const getDelegations: NonNullable<ProjectionSnapshotQueryShape["getDelegations"]> = (
+    delegationIds,
+  ) =>
+    delegationIds.length === 0
+      ? Effect.succeed([])
+      : listDelegationRowsByIds({ delegationIds: [...delegationIds] }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getDelegations:query",
+              "ProjectionSnapshotQuery.getDelegations:decodeRows",
+            ),
+          ),
+        );
+
+  const getOpenDelegationsForTarget: NonNullable<
+    ProjectionSnapshotQueryShape["getOpenDelegationsForTarget"]
+  > = (threadId) =>
+    listOpenDelegationRowsByTarget({ threadId }).pipe(
       Effect.mapError(
         toPersistenceSqlOrDecodeError(
-          "ProjectionSnapshotQuery.getKanbanBoard:query",
-          "ProjectionSnapshotQuery.getKanbanBoard:decodeRows",
+          "ProjectionSnapshotQuery.getOpenDelegationsForTarget:query",
+          "ProjectionSnapshotQuery.getOpenDelegationsForTarget:decodeRows",
         ),
       ),
     );
 
   return {
     getKanbanBoard,
+    getDelegations,
+    getOpenDelegationsForTarget,
     getCommandReadModel,
     getSnapshot,
     getShellSnapshot,

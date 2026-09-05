@@ -1,7 +1,9 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import {
   CommandId,
+  DelegationId,
   IsoDateTime,
   KanbanCardId,
   PositiveInt,
@@ -26,12 +28,31 @@ export const KanbanCard = Schema.Struct({
   status: KanbanStatus,
   orderKey: KanbanOrderKey,
   assigneeThreadId: Schema.NullOr(ThreadId),
+  delegationId: Schema.NullOr(DelegationId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   revision: PositiveInt,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
 });
 export type KanbanCard = typeof KanbanCard.Type;
+
+export const KanbanDelegationState = Schema.Literals([
+  "requested",
+  "provisioning",
+  "turnRequested",
+  "running",
+  "completed",
+  "failed",
+  "interrupted",
+]);
+export type KanbanDelegationState = typeof KanbanDelegationState.Type;
+
+export const KanbanDelegationSummary = Schema.Struct({
+  id: DelegationId,
+  state: KanbanDelegationState,
+  targetThreadId: Schema.NullOr(ThreadId),
+});
+export type KanbanDelegationSummary = typeof KanbanDelegationSummary.Type;
 
 export const KanbanPlacement = Schema.Union([
   Schema.Struct({ status: KanbanStatus, relation: Schema.Literals(["first", "last"]) }),
@@ -49,12 +70,21 @@ export type KanbanBoardInput = typeof KanbanBoardInput.Type;
 export const KanbanBoardSnapshot = Schema.Struct({
   projectId: ProjectId,
   cards: Schema.Array(KanbanCard),
+  delegations: Schema.Array(KanbanDelegationSummary).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
 });
 export type KanbanBoardSnapshot = typeof KanbanBoardSnapshot.Type;
 
 export const KanbanBoardStreamItem = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("snapshot"), snapshot: KanbanBoardSnapshot }),
   Schema.Struct({ kind: Schema.Literal("card-upserted"), sequence: PositiveInt, card: KanbanCard }),
+  Schema.Struct({
+    kind: Schema.Literal("delegation-upserted"),
+    sequence: PositiveInt,
+    projectId: ProjectId,
+    delegation: KanbanDelegationSummary,
+  }),
   Schema.Struct({
     kind: Schema.Literal("card-removed"),
     sequence: PositiveInt,
@@ -64,7 +94,14 @@ export const KanbanBoardStreamItem = Schema.Union([
 ]);
 export type KanbanBoardStreamItem = typeof KanbanBoardStreamItem.Type;
 
-export const KanbanMcpOperation = Schema.Literals(["read", "create", "update", "move", "delete"]);
+export const KanbanMcpOperation = Schema.Literals([
+  "read",
+  "create",
+  "update",
+  "move",
+  "retry",
+  "delete",
+]);
 export type KanbanMcpOperation = typeof KanbanMcpOperation.Type;
 
 export const KanbanMcpErrorReason = Schema.Literals([
@@ -101,6 +138,12 @@ export const KanbanMcpWriteInput = Schema.Union([
     description: KanbanCardDescription,
     assigneeThreadId: Schema.NullOr(ThreadId),
     placement: KanbanPlacement,
+  }),
+  Schema.Struct({
+    ...KanbanMcpMutationBase,
+    action: Schema.Literal("retry"),
+    cardId: KanbanCardId,
+    expectedRevision: PositiveInt,
   }),
   Schema.Struct({
     ...KanbanMcpMutationBase,

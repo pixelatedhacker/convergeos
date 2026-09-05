@@ -2623,6 +2623,7 @@ describe("agent MCP access", () => {
   const startSessionWith = (
     settings: {
       readonly enableAgentBrowserAccess: boolean;
+      readonly enableAgentUsageAccess: boolean;
       readonly enableAgentMeshAccess: boolean;
       readonly enableAgentKanbanAccess?: boolean;
     },
@@ -2681,7 +2682,11 @@ describe("agent MCP access", () => {
   it.effect("requests no MCP credential when all agent MCP access is off", () =>
     Effect.gen(function* () {
       const issued = yield* startSessionWith(
-        { enableAgentBrowserAccess: false, enableAgentMeshAccess: false },
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: false,
+          enableAgentMeshAccess: false,
+        },
         asThreadId("thread-mcp-off"),
       );
 
@@ -2695,7 +2700,11 @@ describe("agent MCP access", () => {
       revokedThreads.length = 0;
 
       yield* startSessionWith(
-        { enableAgentBrowserAccess: false, enableAgentMeshAccess: false },
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: false,
+          enableAgentMeshAccess: false,
+        },
         threadId,
       );
 
@@ -2706,24 +2715,47 @@ describe("agent MCP access", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("grants preview and usage when agent browser access is on", () =>
+  it.effect("grants preview independently from usage access", () =>
     Effect.gen(function* () {
       const threadId = asThreadId("thread-browser-on");
 
       const issued = yield* startSessionWith(
-        { enableAgentBrowserAccess: true, enableAgentMeshAccess: false },
+        {
+          enableAgentBrowserAccess: true,
+          enableAgentUsageAccess: false,
+          enableAgentMeshAccess: false,
+        },
         threadId,
       );
 
       assert.equal(issued[0]?.threadId, threadId);
-      assert.deepEqual(issued[0]?.capabilities, new Set(["preview", "usage.read"]));
+      assert.deepEqual(issued[0]?.capabilities, new Set(["preview"]));
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants usage independently from browser access", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: true,
+          enableAgentMeshAccess: false,
+        },
+        asThreadId("thread-usage-on"),
+      );
+
+      assert.deepEqual(issued[0]?.capabilities, new Set(["usage.read"]));
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("grants mesh tools independently from browser access", () =>
     Effect.gen(function* () {
       const issued = yield* startSessionWith(
-        { enableAgentBrowserAccess: false, enableAgentMeshAccess: true },
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: false,
+          enableAgentMeshAccess: true,
+        },
         asThreadId("thread-mesh-on"),
       );
 
@@ -2739,6 +2771,7 @@ describe("agent MCP access", () => {
       const issued = yield* startSessionWith(
         {
           enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: false,
           enableAgentMeshAccess: false,
           enableAgentKanbanAccess: true,
         },
@@ -2752,7 +2785,11 @@ describe("agent MCP access", () => {
   it.effect("combines browser and mesh capabilities when both are enabled", () =>
     Effect.gen(function* () {
       const issued = yield* startSessionWith(
-        { enableAgentBrowserAccess: true, enableAgentMeshAccess: true },
+        {
+          enableAgentBrowserAccess: true,
+          enableAgentUsageAccess: true,
+          enableAgentMeshAccess: true,
+        },
         asThreadId("thread-all-mcp-on"),
       );
 

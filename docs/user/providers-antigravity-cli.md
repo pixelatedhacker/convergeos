@@ -41,8 +41,11 @@ same environment. You can select a different model for the next turn. Models wit
 appear as separate choices, using the names returned by the CLI.
 Deleting the native CLI conversation or moving to a different environment prevents that resume.
 
-The CLI uses its configured MCP servers. ConvergeOS does not automatically add its project tools or
-agent mesh to the CLI's configuration.
+The CLI uses its configured MCP servers. Current Antigravity CLI releases do not expose a
+per-process MCP configuration option, so ConvergeOS treats this provider as leaf-only: it does not
+automatically add project tools or the agent mesh, and a delegated task running here cannot create
+another ConvergeOS worker. ConvergeOS never writes its short-lived session credential into the
+CLI's shared user or workspace configuration.
 
 ## Troubleshoot a connection
 

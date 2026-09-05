@@ -3,6 +3,10 @@ import {
   KanbanCardDeletedPayload as ContractsKanbanCardDeletedPayloadSchema,
   KanbanCardMovedPayload as ContractsKanbanCardMovedPayloadSchema,
   KanbanCardUpdatedPayload as ContractsKanbanCardUpdatedPayloadSchema,
+  KanbanCardRetriedPayload as ContractsKanbanCardRetriedPayloadSchema,
+  KanbanCardDelegationLinkedPayload as ContractsKanbanCardDelegationLinkedPayloadSchema,
+  KanbanCardDelegationStartedPayload as ContractsKanbanCardDelegationStartedPayloadSchema,
+  KanbanCardDelegationCompletedPayload as ContractsKanbanCardDelegationCompletedPayloadSchema,
   ProjectCreatedPayload as ContractsProjectCreatedPayloadSchema,
   ProjectMetaUpdatedPayload as ContractsProjectMetaUpdatedPayloadSchema,
   ProjectDeletedPayload as ContractsProjectDeletedPayloadSchema,
@@ -44,6 +48,11 @@ export const KanbanCardCreatedPayload = ContractsKanbanCardCreatedPayloadSchema;
 export const KanbanCardUpdatedPayload = ContractsKanbanCardUpdatedPayloadSchema;
 export const KanbanCardMovedPayload = ContractsKanbanCardMovedPayloadSchema;
 export const KanbanCardDeletedPayload = ContractsKanbanCardDeletedPayloadSchema;
+export const KanbanCardRetriedPayload = ContractsKanbanCardRetriedPayloadSchema;
+export const KanbanCardDelegationLinkedPayload = ContractsKanbanCardDelegationLinkedPayloadSchema;
+export const KanbanCardDelegationStartedPayload = ContractsKanbanCardDelegationStartedPayloadSchema;
+export const KanbanCardDelegationCompletedPayload =
+  ContractsKanbanCardDelegationCompletedPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;

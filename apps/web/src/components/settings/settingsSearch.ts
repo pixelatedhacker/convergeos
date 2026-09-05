@@ -342,6 +342,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["agents bots board tasks cards mcp project workflow"],
   },
   {
+    id: "agent-usage-access",
+    title: "Agent usage access",
+    to: "/settings/integrations",
+    searchTerms: ["agents usage quota tokens cost transcripts mcp subscription"],
+  },
+  {
     id: "browser-profiles",
     title: "Browser profiles",
     to: "/settings/integrations",

@@ -2,6 +2,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
   AgentMeshError,
+  CommandId,
+  DelegationId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -12,12 +14,14 @@ import {
   type OrchestrationProjectShell,
   type OrchestrationThreadShell,
 } from "@t3tools/contracts";
+import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as DelegationService from "../delegation/DelegationService.ts";
 import * as AgentMesh from "./AgentMesh.ts";
 
 const callerId = ThreadId.make("thread-caller");
@@ -82,6 +86,63 @@ const makeHarness = (
   const commands: OrchestrationCommand[] = [];
   const acceptedSequences = new Map<string, number>();
   const byId = new Map(threads.map((thread) => [thread.id, thread] as const));
+  const delegationSend: DelegationService.DelegationServiceShape["send"] = (scope, input) =>
+    Effect.gen(function* () {
+      const caller = byId.get(scope.threadId);
+      const target = byId.get(input.targetThreadId);
+      if (caller === undefined || target === undefined || caller.projectId !== target.projectId) {
+        return yield* new AgentMeshError({
+          operation: "send",
+          reason: "targetUnavailable",
+          targetThreadId: input.targetThreadId,
+        });
+      }
+      if (caller.id === target.id) {
+        return yield* new AgentMeshError({
+          operation: "send",
+          reason: "selfTarget",
+          targetThreadId: target.id,
+        });
+      }
+      if (
+        normalizeProjectPathForComparison(caller.worktreePath ?? project.workspaceRoot) ===
+        normalizeProjectPathForComparison(target.worktreePath ?? project.workspaceRoot)
+      ) {
+        return yield* new AgentMeshError({
+          operation: "send",
+          reason: "workspaceShared",
+          targetThreadId: target.id,
+        });
+      }
+      const commandId = CommandId.make(
+        `test-send:${scope.threadId}:${target.id}:${input.requestId}`,
+      );
+      const messageId = MessageId.make(
+        `test-message:${scope.threadId}:${target.id}:${input.requestId}`,
+      );
+      const knownSequence = acceptedSequences.get(commandId);
+      const sequence = knownSequence ?? commands.length + 1;
+      if (knownSequence === undefined) {
+        commands.push({
+          type: "thread.peer-turn.start",
+          commandId,
+          requestId: input.requestId,
+          sourceThreadId: caller.id,
+          threadId: target.id,
+          messageId,
+          message: input.message,
+        });
+        acceptedSequences.set(commandId, sequence);
+      }
+      return {
+        delegationId: DelegationId.make(`test-delegation:${commandId}`),
+        targetThreadId: target.id,
+        commandId,
+        messageId,
+        sequence,
+        state: "turnRequested",
+      };
+    });
   const dependencies = Layer.mergeAll(
     NodeServices.layer,
     Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
@@ -133,6 +194,14 @@ const makeHarness = (
           return { sequence };
         }),
     }),
+    Layer.succeed(
+      DelegationService.DelegationService,
+      DelegationService.DelegationService.of({
+        spawn: () => Effect.die("unused"),
+        send: delegationSend,
+        wait: () => Effect.die("unused"),
+      }),
+    ),
   );
   return {
     commands,
@@ -147,6 +216,16 @@ it.effect("lists only same-project agents with bounded status metadata", () =>
       shell(targetId, {
         updatedAt: "2026-09-03T22:00:00.000Z",
         hasPendingApprovals: true,
+        session: {
+          threadId: targetId,
+          status: "ready",
+          providerName: "antigravityCli",
+          mcpAttachment: "leafOnly",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "2026-09-03T22:00:00.000Z",
+        },
       }),
       shell(callerId),
       shell(otherProjectId, { projectId: ProjectId.make("project-other") }),
@@ -160,6 +239,7 @@ it.effect("lists only same-project agents with bounded status metadata", () =>
     expect(result.agents[0]?.current).toBe(true);
     expect(result.agents[1]?.hasPendingApprovals).toBe(true);
     expect(result.agents[1]?.workspaceIsolation).toBe("shared");
+    expect(result.agents[1]?.mcpAttachment).toBe("leafOnly");
     expect(result.hasMore).toBe(false);
   }),
 );

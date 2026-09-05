@@ -17,6 +17,11 @@ With a server URL, ConvergeOS connects to that external server and uses only the
 provider settings. It does not send a local `OPENCODE_SERVER_PASSWORD` to an external server.
 OpenCode uses this password for HTTP Basic authentication.
 
+ConvergeOS attaches its authenticated MCP server to local OpenCode processes that it starts and
+owns. It does not mutate an external OpenCode server's shared MCP configuration or send a
+thread-scoped credential to it. External OpenCode therefore runs as a leaf-only provider unless the
+server owner configures a separately managed, reachable ConvergeOS MCP credential.
+
 ## Stop a turn
 
 When you select **Stop**, ConvergeOS stops the main OpenCode session and all nested child sessions.

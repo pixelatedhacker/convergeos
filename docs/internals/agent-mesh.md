@@ -1,7 +1,8 @@
 # Agent mesh architecture
 
-Agent mesh is a capability-gated MCP view over existing durable threads. It does not introduce a
-second agent registry, broker, queue, or persistence model.
+Agent mesh is a capability-gated MCP view over durable threads. It reuses the thread and provider
+runtime, with one small `Delegation` aggregate for each assigned turn; it does not introduce a
+second agent registry or execution engine.
 
 ## Boundaries
 
@@ -10,10 +11,16 @@ second agent registry, broker, queue, or persistence model.
 `OrchestrationEngineService`, so command receipts, events, projections, reactors, provider routing,
 and checkpoints remain authoritative.
 
-Two internal commands represent peer mutations:
+Internal commands represent peer mutations and the durable delegation lifecycle:
 
 - `thread.peer-turn.start`
 - `thread.peer-turn.interrupt`
+- `delegation.request`
+- `delegation.provision.start`
+- `delegation.target.bind`
+- `delegation.turn.request`
+- `delegation.turn.bind`
+- `delegation.complete`
 
 They are members of `InternalOrchestrationCommand`, not `ClientOrchestrationCommand`. WebSocket and
 HTTP clients therefore cannot claim peer-agent provenance. The decider validates source and target
@@ -33,7 +40,14 @@ currently expose integration settings, so it can observe mesh-driven thread acti
 toggle this server permission yet.
 
 Cross-project and missing targets deliberately collapse to the same error. `agents_read` uses a
-one-turn detail window and caps assistant text. It never returns user messages.
+one-turn detail window and caps assistant text. It never returns user messages. `agents_wait`
+accepts at most eight delegation IDs, caps returned assistant text, and waits on event streams with
+a bounded timeout rather than polling.
+
+Projected sessions retain the provider's MCP attachment outcome. `agents_list` exposes
+`attached`, `notRequested`, or `leafOnly`, allowing the mesh to distinguish a worker that can only
+receive work from one where recursive access may be granted. Attachment alone is not treated as a
+grant: every tool call still checks the credential's capabilities.
 
 The current Effect MCP registry has a process-wide tool catalog, so a session may discover a tool
 name that its credential cannot invoke. Every handler still enforces its capability at call time.
@@ -43,9 +57,16 @@ discovery without changing the authorization boundary.
 
 ## Mutation invariants
 
-Every peer send has a bounded request ID. The source thread, target thread, operation, and request ID
-produce a stable command ID, so the existing command-receipt path deduplicates retries. The visible
-message also names its source thread.
+Every spawn or peer send has a bounded request ID. The caller and request ID produce a stable
+delegation ID; each lifecycle step also has a deterministic command and message ID. The existing
+command-receipt path therefore resumes retries and restart recovery without creating a second turn.
+The delegation projection records its requester, target, target thread, turn, terminal outcome, and
+revision.
+
+`agents_spawn` provisions a deterministic worker thread and isolated worktree from the caller's
+branch, then starts one normal turn. `agents_send` assigns one turn to an existing bot inbox. The
+same reconciliation path repairs a crash between reservation, worktree preparation, turn request,
+and turn binding. Completion follows the target turn's projected lifecycle.
 
 The decider rejects a peer send when:
 
@@ -54,6 +75,10 @@ The decider rejects a peer send when:
 - the threads belong to different projects;
 - their effective workspaces are shared;
 - the target is running, starting, queued, or waiting for approval or user input.
+
+The delegation request is the queue-owned reservation point. It also rejects a second open
+delegation for the same target, so concurrent Kanban and mesh callers cannot both pass a stale
+availability check.
 
 An interrupt carries the exact turn ID observed by the caller. The decider rejects it if the target
 has moved to another turn before dispatch.
@@ -74,6 +99,6 @@ remote, relay, web, desktop, and mobile clients share the same state. `agents_li
 `onlyBots` and includes profile metadata in results. Sends still target the underlying thread and
 therefore keep every agent-mesh authorization and workspace invariant above.
 
-Kanban cards may name bot inboxes as assignees, but assignment is planning metadata rather than an
-automatic dispatch. Work still starts through the normal thread or mesh path, preserving these
-orchestration invariants.
+Kanban cards may name bot inboxes as assignees. A Ready assignment creates the same delegation
+aggregate and starts through the same thread path, preserving the authorization, exclusivity, and
+workspace invariants above.

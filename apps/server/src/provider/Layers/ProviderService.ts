@@ -147,6 +147,7 @@ function toRuntimePayloadFromSession(
     model: session.model ?? null,
     activeTurnId: session.activeTurnId ?? null,
     lastError: session.lastError ?? null,
+    mcpAttachment: session.mcpAttachment ?? null,
     ...(extra?.modelSelection !== undefined ? { modelSelection: extra.modelSelection } : {}),
     ...(extra?.lastRuntimeEvent !== undefined ? { lastRuntimeEvent: extra.lastRuntimeEvent } : {}),
     ...(extra?.lastRuntimeEventAt !== undefined
@@ -236,7 +237,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   /**
-   * Attach the `t3-code` MCP server to the session that is about to start.
+   * Attach the `convergeos` MCP server to the session that is about to start.
    *
    * This is the only place a credential is minted, so withholding one here is
    * what disables all agent MCP access: every adapter already
@@ -256,6 +257,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const capabilities = new Set<McpCapability>();
       if (settings.enableAgentBrowserAccess) {
         capabilities.add("preview");
+      }
+      if (settings.enableAgentUsageAccess) {
         capabilities.add("usage.read");
       }
       if (settings.enableAgentMeshAccess) {
@@ -1109,6 +1112,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           resumeCursor?: ProviderSession["resumeCursor"];
           runtimeMode?: ProviderSession["runtimeMode"];
           providerInstanceId?: ProviderSession["providerInstanceId"];
+          mcpAttachment?: ProviderSession["mcpAttachment"];
         } = {};
         overrides.providerInstanceId = dieOnMissingBindingInstanceId(
           "ProviderService.listSessions",
@@ -1133,6 +1137,18 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
         if (binding.runtimeMode !== undefined) {
           overrides.runtimeMode = binding.runtimeMode;
+        }
+        if (
+          session.mcpAttachment === undefined &&
+          binding.runtimePayload &&
+          typeof binding.runtimePayload === "object" &&
+          !Array.isArray(binding.runtimePayload) &&
+          "mcpAttachment" in binding.runtimePayload &&
+          (binding.runtimePayload.mcpAttachment === "attached" ||
+            binding.runtimePayload.mcpAttachment === "notRequested" ||
+            binding.runtimePayload.mcpAttachment === "leafOnly")
+        ) {
+          overrides.mcpAttachment = binding.runtimePayload.mcpAttachment;
         }
         sessions.push(Object.assign({}, session, overrides));
       }

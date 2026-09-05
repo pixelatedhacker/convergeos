@@ -4,10 +4,15 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
+  UsageDay,
+  UsageMcpSummary,
+  UsageReadError,
+  type UsageSummary,
   type SubscriptionQuotaScopedReport,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { McpSchema, McpServer } from "effect/unstable/ai";
 import { vi } from "vite-plus/test";
@@ -15,6 +20,7 @@ import { vi } from "vite-plus/test";
 import type { ProviderInstance } from "../../../provider/ProviderDriver.ts";
 import * as SubscriptionQuotaService from "../../../subscriptionQuota/SubscriptionQuotaService.ts";
 import * as ProviderInstanceRegistry from "../../../provider/Services/ProviderInstanceRegistry.ts";
+import * as UsageService from "../../../usage/UsageService.ts";
 import * as McpHttpServer from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
@@ -22,6 +28,7 @@ const environmentId = EnvironmentId.make("environment-usage-mcp");
 const providerInstanceId = ProviderInstanceId.make("codex-personal");
 const readScoped =
   vi.fn<SubscriptionQuotaService.SubscriptionQuotaService["Service"]["readScoped"]>();
+const readSummary = vi.fn<UsageService.UsageService["Service"]["readSummary"]>();
 
 const providerInstance = {
   instanceId: providerInstanceId,
@@ -55,6 +62,33 @@ const report: SubscriptionQuotaScopedReport = {
   ],
 };
 
+const usageSummary: UsageSummary = {
+  contractVersion: 5,
+  readAt: "2026-09-03T22:00:00.000Z",
+  timeZone: "America/Chicago",
+  sinceDay: UsageDay.make("2026-09-01"),
+  untilDay: UsageDay.make("2026-09-03"),
+  buckets: [],
+  sources: [
+    {
+      fingerprint: {
+        hostId: "private-host",
+        provider: "codex",
+        resolvedHomePath: "/Users/private/.codex",
+        volumeId: "1:2",
+      },
+      status: "ok",
+      scannedFiles: 2,
+      skippedFiles: 0,
+      malformedRecords: 0,
+      distinctSessions: 1,
+      message: null,
+    },
+  ],
+  pricing: { status: "cached", source: "test-rates", fetchedAt: null, knownModels: 0 },
+  scanDurationMs: 2,
+};
+
 const TestLayer = McpHttpServer.UsageToolkitRegistrationLive.pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provide(
@@ -71,6 +105,15 @@ const TestLayer = McpHttpServer.UsageToolkitRegistrationLive.pipe(
       listInstances: Effect.sync(() => registryInstances),
       streamChanges: Stream.empty,
     }),
+  ),
+  Layer.provide(
+    Layer.succeed(
+      UsageService.UsageService,
+      UsageService.UsageService.of({
+        readSummary: (input) => readSummary(input),
+        refreshRates: Effect.succeed(usageSummary.pricing),
+      }),
+    ),
   ),
 );
 
@@ -146,5 +189,86 @@ it.effect("resolves the live provider registry for every invocation", () =>
       providerInstanceId,
       instances: [],
     });
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("returns transcript-backed usage history for the requested window", () =>
+  Effect.gen(function* () {
+    readSummary.mockReturnValueOnce(Effect.succeed(usageSummary));
+    const server = yield* McpServer.McpServer;
+    const input = {
+      sinceDay: UsageDay.make("2026-09-01"),
+      untilDay: UsageDay.make("2026-09-03"),
+      timeZone: "America/Chicago",
+      resolution: "day" as const,
+    };
+    const result = yield* server.callTool({ name: "usage_summary", arguments: input }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, {
+        environmentId,
+        threadId: ThreadId.make("thread-usage-history-mcp"),
+        providerSessionId: "session-usage-history-mcp",
+        providerInstanceId,
+        capabilities: new Set(["usage.read"] as const),
+        issuedAt: 1,
+      }),
+      Effect.provideService(McpSchema.McpServerClient, client),
+    );
+
+    expect(readSummary).toHaveBeenCalledWith(input);
+    expect(result.isError).toBe(false);
+    const summary = yield* Schema.decodeUnknownEffect(UsageMcpSummary)(result.structuredContent);
+    expect(summary).toEqual({
+      ...usageSummary,
+      sources: usageSummary.sources.map(({ fingerprint: _fingerprint, ...source }) => source),
+    });
+    expect(summary.sources.every((source) => !("fingerprint" in source))).toBe(true);
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("removes host paths from usage_summary failures", () =>
+  Effect.gen(function* () {
+    readSummary.mockReturnValueOnce(
+      Effect.fail(
+        new UsageReadError({
+          reason: "scanFailed",
+          detail: "Server settings could not be read.",
+          cause: new Error("Could not read /Users/private/.convergeos/settings.json"),
+        }),
+      ),
+    );
+    const server = yield* McpServer.McpServer;
+    const result = yield* server
+      .callTool({
+        name: "usage_summary",
+        arguments: {
+          sinceDay: "2026-09-01",
+          untilDay: "2026-09-03",
+          timeZone: "America/Chicago",
+          resolution: "day",
+        },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          environmentId,
+          threadId: ThreadId.make("thread-usage-failure-mcp"),
+          providerSessionId: "session-usage-failure-mcp",
+          providerInstanceId,
+          capabilities: new Set(["usage.read"] as const),
+          issuedAt: 1,
+        }),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+
+    expect(result.isError).toBe(true);
+    const text = result.content
+      .filter(
+        (item): item is Extract<(typeof result.content)[number], { type: "text" }> =>
+          item.type === "text",
+      )
+      .map((item) => item.text)
+      .join("\n");
+    expect(text).toContain("Server settings could not be read.");
+    expect(text).not.toContain("/Users/private");
+    expect(text).not.toContain("settings.json");
   }).pipe(Effect.provide(TestLayer)),
 );

@@ -2,6 +2,7 @@ import {
   AgentMeshError,
   type AgentMeshAgent,
   type AgentMeshDispatchReceipt,
+  type AgentMeshDelegationDispatchReceipt,
   type AgentMeshInterruptInput,
   type AgentMeshListInput,
   type AgentMeshListResult,
@@ -9,6 +10,9 @@ import {
   type AgentMeshReadInput,
   type AgentMeshReadResult,
   type AgentMeshSendInput,
+  type AgentMeshSpawnInput,
+  type AgentMeshWaitInput,
+  type AgentMeshWaitResult,
   CommandId,
   MessageId,
   type OrchestrationCommand,
@@ -23,6 +27,8 @@ import * as Option from "effect/Option";
 
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as DelegationService from "../delegation/DelegationService.ts";
+import * as ThreadLaunchService from "../orchestration/Services/ThreadLaunchService.ts";
 
 const DEFAULT_LIST_LIMIT = 50;
 const stableIdPart = (value: string): string => `${value.length}:${value}`;
@@ -39,7 +45,15 @@ export interface AgentMeshShape {
   readonly send: (
     scope: AgentMeshScope,
     input: AgentMeshSendInput,
-  ) => Effect.Effect<AgentMeshDispatchReceipt, AgentMeshError>;
+  ) => Effect.Effect<AgentMeshDelegationDispatchReceipt, AgentMeshError>;
+  readonly spawn: (
+    scope: AgentMeshScope,
+    input: AgentMeshSpawnInput,
+  ) => Effect.Effect<AgentMeshDelegationDispatchReceipt, AgentMeshError>;
+  readonly wait: (
+    scope: AgentMeshScope,
+    input: AgentMeshWaitInput,
+  ) => Effect.Effect<AgentMeshWaitResult, AgentMeshError>;
   readonly read: (
     scope: AgentMeshScope,
     input: AgentMeshReadInput,
@@ -69,6 +83,7 @@ const projectAgent = (
   latestTurnState: thread.latestTurn?.state ?? null,
   activeTurnId: thread.session?.activeTurnId ?? null,
   providerInstanceId: thread.session?.providerInstanceId ?? null,
+  mcpAttachment: thread.session?.mcpAttachment ?? null,
   hasPendingApprovals: thread.hasPendingApprovals,
   hasPendingUserInput: thread.hasPendingUserInput,
   backgroundLiveness: thread.backgroundLiveness ?? null,
@@ -85,6 +100,7 @@ const projectAgent = (
 export const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const delegations = yield* DelegationService.DelegationService;
 
   const readThread = (operation: AgentMeshOperation, threadId: ThreadId) =>
     query.getThreadShellById(threadId).pipe(
@@ -220,39 +236,11 @@ export const make = Effect.gen(function* () {
     };
   });
 
-  const send: AgentMeshShape["send"] = Effect.fn("AgentMesh.send")(function* (scope, input) {
-    const { caller, target, workspaceRoot } = yield* requireTarget(
-      "send",
-      scope,
-      input.targetThreadId,
-    );
-    const commandId = CommandId.make(
-      `provider:agent-mesh:send:${stableIdPart(caller.id)}:${stableIdPart(target.id)}:${input.requestId}`,
-    );
-    const messageId = MessageId.make(
-      `agent-mesh:${stableIdPart(caller.id)}:${stableIdPart(target.id)}:${input.requestId}`,
-    );
-    if (caller.id === target.id) {
-      return yield* meshError("send", "selfTarget", target.id);
-    }
-    if (
-      normalizeProjectPathForComparison(caller.worktreePath ?? workspaceRoot) ===
-      normalizeProjectPathForComparison(target.worktreePath ?? workspaceRoot)
-    ) {
-      return yield* meshError("send", "workspaceShared", target.id);
-    }
-    const command = {
-      type: "thread.peer-turn.start",
-      commandId,
-      requestId: input.requestId,
-      sourceThreadId: caller.id,
-      threadId: target.id,
-      messageId,
-      message: input.message,
-    } satisfies OrchestrationCommand;
-    const receipt = yield* dispatch("send", target.id, command);
-    return { targetThreadId: target.id, commandId, messageId, sequence: receipt.sequence };
-  });
+  const send: AgentMeshShape["send"] = (scope, input) => delegations.send(scope, input);
+
+  const spawn: AgentMeshShape["spawn"] = (scope, input) => delegations.spawn(scope, input);
+
+  const wait: AgentMeshShape["wait"] = (scope, input) => delegations.wait(scope, input);
 
   const interrupt: AgentMeshShape["interrupt"] = Effect.fn("AgentMesh.interrupt")(
     function* (scope, input) {
@@ -276,17 +264,22 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return AgentMesh.of({ list, read, send, interrupt });
+  return AgentMesh.of({ list, read, spawn, send, wait, interrupt });
 });
 
-export const layer = Layer.effect(AgentMesh, make);
+export const layer = Layer.effect(AgentMesh, make).pipe(
+  Layer.provide(DelegationService.layer),
+  Layer.provide(ThreadLaunchService.layer),
+);
 
 export const layerTest = Layer.succeed(
   AgentMesh,
   AgentMesh.of({
     list: (_scope, _input) => Effect.die("AgentMesh.list is not stubbed in this test"),
     read: (_scope, _input) => Effect.die("AgentMesh.read is not stubbed in this test"),
+    spawn: (_scope, _input) => Effect.die("AgentMesh.spawn is not stubbed in this test"),
     send: (_scope, _input) => Effect.die("AgentMesh.send is not stubbed in this test"),
+    wait: (_scope, _input) => Effect.die("AgentMesh.wait is not stubbed in this test"),
     interrupt: (_scope, _input) => Effect.die("AgentMesh.interrupt is not stubbed in this test"),
   }),
 );

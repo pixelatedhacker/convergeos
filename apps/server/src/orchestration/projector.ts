@@ -15,6 +15,10 @@ import {
   KanbanCardDeletedPayload,
   KanbanCardMovedPayload,
   KanbanCardUpdatedPayload,
+  KanbanCardRetriedPayload,
+  KanbanCardDelegationLinkedPayload,
+  KanbanCardDelegationStartedPayload,
+  KanbanCardDelegationCompletedPayload,
   ProjectCreatedPayload,
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
@@ -853,13 +857,25 @@ export function projectEvent(
 
     case "kanban.card-created":
     case "kanban.card-updated":
-    case "kanban.card-moved": {
+    case "kanban.card-moved":
+    case "kanban.card-retried":
+    case "kanban.card-delegation-linked":
+    case "kanban.card-delegation-started":
+    case "kanban.card-delegation-completed": {
       const payloadSchema =
         event.type === "kanban.card-created"
           ? KanbanCardCreatedPayload
           : event.type === "kanban.card-updated"
             ? KanbanCardUpdatedPayload
-            : KanbanCardMovedPayload;
+            : event.type === "kanban.card-moved"
+              ? KanbanCardMovedPayload
+              : event.type === "kanban.card-retried"
+                ? KanbanCardRetriedPayload
+                : event.type === "kanban.card-delegation-linked"
+                  ? KanbanCardDelegationLinkedPayload
+                  : event.type === "kanban.card-delegation-started"
+                    ? KanbanCardDelegationStartedPayload
+                    : KanbanCardDelegationCompletedPayload;
       return decodeForEvent(payloadSchema, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => ({
           ...nextBase,

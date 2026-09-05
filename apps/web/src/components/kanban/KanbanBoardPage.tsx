@@ -1,4 +1,8 @@
 import { KanbanCardId, type KanbanCard, type KanbanStatus } from "@t3tools/contracts";
+import {
+  deriveKanbanCardExecutionStatus,
+  type KanbanBoardState,
+} from "@t3tools/client-runtime/state/kanban";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import {
@@ -126,6 +130,7 @@ function KanbanBoard({
   const updateCard = useAtomCommand(kanbanEnvironment.updateCard, { reportFailure: false });
   const moveCard = useAtomCommand(kanbanEnvironment.moveCard, { reportFailure: false });
   const deleteCard = useAtomCommand(kanbanEnvironment.deleteCard, { reportFailure: false });
+  const retryCard = useAtomCommand(kanbanEnvironment.retryCard, { reportFailure: false });
   const [newTitle, setNewTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const cards = query.data?.cards ?? [];
@@ -230,6 +235,11 @@ function KanbanBoard({
                       key={card.id}
                       card={card}
                       bots={bots}
+                      delegation={
+                        query.data?.delegations.find(
+                          (delegation) => delegation.id === card.delegationId,
+                        ) ?? null
+                      }
                       canMoveLeft={columnIndex > 0}
                       canMoveRight={columnIndex < COLUMNS.length - 1}
                       canMoveUp={cardIndex > 0}
@@ -282,6 +292,14 @@ function KanbanBoard({
                           }),
                         ).then(() => undefined)
                       }
+                      onRetry={() =>
+                        run(
+                          retryCard({
+                            environmentId,
+                            input: { cardId: card.id, expectedRevision: card.revision },
+                          }),
+                        ).then(() => undefined)
+                      }
                     />
                   ))}
                 </div>
@@ -297,6 +315,7 @@ function KanbanBoard({
 function KanbanCardView({
   card,
   bots,
+  delegation,
   canMoveLeft,
   canMoveRight,
   canMoveUp,
@@ -305,9 +324,11 @@ function KanbanCardView({
   onReorder,
   onSave,
   onDelete,
+  onRetry,
 }: {
   card: KanbanCard;
   bots: ReturnType<typeof useThreadShells>;
+  delegation: NonNullable<KanbanBoardState["delegations"]>[number] | null;
   canMoveLeft: boolean;
   canMoveRight: boolean;
   canMoveUp: boolean;
@@ -320,12 +341,18 @@ function KanbanCardView({
     assigneeThreadId: KanbanCard["assigneeThreadId"];
   }) => Promise<boolean>;
   onDelete: () => Promise<void>;
+  onRetry: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description);
   const [assignee, setAssignee] = useState<string>(card.assigneeThreadId ?? "");
   const assigneeBot = bots.find((bot) => bot.id === card.assigneeThreadId) ?? null;
+  const executionStatus = deriveKanbanCardExecutionStatus({
+    card,
+    delegation,
+    assignee: assigneeBot,
+  });
 
   useEffect(() => {
     if (editing) return;
@@ -420,6 +447,16 @@ function KanbanCardView({
           {assigneeBot.botProfile?.displayName ?? assigneeBot.title}
         </div>
       ) : null}
+      {executionStatus === null ? null : (
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="capitalize">{executionStatus}</span>
+          {executionStatus === "failed" || executionStatus === "interrupted" ? (
+            <Button size="xs" variant="outline" onClick={() => void onRetry()}>
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-1 border-t pt-2">
         <Button
           size="icon-xs"

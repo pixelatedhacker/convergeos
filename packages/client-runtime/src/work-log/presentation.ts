@@ -53,7 +53,7 @@ export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
 }
 
-const T3_MCP_TOOL_LABELS: Record<
+const CONVERGEOS_MCP_TOOL_LABELS: Record<
   string,
   readonly [action: string, running: string, completed: string, detail: string]
 > = {
@@ -95,15 +95,18 @@ const T3_MCP_TOOL_LABELS: Record<
   preview_recording_stop: ["Stop", "Stopping", "Stopped", "recording the preview browser"],
 };
 
-function resolveT3McpToolPresentation(value: string | undefined, status: string | undefined) {
+function resolveConvergeOsMcpToolPresentation(
+  value: string | undefined,
+  status: string | undefined,
+) {
   if (!value) return null;
   const name = normalizeCompactToolLabel(value).replace(
-    /^(?:mcp__(?:t3-code|t3_code|t3code)__|(?:t3-code|t3_code|t3code)(?:[.:/]|\s*·\s*))/i,
+    /^(?:mcp__(?:convergeos|t3-code|t3_code|t3code)__|(?:convergeos|t3-code|t3_code|t3code)(?:[.:/]|\s*·\s*))/i,
     "",
   );
-  if (!Object.hasOwn(T3_MCP_TOOL_LABELS, name)) return null;
+  if (!Object.hasOwn(CONVERGEOS_MCP_TOOL_LABELS, name)) return null;
 
-  const [action, running, completed, detail] = T3_MCP_TOOL_LABELS[name]!;
+  const [action, running, completed, detail] = CONVERGEOS_MCP_TOOL_LABELS[name]!;
   const verb =
     status === "inProgress"
       ? running
@@ -144,16 +147,16 @@ export function resolveWorkEntryToolPresentation(
       "tool" in data &&
       typeof data.tool === "string"
     ) {
-      return resolveT3McpToolPresentation(`${data.server}.${data.tool}`, status);
+      return resolveConvergeOsMcpToolPresentation(`${data.server}.${data.tool}`, status);
     }
     if ("toolName" in data && typeof data.toolName === "string") {
-      return resolveT3McpToolPresentation(data.toolName, status);
+      return resolveConvergeOsMcpToolPresentation(data.toolName, status);
     }
   }
 
   return (
-    resolveT3McpToolPresentation(entry.toolTitle, status) ??
-    resolveT3McpToolPresentation(entry.label, status)
+    resolveConvergeOsMcpToolPresentation(entry.toolTitle, status) ??
+    resolveConvergeOsMcpToolPresentation(entry.label, status)
   );
 }
 
