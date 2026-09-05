@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  BotIcon,
   ChartNoAxesColumnIcon,
   GitPullRequestIcon,
   SettingsIcon,
@@ -139,9 +140,11 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           ? "project-settings"
           : location.pathname === "/usage"
             ? "usage"
-            : location.pathname === "/pull-requests"
-              ? "pull-requests"
-              : null,
+            : location.pathname === "/bots"
+              ? "bots"
+              : location.pathname === "/pull-requests"
+                ? "pull-requests"
+                : null,
   });
   const { environments } = useEnvironments();
   // The page reads every connected server, so one of them offering pull requests is enough for
@@ -173,6 +176,11 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
 
+  const handleBotsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/bots" });
+  }, [closeMobileSidebar, navigate]);
+
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
     if (canGoBack) {
@@ -198,6 +206,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Settings"
             onClick={handleSettingsClick}
           />
+          <SidebarUtilityItem icon={<BotIcon />} label="Bots" onClick={handleBotsClick} />
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<GitPullRequestIcon />}
