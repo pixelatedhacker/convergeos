@@ -22,6 +22,10 @@ import {
   ProjectCreatedPayload,
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
+  ScheduleCreatedPayload,
+  ScheduleUpdatedPayload,
+  ScheduleDeletedPayload,
+  ScheduleFiredPayload,
   ThreadActivityAppendedPayload,
   ThreadArchivedPayload,
   ThreadBotConfiguredPayload,
@@ -201,6 +205,7 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     projects: [],
     threads: [],
     kanbanCards: [],
+    schedules: [],
     updatedAt: nowIso,
   };
 }
@@ -900,6 +905,43 @@ export function projectEvent(
                   deletedAt: payload.deletedAt,
                 }
               : card,
+          ),
+        })),
+      );
+
+    case "schedule.created":
+    case "schedule.updated":
+    case "schedule.fired": {
+      const payloadSchema =
+        event.type === "schedule.created"
+          ? ScheduleCreatedPayload
+          : event.type === "schedule.updated"
+            ? ScheduleUpdatedPayload
+            : ScheduleFiredPayload;
+      return decodeForEvent(payloadSchema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          schedules: [
+            ...(nextBase.schedules ?? []).filter((schedule) => schedule.id !== payload.schedule.id),
+            payload.schedule,
+          ],
+        })),
+      );
+    }
+
+    case "schedule.deleted":
+      return decodeForEvent(ScheduleDeletedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          schedules: (nextBase.schedules ?? []).map((schedule) =>
+            schedule.id === payload.scheduleId
+              ? {
+                  ...schedule,
+                  revision: payload.previousRevision + 1,
+                  updatedAt: payload.deletedAt,
+                  deletedAt: payload.deletedAt,
+                }
+              : schedule,
           ),
         })),
       );

@@ -23,6 +23,8 @@ import type {
   OrchestrationThreadDetailWindow,
   OrchestrationThreadShell,
   ProjectId,
+  Schedule,
+  ScheduleListSnapshot,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -80,6 +82,14 @@ export interface ProjectionSnapshotQueryShape {
   readonly getKanbanBoard?: (
     projectId: ProjectId,
   ) => Effect.Effect<KanbanBoardSnapshot, ProjectionRepositoryError>;
+
+  /** Read every active schedule plus the 10 most recent runs per schedule. */
+  readonly listSchedules: () => Effect.Effect<ScheduleListSnapshot, ProjectionRepositoryError>;
+
+  /** Read enabled, non-deleted schedules whose next_run_at is due. */
+  readonly listDueSchedules: (
+    nowIso: string,
+  ) => Effect.Effect<ReadonlyArray<Schedule>, ProjectionRepositoryError>;
 
   /**
    * Read the lightweight command snapshot used to bootstrap the in-memory

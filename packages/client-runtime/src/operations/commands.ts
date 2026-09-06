@@ -50,6 +50,9 @@ export type UpdateKanbanCardInput = CommandInput<"kanban.card.update">;
 export type MoveKanbanCardInput = CommandInput<"kanban.card.move">;
 export type RetryKanbanCardInput = CommandInput<"kanban.card.retry">;
 export type DeleteKanbanCardInput = CommandInput<"kanban.card.delete">;
+export type CreateScheduleInput = CommandInput<"schedule.create">;
+export type UpdateScheduleInput = CommandInput<"schedule.update">;
+export type DeleteScheduleInput = CommandInput<"schedule.delete">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
 export type StartThreadTurnInput = CommandInput<"thread.turn.start">;
@@ -326,6 +329,42 @@ export const deleteKanbanCard: (input: DeleteKanbanCardInput) => CommandEffect =
   return yield* dispatch({
     ...input,
     type: "kanban.card.delete",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const createSchedule: (input: CreateScheduleInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.createSchedule",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "schedule.create",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const updateSchedule: (input: UpdateScheduleInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.updateSchedule",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "schedule.update",
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+});
+
+export const deleteSchedule: (input: DeleteScheduleInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.deleteSchedule",
+)(function* (input) {
+  const metadata = yield* timestampedCommandMetadata(input);
+  return yield* dispatch({
+    ...input,
+    type: "schedule.delete",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
   });

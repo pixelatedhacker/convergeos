@@ -4,8 +4,10 @@ import {
   DelegationFailure,
   DelegationRequester,
   DelegationTarget,
+  ModelSelection,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
+  ScheduleRecurrence,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -62,6 +64,8 @@ import {
 const encodeDelegationRequester = Schema.encodeSync(Schema.fromJsonString(DelegationRequester));
 const encodeDelegationTarget = Schema.encodeSync(Schema.fromJsonString(DelegationTarget));
 const encodeDelegationFailure = Schema.encodeSync(Schema.fromJsonString(DelegationFailure));
+const encodeScheduleRecurrence = Schema.encodeSync(Schema.fromJsonString(ScheduleRecurrence));
+const encodeScheduleModelSelection = Schema.encodeSync(Schema.fromJsonString(ModelSelection));
 
 export const ORCHESTRATION_PROJECTOR_NAMES = {
   projects: "projection.projects",
@@ -75,6 +79,8 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   pendingApprovals: "projection.pending-approvals",
   kanbanCards: "projection.kanban-cards",
   delegations: "projection.delegations",
+  schedules: "projection.schedules",
+  scheduleRuns: "projection.schedule-runs",
 } as const;
 
 type ProjectorName =
@@ -1907,6 +1913,105 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       }
     });
 
+    const applySchedulesProjection: ProjectorDefinition["apply"] = Effect.fn(
+      "applySchedulesProjection",
+    )(function* (event) {
+      switch (event.type) {
+        case "schedule.created":
+        case "schedule.updated":
+        case "schedule.fired": {
+          const schedule = event.payload.schedule;
+          yield* sql`
+            INSERT INTO projection_schedules (
+              schedule_id,
+              project_id,
+              title,
+              prompt,
+              recurrence_json,
+              time_zone,
+              model_selection_json,
+              runtime_mode,
+              interaction_mode,
+              enabled,
+              next_run_at,
+              last_run_at,
+              revision,
+              created_at,
+              updated_at,
+              deleted_at
+            ) VALUES (
+              ${schedule.id},
+              ${schedule.projectId},
+              ${schedule.title},
+              ${schedule.prompt},
+              ${encodeScheduleRecurrence(schedule.recurrence)},
+              ${schedule.timeZone},
+              ${encodeScheduleModelSelection(schedule.modelSelection)},
+              ${schedule.runtimeMode},
+              ${schedule.interactionMode},
+              ${schedule.enabled ? 1 : 0},
+              ${schedule.nextRunAt},
+              ${schedule.lastRunAt},
+              ${schedule.revision},
+              ${schedule.createdAt},
+              ${schedule.updatedAt},
+              ${schedule.deletedAt}
+            )
+            ON CONFLICT(schedule_id) DO UPDATE SET
+              project_id = excluded.project_id,
+              title = excluded.title,
+              prompt = excluded.prompt,
+              recurrence_json = excluded.recurrence_json,
+              time_zone = excluded.time_zone,
+              model_selection_json = excluded.model_selection_json,
+              runtime_mode = excluded.runtime_mode,
+              interaction_mode = excluded.interaction_mode,
+              enabled = excluded.enabled,
+              next_run_at = excluded.next_run_at,
+              last_run_at = excluded.last_run_at,
+              revision = excluded.revision,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at,
+              deleted_at = excluded.deleted_at
+          `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.schedules:upsert")));
+          return;
+        }
+        case "schedule.deleted":
+          yield* sql`
+            UPDATE projection_schedules
+            SET
+              revision = ${event.payload.previousRevision + 1},
+              updated_at = ${event.payload.deletedAt},
+              deleted_at = ${event.payload.deletedAt}
+            WHERE schedule_id = ${event.payload.scheduleId}
+          `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.schedules:delete")));
+          return;
+        default:
+          return;
+      }
+    });
+
+    const applyScheduleRunsProjection: ProjectorDefinition["apply"] = Effect.fn(
+      "applyScheduleRunsProjection",
+    )(function* (event) {
+      if (event.type !== "schedule.fired") {
+        return;
+      }
+      yield* sql`
+        INSERT INTO projection_schedule_runs (
+          schedule_id,
+          thread_id,
+          fired_at
+        ) VALUES (
+          ${event.payload.schedule.id},
+          ${event.payload.threadId},
+          ${event.payload.firedAt}
+        )
+        ON CONFLICT(schedule_id, thread_id) DO UPDATE SET
+          fired_at = excluded.fired_at
+      `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.scheduleRuns:insert")));
+    });
+
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -1947,6 +2052,14 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.delegations,
         apply: applyDelegationsProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.schedules,
+        apply: applySchedulesProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.scheduleRuns,
+        apply: applyScheduleRunsProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,

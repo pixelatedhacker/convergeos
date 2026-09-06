@@ -108,6 +108,9 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Named bot profiles bound to canonical thread inboxes. */
   botProfiles: Schema.optionalKey(Schema.Boolean),
   kanban: Schema.optionalKey(Schema.Boolean),
+  /** Server understands schedule.create/update/delete and fires scheduled
+      turns without a client. Same version-skew contract as threadSettlement. */
+  scheduledTurns: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.pin.reorder (and orderKey on thread.pin).
       Same version-skew contract as threadSettlement. */
   threadPinReorder: Schema.optionalKey(Schema.Boolean),

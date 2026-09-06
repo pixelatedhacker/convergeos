@@ -4,6 +4,7 @@ import type {
   DelegationId,
   KanbanCardId,
   ProjectId,
+  ScheduleId,
   ThreadId,
 } from "@t3tools/contracts";
 import { OrchestrationCommand } from "@t3tools/contracts";
@@ -67,8 +68,8 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "thread" | "kanban-card" | "delegation";
-  readonly aggregateId: ProjectId | ThreadId | KanbanCardId | DelegationId;
+  readonly aggregateKind: "project" | "thread" | "kanban-card" | "delegation" | "schedule";
+  readonly aggregateId: ProjectId | ThreadId | KanbanCardId | DelegationId | ScheduleId;
 } {
   switch (command.type) {
     case "project.create":
@@ -99,6 +100,14 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "delegation",
         aggregateId: command.delegationId,
+      };
+    case "schedule.create":
+    case "schedule.update":
+    case "schedule.delete":
+    case "schedule.fire":
+      return {
+        aggregateKind: "schedule",
+        aggregateId: command.scheduleId,
       };
     default:
       return {

@@ -43,6 +43,7 @@ import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
   BotIcon,
+  CalendarClockIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
@@ -1638,6 +1639,17 @@ function OpenCommandPaletteDialog(props: {
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/bots" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:schedules",
+    searchTerms: ["schedules", "scheduled turns", "recurring", "cron", "automation"],
+    title: "Open schedules",
+    icon: <CalendarClockIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/schedules" });
     },
   });
 

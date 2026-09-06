@@ -64,6 +64,7 @@ import Migration0049 from "./Migrations/049_ProjectionKanbanCards.ts";
 import Migration0050 from "./Migrations/050_ProjectionDelegations.ts";
 import Migration0051 from "./Migrations/051_ProjectionKanbanDelegationLink.ts";
 import Migration0052 from "./Migrations/052_ProjectionThreadSessionMcpAttachment.ts";
+import Migration0053 from "./Migrations/053_ProjectionSchedules.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -128,6 +129,7 @@ export const migrationEntries = [
   [50, "ProjectionDelegations", Migration0050],
   [51, "ProjectionKanbanDelegationLink", Migration0051],
   [52, "ProjectionThreadSessionMcpAttachment", Migration0052],
+  [53, "ProjectionSchedules", Migration0053],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
