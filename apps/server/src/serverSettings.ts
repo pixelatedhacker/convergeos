@@ -11,6 +11,7 @@
  * @module ServerSettings
  */
 import {
+  AgentKanbanAccess,
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   DEFAULT_MODEL_BY_PROVIDER,
@@ -243,6 +244,29 @@ const PersistedOptionalProviderSettings = Schema.Struct({
 const decodePersistedOptionalProviderSettingsJsonExit = Schema.decodeUnknownExit(
   fromLenientJson(PersistedOptionalProviderSettings),
 );
+const PersistedAgentKanbanSettings = Schema.Struct({
+  agentKanbanAccess: Schema.optionalKey(AgentKanbanAccess),
+  enableAgentKanbanAccess: Schema.optionalKey(Schema.Unknown),
+});
+const decodePersistedAgentKanbanSettingsJsonExit = Schema.decodeUnknownExit(
+  fromLenientJson(PersistedAgentKanbanSettings),
+);
+
+function restoreAgentKanbanAccess(
+  settings: ServerSettings,
+  persisted: typeof PersistedAgentKanbanSettings.Type,
+): ServerSettings {
+  if (persisted.agentKanbanAccess !== undefined) {
+    return settings;
+  }
+  if (typeof persisted.enableAgentKanbanAccess !== "boolean") {
+    return settings;
+  }
+  return {
+    ...settings,
+    agentKanbanAccess: persisted.enableAgentKanbanAccess ? "write" : "none",
+  };
+}
 
 function restoreUsedProviders(
   settings: ServerSettings,
@@ -413,13 +437,18 @@ const make = Effect.gen(function* () {
   const loadSettingsFromDisk = Effect.gen(function* () {
     let settings = DEFAULT_SERVER_SETTINGS;
     let persisted: typeof PersistedOptionalProviderSettings.Type = {};
+    let persistedAgentKanban: typeof PersistedAgentKanbanSettings.Type = {};
 
     if (yield* readConfigExists) {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
       const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
+      const persistedAgentKanbanSettings = decodePersistedAgentKanbanSettingsJsonExit(raw);
       if (persistedSettings._tag === "Success") {
         persisted = persistedSettings.value;
+      }
+      if (persistedAgentKanbanSettings._tag === "Success") {
+        persistedAgentKanban = persistedAgentKanbanSettings.value;
       }
       if (decoded._tag === "Failure" || persistedSettings._tag === "Failure") {
         const failure = decoded._tag === "Failure" ? decoded : persistedSettings;
@@ -462,7 +491,10 @@ const make = Effect.gen(function* () {
     );
 
     return foldProviderInstanceEnabledFlags(
-      restoreUsedProviders(settings, persisted, providerHistory),
+      restoreAgentKanbanAccess(
+        restoreUsedProviders(settings, persisted, providerHistory),
+        persistedAgentKanban,
+      ),
     );
   });
 

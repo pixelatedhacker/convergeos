@@ -17,13 +17,16 @@ import {
   DelegationFailure,
   DelegationState,
   ModelSelection,
+  RuntimeMode,
   OrchestrationLatestTurnState,
   OrchestrationSessionStatus,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
 } from "./orchestration.ts";
-import { ProviderInstanceId } from "./providerInstance.ts";
+import { ServerProviderAuthStatus, ServerProviderModel, ServerProviderState } from "./server.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 export const AgentMeshOperation = Schema.Literals([
+  "models",
   "list",
   "read",
   "spawn",
@@ -36,6 +39,7 @@ export type AgentMeshOperation = typeof AgentMeshOperation.Type;
 export const AgentMeshAgent = Schema.Struct({
   threadId: ThreadId,
   title: TrimmedNonEmptyString,
+  modelSelection: ModelSelection,
   sessionStatus: Schema.NullOr(OrchestrationSessionStatus),
   latestTurnState: Schema.NullOr(OrchestrationLatestTurnState),
   activeTurnId: Schema.NullOr(TurnId),
@@ -50,6 +54,33 @@ export const AgentMeshAgent = Schema.Struct({
   botProfile: Schema.optional(BotProfile),
 });
 export type AgentMeshAgent = typeof AgentMeshAgent.Type;
+
+export const AgentMeshModelsInput = Schema.Struct({
+  instanceId: Schema.optional(ProviderInstanceId),
+  query: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(160))),
+  offset: Schema.optional(NonNegativeInt),
+  limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+});
+export type AgentMeshModelsInput = typeof AgentMeshModelsInput.Type;
+
+export const AgentMeshModelsResult = Schema.Struct({
+  projectId: ProjectId,
+  models: Schema.Array(
+    Schema.Struct({
+      instanceId: ProviderInstanceId,
+      driver: ProviderDriverKind,
+      enabled: Schema.Boolean,
+      installed: Schema.Boolean,
+      status: ServerProviderState,
+      authStatus: ServerProviderAuthStatus,
+      checkedAt: IsoDateTime,
+      supportedRuntimeModes: Schema.NullOr(Schema.Array(RuntimeMode)),
+      model: ServerProviderModel,
+    }),
+  ),
+  nextOffset: Schema.NullOr(NonNegativeInt),
+});
+export type AgentMeshModelsResult = typeof AgentMeshModelsResult.Type;
 
 export const AgentMeshListInput = Schema.Struct({
   limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),

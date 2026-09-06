@@ -63,6 +63,28 @@ describe("serverSettings helpers", () => {
     });
   });
 
+  it("maps legacy Kanban access patches to the canonical access level", () => {
+    expect(
+      applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { enableAgentKanbanAccess: true })
+        .agentKanbanAccess,
+    ).toBe("write");
+    expect(
+      applyServerSettingsPatch(
+        { ...DEFAULT_SERVER_SETTINGS, agentKanbanAccess: "write" },
+        { enableAgentKanbanAccess: false },
+      ).agentKanbanAccess,
+    ).toBe("none");
+  });
+
+  it("prefers canonical Kanban access when a mixed-version patch sends both fields", () => {
+    expect(
+      applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+        agentKanbanAccess: "read",
+        enableAgentKanbanAccess: true,
+      }).agentKanbanAccess,
+    ).toBe("read");
+  });
+
   it("replaces text generation selection when provider/model are provided", () => {
     const current = {
       ...DEFAULT_SERVER_SETTINGS,

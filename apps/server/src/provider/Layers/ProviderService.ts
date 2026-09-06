@@ -266,9 +266,18 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         capabilities.add("agents.send");
         capabilities.add("agents.control");
       }
-      if (settings.enableAgentKanbanAccess) {
-        capabilities.add("kanban.read");
-        capabilities.add("kanban.write");
+      switch (settings.agentKanbanAccess) {
+        case "none":
+          break;
+        case "read":
+          capabilities.add("kanban.read");
+          break;
+        case "write":
+          capabilities.add("kanban.read");
+          capabilities.add("kanban.write");
+          break;
+        default:
+          settings.agentKanbanAccess satisfies never;
       }
       return capabilities;
     }),

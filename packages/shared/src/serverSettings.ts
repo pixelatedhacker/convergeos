@@ -2,6 +2,7 @@ import {
   isProviderDriverKind,
   isProviderAvailable,
   resolveProviderInstanceEnabled,
+  type AgentKanbanAccess,
   type ModelSelection,
   type ProviderDriverKind,
   type ServerProvider,
@@ -132,8 +133,15 @@ export function applyServerSettingsPatch(
     providerHealthRefreshInterval,
     backgroundActivityProfile,
     backgroundActivity,
+    enableAgentKanbanAccess,
     ...patchForMerge
   } = patch;
+  const legacyAgentKanbanAccess: AgentKanbanAccess | undefined =
+    patch.agentKanbanAccess === undefined && enableAgentKanbanAccess !== undefined
+      ? enableAgentKanbanAccess
+        ? "write"
+        : "none"
+      : undefined;
   const currentBackgroundActivity = normalizeServerBackgroundActivitySettings(current);
   const backgroundActivityPatch =
     backgroundActivityProfile !== undefined
@@ -172,6 +180,9 @@ export function applyServerSettingsPatch(
   const next = deepMerge(current, patchForMerge);
   const nextWithReplacementsBase = {
     ...next,
+    ...(legacyAgentKanbanAccess !== undefined
+      ? { agentKanbanAccess: legacyAgentKanbanAccess }
+      : {}),
     ...(backgroundActivity !== undefined
       ? {
           backgroundActivity: {

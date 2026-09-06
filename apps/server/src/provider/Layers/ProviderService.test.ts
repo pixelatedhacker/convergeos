@@ -2625,7 +2625,7 @@ describe("agent MCP access", () => {
       readonly enableAgentBrowserAccess: boolean;
       readonly enableAgentUsageAccess: boolean;
       readonly enableAgentMeshAccess: boolean;
-      readonly enableAgentKanbanAccess?: boolean;
+      readonly agentKanbanAccess?: "none" | "read" | "write";
     },
     threadId: ThreadId,
   ) =>
@@ -2766,16 +2766,32 @@ describe("agent MCP access", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("grants project Kanban tools independently", () =>
+  it.effect("grants read-only project Kanban access independently", () =>
     Effect.gen(function* () {
       const issued = yield* startSessionWith(
         {
           enableAgentBrowserAccess: false,
           enableAgentUsageAccess: false,
           enableAgentMeshAccess: false,
-          enableAgentKanbanAccess: true,
+          agentKanbanAccess: "read",
         },
-        asThreadId("thread-kanban-on"),
+        asThreadId("thread-kanban-read"),
+      );
+
+      assert.deepEqual(issued[0]?.capabilities, new Set(["kanban.read"]));
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants write access together with its required read capability", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(
+        {
+          enableAgentBrowserAccess: false,
+          enableAgentUsageAccess: false,
+          enableAgentMeshAccess: false,
+          agentKanbanAccess: "write",
+        },
+        asThreadId("thread-kanban-write"),
       );
 
       assert.deepEqual(issued[0]?.capabilities, new Set(["kanban.read", "kanban.write"]));

@@ -7,6 +7,7 @@
  * @module IntegrationsSettings
  */
 import {
+  type AgentKanbanAccess,
   BROWSER_PROFILE_MAX_COUNT,
   type BrowserLinkTarget,
   type BrowserProfile,
@@ -86,6 +87,11 @@ import { searchableSetting } from "./settingsSearch";
 
 const FILL_VALUE = "fill";
 const RESPONSIVE_VALUE = "responsive";
+const AGENT_KANBAN_ACCESS_LABELS: Readonly<Record<AgentKanbanAccess, string>> = {
+  none: "No access",
+  read: "Read only",
+  write: "Read and write",
+};
 
 type BrowserProfileDataBridge = Pick<
   NonNullable<typeof previewBridge>,
@@ -633,28 +639,40 @@ function AgentKanbanAccessSetting() {
     <SettingsRow
       serverScoped
       {...searchableSetting("agent-kanban-access")}
-      description="Let agents read and update the Kanban board for their own project. Card assignments remain limited to active project bots."
-      status="Applies to sessions started from now on; running agents keep their current tools."
+      description="Choose whether agents can view or also update the Kanban board for their own project. Card assignments remain limited to active project bots."
+      status="Applies to newly started sessions; running agents keep their current tools."
       resetAction={
-        settings.enableAgentKanbanAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess ? (
+        settings.agentKanbanAccess !== DEFAULT_UNIFIED_SETTINGS.agentKanbanAccess ? (
           <SettingResetButton
             label="agent Kanban access"
             onClick={() =>
               updateSettings({
-                enableAgentKanbanAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentKanbanAccess,
+                agentKanbanAccess: DEFAULT_UNIFIED_SETTINGS.agentKanbanAccess,
               })
             }
           />
         ) : null
       }
       control={
-        <Switch
-          checked={settings.enableAgentKanbanAccess}
-          onCheckedChange={(checked) =>
-            updateSettings({ enableAgentKanbanAccess: Boolean(checked) })
-          }
-          aria-label="Allow agent Kanban access"
-        />
+        <Select
+          value={settings.agentKanbanAccess}
+          onValueChange={(value) => {
+            if (value === "none" || value === "read" || value === "write") {
+              updateSettings({ agentKanbanAccess: value });
+            }
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Agent Kanban access">
+            <SelectValue>{AGENT_KANBAN_ACCESS_LABELS[settings.agentKanbanAccess]}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            {Object.entries(AGENT_KANBAN_ACCESS_LABELS).map(([value, label]) => (
+              <SelectItem hideIndicator key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
       }
     />
   );

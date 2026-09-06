@@ -2,6 +2,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
   AgentMeshError,
+  EnvironmentId,
+  ProviderDriverKind,
   CommandId,
   DelegationId,
   MessageId,
@@ -9,6 +11,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
+  type ServerProvider,
   type OrchestrationCommand,
   type OrchestrationMessage,
   type OrchestrationProjectShell,
@@ -18,11 +21,15 @@ import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { McpSchema, McpServer } from "effect/unstable/ai";
 
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as DelegationService from "../delegation/DelegationService.ts";
+import { makeProviderRegistryLayer } from "../provider/testUtils/providerRegistryMock.ts";
 import * as AgentMesh from "./AgentMesh.ts";
+import { AgentsToolkitRegistrationLive } from "./McpHttpServer.ts";
+import * as McpInvocationContext from "./McpInvocationContext.ts";
 
 const callerId = ThreadId.make("thread-caller");
 const targetId = ThreadId.make("thread-target");
@@ -82,6 +89,7 @@ const shell = (
 const makeHarness = (
   threads: ReadonlyArray<OrchestrationThreadShell>,
   messages: Readonly<Record<string, ReadonlyArray<OrchestrationMessage>>> = {},
+  providers: ReadonlyArray<ServerProvider> = [],
 ) => {
   const commands: OrchestrationCommand[] = [];
   const acceptedSequences = new Map<string, number>();
@@ -144,6 +152,7 @@ const makeHarness = (
       };
     });
   const dependencies = Layer.mergeAll(
+    makeProviderRegistryLayer(providers),
     NodeServices.layer,
     Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
       getThreadShellById: (threadId) => Effect.succeed(Option.fromUndefinedOr(byId.get(threadId))),
@@ -534,4 +543,143 @@ it.effect("returns bounded latest assistant output without user messages", () =>
     expect(result.latestAssistant?.text).not.toContain("private prompt");
     expect(result.latestAssistant?.truncated).toBe(true);
   }),
+);
+
+const catalogProvider: ServerProvider = {
+  instanceId: ProviderInstanceId.make("judgment-instance"),
+  driver: ProviderDriverKind.make("codex"),
+  enabled: true,
+  installed: true,
+  version: "1.0.0",
+  status: "ready",
+  auth: { status: "authenticated", email: "private@example.invalid" },
+  message: "private provider diagnostic",
+  checkedAt: "2026-09-05T00:00:00.000Z",
+  supportedRuntimeModes: ["approval-required", "full-access"],
+  models: [
+    { slug: "execution", name: "Execution", isCustom: false, capabilities: null },
+    {
+      slug: "judgment",
+      name: "Judgment",
+      aliases: ["reviewer"],
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "reasoning",
+            label: "Reasoning",
+            type: "select",
+            options: [{ id: "high", label: "High" }],
+          },
+        ],
+      },
+    },
+  ],
+  slashCommands: [],
+  skills: [],
+};
+
+it.effect(
+  "discovers paginated model selections and native effort options without account details",
+  () =>
+    Effect.gen(function* () {
+      const mesh = yield* makeHarness([shell(callerId)], {}, [catalogProvider]).make;
+      const first = yield* mesh.models({ threadId: callerId }, { limit: 1 });
+      expect(first.models.map(({ model }) => model.slug)).toEqual(["execution"]);
+      expect(first.nextOffset).toBe(1);
+      const next = yield* mesh.models({ threadId: callerId }, { offset: 1, limit: 1 });
+      expect(next.nextOffset).toBeNull();
+      expect(next.models[0]).toMatchObject({
+        instanceId: "judgment-instance",
+        authStatus: "authenticated",
+        supportedRuntimeModes: ["approval-required", "full-access"],
+        model: {
+          slug: "judgment",
+          capabilities: { optionDescriptors: [{ id: "reasoning", options: [{ id: "high" }] }] },
+        },
+      });
+      expect(next.models[0]).not.toHaveProperty("auth");
+      expect(next.models[0]).not.toHaveProperty("message");
+      const filtered = yield* mesh.models(
+        { threadId: callerId },
+        { query: "REVIEWER", instanceId: catalogProvider.instanceId },
+      );
+      expect(filtered.models.map(({ model }) => model.slug)).toEqual(["judgment"]);
+      const absent = yield* mesh.models(
+        { threadId: callerId },
+        { instanceId: ProviderInstanceId.make("absent") },
+      );
+      expect(absent.models).toEqual([]);
+    }),
+);
+
+it.effect("does not expose the catalog to an unavailable caller", () =>
+  Effect.gen(function* () {
+    const mesh = yield* makeHarness([], {}, [catalogProvider]).make;
+    const error = yield* mesh.models({ threadId: callerId }, {}).pipe(Effect.flip);
+    expect(error.reason).toBe("callerUnavailable");
+  }),
+);
+
+it.effect("reports the bot's configured selection without inferring identity from its title", () =>
+  Effect.gen(function* () {
+    const selection = {
+      instanceId: catalogProvider.instanceId,
+      model: "judgment",
+      options: [{ id: "reasoning", value: "high" }],
+    };
+    const mesh = yield* makeHarness([
+      shell(callerId),
+      shell(targetId, { modelSelection: selection }),
+    ]).make;
+    const result = yield* mesh.list({ threadId: callerId }, {});
+    expect(result.agents.find(({ threadId }) => threadId === targetId)?.modelSelection).toEqual(
+      selection,
+    );
+  }),
+);
+
+it.effect("registers model discovery as an MCP tool and requires agents.read", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const mesh = yield* makeHarness([shell(callerId)], {}, [catalogProvider]).make;
+      const registered = AgentsToolkitRegistrationLive.pipe(
+        Layer.provide(Layer.succeed(AgentMesh.AgentMesh, mesh)),
+        Layer.provideMerge(McpServer.McpServer.layer),
+      );
+      yield* Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+        const client = McpSchema.McpServerClient.of({
+          clientId: 1,
+          protocolVersion: "2025-06-18",
+          initializePayload: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "mesh-test", version: "1" },
+          },
+          getClient: Effect.die("unused"),
+        });
+        const invoke = (capabilities: ReadonlySet<McpInvocationContext.McpCapability>) =>
+          server.callTool({ name: "agents_models", arguments: { query: "judgment" } }).pipe(
+            Effect.provideService(McpSchema.McpServerClient, client),
+            Effect.provideService(McpInvocationContext.McpInvocationContext, {
+              environmentId: EnvironmentId.make("test-environment"),
+              threadId: callerId,
+              providerSessionId: "test-session",
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              issuedAt: 1,
+              capabilities,
+            }),
+          );
+        const denied = yield* invoke(new Set());
+        expect(denied.isError).toBe(true);
+        const allowed = yield* invoke(new Set(["agents.read"]));
+        expect(allowed.isError).not.toBe(true);
+        expect(allowed.structuredContent).toMatchObject({
+          models: [{ instanceId: "judgment-instance" }],
+        });
+        expect(allowed.structuredContent).not.toHaveProperty("models.0.auth");
+      }).pipe(Effect.provide(registered));
+    }),
+  ),
 );

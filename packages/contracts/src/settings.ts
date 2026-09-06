@@ -832,6 +832,14 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
+/**
+ * Project Kanban authority granted to a newly started agent session.
+ * `write` includes read authority, so the model cannot represent write-only access.
+ */
+export const AgentKanbanAccess = Schema.Literals(["none", "read", "write"]);
+export type AgentKanbanAccess = typeof AgentKanbanAccess.Type;
+export const DEFAULT_AGENT_KANBAN_ACCESS: AgentKanbanAccess = "none";
+
 export const ServerSettings = Schema.Struct({
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
   // `enableAssistantStreaming`): decoding drops the old key, so everyone,
@@ -863,8 +871,10 @@ export const ServerSettings = Schema.Struct({
    * value; browser access is an independent permission.
    */
   enableAgentMeshAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Whether agents may read and mutate the Kanban board for their own project. */
-  enableAgentKanbanAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Project-scoped Kanban authority granted to newly started agent sessions. */
+  agentKanbanAccess: AgentKanbanAccess.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_KANBAN_ACCESS)),
+  ),
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
@@ -1129,6 +1139,8 @@ export const ServerSettingsPatch = Schema.Struct({
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enableAgentUsageAccess: Schema.optionalKey(Schema.Boolean),
   enableAgentMeshAccess: Schema.optionalKey(Schema.Boolean),
+  agentKanbanAccess: Schema.optionalKey(AgentKanbanAccess),
+  /** @deprecated Use `agentKanbanAccess`. Retained for older remote clients. */
   enableAgentKanbanAccess: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
