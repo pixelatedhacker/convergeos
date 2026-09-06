@@ -44,6 +44,7 @@ import {
   ArrowLeftIcon,
   BotIcon,
   CalendarClockIcon,
+  LayoutDashboardIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
@@ -1630,6 +1631,17 @@ function OpenCommandPaletteDialog(props: {
       run: copyActiveThreadReference,
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:dashboard",
+    searchTerms: ["dashboard", "overview", "running", "attention", "quota", "status"],
+    title: "Open dashboard",
+    icon: <LayoutDashboardIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/dashboard" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

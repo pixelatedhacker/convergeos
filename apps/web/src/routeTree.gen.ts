@@ -13,6 +13,7 @@ import { Route as UsageRouteImport } from './routes/usage'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as PairRouteImport } from './routes/pair'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as BotsRouteImport } from './routes/bots'
 import { Route as ChatRouteImport } from './routes/_chat'
@@ -51,6 +52,11 @@ const SchedulesRoute = SchedulesRouteImport.update({
 const PairRoute = PairRouteImport.update({
   id: '/pair',
   path: '/pair',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectRoute = ConnectRouteImport.update({
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/bots': typeof BotsRoute
   '/connect': typeof ConnectRoute
+  '/dashboard': typeof DashboardRoute
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
@@ -176,6 +183,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/bots': typeof BotsRoute
   '/connect': typeof ConnectRoute
+  '/dashboard': typeof DashboardRoute
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/_chat': typeof ChatRouteWithChildren
   '/bots': typeof BotsRoute
   '/connect': typeof ConnectRoute
+  '/dashboard': typeof DashboardRoute
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bots'
     | '/connect'
+    | '/dashboard'
     | '/pair'
     | '/schedules'
     | '/settings'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
   to:
     | '/bots'
     | '/connect'
+    | '/dashboard'
     | '/pair'
     | '/schedules'
     | '/settings'
@@ -277,6 +288,7 @@ export interface FileRouteTypes {
     | '/_chat'
     | '/bots'
     | '/connect'
+    | '/dashboard'
     | '/pair'
     | '/schedules'
     | '/settings'
@@ -303,6 +315,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   BotsRoute: typeof BotsRoute
   ConnectRoute: typeof ConnectRoute
+  DashboardRoute: typeof DashboardRoute
   PairRoute: typeof PairRoute
   SchedulesRoute: typeof SchedulesRoute
   SettingsRoute: typeof SettingsRouteWithChildren
@@ -340,6 +353,13 @@ declare module '@tanstack/react-router' {
       path: '/pair'
       fullPath: '/pair'
       preLoaderRoute: typeof PairRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connect': {
@@ -526,6 +546,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   BotsRoute: BotsRoute,
   ConnectRoute: ConnectRoute,
+  DashboardRoute: DashboardRoute,
   PairRoute: PairRoute,
   SchedulesRoute: SchedulesRoute,
   SettingsRoute: SettingsRouteWithChildren,

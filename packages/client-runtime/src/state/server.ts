@@ -881,6 +881,14 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetUsageSummary,
       staleTimeMs: 60_000,
     }),
+    // Quota observations are volatile but expensive to collect (a CLI spawn
+    // per provider), so a minute cadence is the freshest that stays cheap.
+    subscriptionQuota: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:subscription-quota",
+      tag: WS_METHODS.serverGetSubscriptionQuota,
+      staleTimeMs: 30_000,
+      refreshIntervalMs: 60_000,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
