@@ -1,3 +1,16 @@
+import {
+  readSkillStore,
+  mutateSkillStore,
+  resolveSkillStoreTarget,
+} from "./provider/skillStore.ts";
+import { SkillStoreError, CodexSettings } from "@t3tools/contracts";
+import { setCodexSkillEnabled } from "./provider/codexSkillEnablement.ts";
+import {
+  resolveCodexHomeLayout,
+  materializeCodexShadowHome,
+} from "./provider/Drivers/CodexHomeLayout.ts";
+import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import * as FileSystem from "effect/FileSystem";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -146,6 +159,8 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
+const decodeSkillStoreCodexSettings = Schema.decodeUnknownEffect(CodexSettings);
+
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -1741,6 +1756,96 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.serverGetSkillStore]: (input) =>
+          Effect.gen(function* () {
+            const settings = yield* serverSettings.getSettings.pipe(
+              Effect.mapError((error) => new SkillStoreError({ message: error.message })),
+            );
+            const providers = yield* providerRegistry.getProviders;
+            let provider = providers.find((item) => item.instanceId === input.instanceId);
+            if (!provider)
+              return yield* new SkillStoreError({ message: "Provider instance not found." });
+            const environment = yield* HostProcessEnvironment;
+            const target = resolveSkillStoreTarget(input, settings, provider, environment);
+            if (
+              input.cwd &&
+              !provider.workspaceSnapshots?.some((snapshot) => snapshot.cwd === target.cwd)
+            ) {
+              const refreshed = yield* providerRegistry.refreshWorkspaceSnapshot({
+                instanceId: input.instanceId,
+                cwd: target.cwd,
+              });
+              provider = refreshed.find((item) => item.instanceId === input.instanceId) ?? provider;
+            }
+            const selectedProvider = provider;
+            return yield* Effect.tryPromise({
+              try: () =>
+                readSkillStore(
+                  { ...input, ...(input.cwd ? { cwd: target.cwd } : {}) },
+                  settings,
+                  selectedProvider,
+                  undefined,
+                  environment,
+                ),
+              catch: (error) =>
+                new SkillStoreError({
+                  message: error instanceof Error ? error.message : String(error),
+                }),
+            });
+          }),
+        [WS_METHODS.serverMutateSkillStore]: (input) =>
+          Effect.gen(function* () {
+            const providers = yield* providerRegistry.getProviders;
+            const provider = providers.find((item) => item.instanceId === input.instanceId);
+            if (!provider)
+              return yield* new SkillStoreError({ message: "Provider instance not found." });
+            const settings = yield* serverSettings.getSettings.pipe(
+              Effect.mapError((error) => new SkillStoreError({ message: error.message })),
+            );
+            const environment = yield* HostProcessEnvironment;
+            const action = input.action;
+            if (action.kind === "set-skill-enabled") {
+              if (provider.driver !== "codex" || !provider.installed)
+                return yield* new SkillStoreError({
+                  message: "This provider does not support skill enablement.",
+                });
+              const target = resolveSkillStoreTarget(input, settings, provider, environment);
+              return yield* Effect.gen(function* () {
+                const codexSettings = yield* decodeSkillStoreCodexSettings(
+                  settings.providerInstances[input.instanceId]?.config ?? settings.providers.codex,
+                );
+                const layout = yield* resolveCodexHomeLayout(codexSettings);
+                yield* materializeCodexShadowHome(layout);
+                const fs = yield* FileSystem.FileSystem;
+                const cwd = yield* fs.realPath(target.cwd);
+                return yield* setCodexSkillEnabled({
+                  binaryPath: codexSettings.binaryPath || "codex",
+                  ...(layout.effectiveHomePath ? { homePath: layout.effectiveHomePath } : {}),
+                  launchArgs: codexSettings.launchArgs,
+                  cwd,
+                  environment: target.env,
+                  skillPath: action.path,
+                  enabled: action.enabled,
+                });
+              }).pipe(
+                Effect.scoped,
+                Effect.timeout("30 seconds"),
+                Effect.mapError(
+                  (error) =>
+                    new SkillStoreError({
+                      message: error instanceof Error ? error.message : String(error),
+                    }),
+                ),
+              );
+            }
+            return yield* Effect.tryPromise({
+              try: () => mutateSkillStore(input, settings, provider, undefined, environment),
+              catch: (error) =>
+                new SkillStoreError({
+                  message: error instanceof Error ? error.message : String(error),
+                }),
+            });
+          }),
         [WS_METHODS.serverGetUsageSummary]: (input) =>
           observeRpcEffect(WS_METHODS.serverGetUsageSummary, usage.readSummary(input), {
             "rpc.aggregate": "server",
