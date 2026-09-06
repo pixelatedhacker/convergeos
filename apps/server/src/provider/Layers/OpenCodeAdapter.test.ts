@@ -50,6 +50,9 @@ class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterSh
 ) {}
 
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
+const decodePromptMessageId = Schema.decodeUnknownEffect(
+  Schema.Struct({ messageID: Schema.String }),
+);
 
 type MessageEntry = {
   info: {
@@ -81,6 +84,7 @@ const runtimeMock = {
     messageCalls: [] as Array<{ sessionID: string; messageID: string }>,
     messageFailures: 0,
     promptCalls: [] as Array<unknown>,
+    onSseError: undefined as ((error: unknown) => void) | undefined,
     promptAsyncError: null as Error | null,
     promptAsyncImplementation: null as (() => Promise<void>) | null,
     autoPromptEcho: true,
@@ -133,6 +137,7 @@ const runtimeMock = {
     this.state.messageCalls.length = 0;
     this.state.messageFailures = 0;
     this.state.promptCalls.length = 0;
+    this.state.onSseError = undefined;
     this.state.promptAsyncError = null;
     this.state.promptAsyncImplementation = null;
     this.state.autoPromptEcho = true;
@@ -354,7 +359,11 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         },
       },
       event: {
-        subscribe: async () => {
+        subscribe: async (
+          _input?: unknown,
+          options?: { onSseError?: (error: unknown) => void },
+        ) => {
+          runtimeMock.state.onSseError = options?.onSseError;
           runtimeMock.state.eventSubscribeObserved?.();
           return {
             stream: (async function* () {
@@ -515,6 +524,148 @@ const questionRequest = (id: string, sessionID: string): QuestionRequest => ({
 });
 
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
+  for (const outcome of ["completion", "failure", "cancellation", "SSE recovery"]) {
+    const failed = outcome === "failure";
+    const cancelled = outcome === "cancellation";
+    const reconnected = outcome === "SSE recovery";
+    it.effect(`reports deduplicated step consumption on ${outcome}`, () =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId(`thread-invocation-usage-${outcome}`);
+        const assistantEvent = promiseWithResolvers<unknown>();
+        const stepEvent = promiseWithResolvers<unknown>();
+        const terminalEvent = promiseWithResolvers<unknown>();
+        const processedSteps = promiseWithResolvers<unknown>();
+        runtimeMock.state.subscribedEvents = [
+          assistantEvent.promise,
+          stepEvent.promise,
+          stepEvent.promise,
+          processedSteps.promise,
+          terminalEvent.promise,
+        ];
+        const checkpoint = promiseWithResolvers<void>();
+        const completion = yield* adapter.streamEvents.pipe(
+          Stream.tap((event) =>
+            Effect.sync(() => {
+              if (event.threadId === threadId && event.type === "thread.metadata.updated")
+                checkpoint.resolve(undefined);
+            }),
+          ),
+          Stream.filter(
+            (event) =>
+              event.threadId === threadId &&
+              (event.type === "turn.completed" || event.type === "turn.aborted"),
+          ),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "full-access",
+        });
+        runtimeMock.state.onSseError?.(new Error("Idle connection gap"));
+        const turn = yield* adapter.sendTurn({
+          threadId,
+          input: "Do the work",
+          modelSelection: createModelSelection(
+            ProviderInstanceId.make("opencode"),
+            "requested/model",
+          ),
+        });
+        const prompt = yield* decodePromptMessageId(runtimeMock.state.promptCalls[0]);
+        const sessionID = "http://127.0.0.1:9999/session";
+        assistantEvent.resolve({
+          type: "message.updated",
+          properties: {
+            info: {
+              id: "usage-assistant",
+              sessionID,
+              role: "assistant",
+              parentID: prompt.messageID,
+              providerID: "actual-provider",
+              modelID: "actual-model",
+              time: { created: 1, completed: 2 },
+              mode: "build",
+              agent: "build",
+              path: { cwd: "/tmp", root: "/tmp" },
+              cost: 999,
+              tokens: { input: 999, output: 999, reasoning: 999, cache: { read: 999, write: 999 } },
+            },
+          },
+        });
+        stepEvent.resolve({
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "usage-step",
+              type: "step-finish",
+              sessionID,
+              messageID: "usage-assistant",
+              reason: "stop",
+              cost: 0.1,
+              tokens: { input: 10, output: 20, reasoning: 5, cache: { read: 30, write: 40 } },
+            },
+          },
+        });
+        processedSteps.resolve({
+          type: "session.updated",
+          properties: { info: { id: sessionID, title: "Steps received" } },
+        });
+        yield* Effect.promise(() => checkpoint.promise);
+        if (reconnected) {
+          NodeAssert.ok(runtimeMock.state.onSseError);
+          runtimeMock.state.onSseError(new Error("SSE disconnected and retried"));
+        }
+        const resolveTerminal = () =>
+          terminalEvent.resolve(
+            failed
+              ? {
+                  type: "session.error",
+                  properties: {
+                    sessionID,
+                    error: { name: "UnknownError", data: { message: "provider failed" } },
+                  },
+                }
+              : {
+                  type: "session.status",
+                  properties: { sessionID, status: { type: "idle" } },
+                },
+          );
+        if (cancelled) {
+          runtimeMock.state.abortImplementation = async () => {
+            resolveTerminal();
+          };
+          yield* adapter.interruptTurn(threadId, turn.turnId);
+        } else resolveTerminal();
+        const completed = Option.getOrThrow(yield* Fiber.join(completion));
+        NodeAssert.equal(completed.turnId, turn.turnId);
+        if (completed.type !== "turn.completed" && completed.type !== "turn.aborted")
+          throw new Error("Expected terminal event");
+        if (completed.type === "turn.completed")
+          NodeAssert.equal(completed.payload.state, failed ? "failed" : "completed");
+        else NodeAssert.equal(cancelled, true);
+        NodeAssert.deepEqual(completed.payload.invocationUsage, {
+          source: "opencode.step-finish",
+          attribution: "turn",
+          completeness: failed || cancelled || reconnected ? "partial" : "reported",
+          nativeSubagentUsage: "excluded",
+          models: [
+            {
+              model: "actual-provider/actual-model",
+              inputTokens: 80,
+              outputTokens: 25,
+              cachedInputTokens: 30,
+              cacheCreationTokens: 40,
+              reasoningTokens: 5,
+              costUsd: 0.1,
+            },
+          ],
+        });
+      }),
+    );
+  }
+
   it.effect("reports external OpenCode as leaf-only and leaves its shared MCP config alone", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;

@@ -1,4 +1,9 @@
 import {
+  invocationFinishedActivityId,
+  invocationStartedActivityId,
+  invocationUsageActivityId,
+} from "../../usage/invocationUsageActivity.ts";
+import {
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
@@ -362,6 +367,7 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
   return fields;
 }
 
+// Usage snapshots share the same event-sourced persistence and replay as other activity.
 export function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
   taskTitle?: string,
@@ -373,6 +379,52 @@ export function runtimeEventToActivities(
       : {};
   })();
   switch (event.type) {
+    case "turn.started": {
+      if (event.turnId === undefined) return [];
+      return [
+        {
+          id: invocationStartedActivityId(event.threadId, event.turnId),
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "invocation.started",
+          summary: "Invocation started",
+          payload: {},
+          turnId: event.turnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+    case "turn.completed":
+    case "turn.aborted": {
+      if (event.turnId === undefined) return [];
+      const terminalPayload = {
+        provider: event.provider,
+        providerInstanceId: event.providerInstanceId ?? null,
+        state: event.type === "turn.aborted" ? "interrupted" : event.payload.state,
+        report: null,
+      };
+      const terminal: OrchestrationThreadActivity = {
+        id: invocationFinishedActivityId(event.threadId, event.turnId),
+        createdAt: event.createdAt,
+        tone: "info",
+        kind: "invocation.finished",
+        summary: "Invocation finished",
+        payload: terminalPayload,
+        turnId: event.turnId,
+        ...maybeSequence,
+      };
+      if (event.payload.invocationUsage === undefined) return [terminal];
+      return [
+        {
+          ...terminal,
+          id: invocationUsageActivityId(event.threadId, event.turnId),
+          kind: "invocation.usage",
+          summary: "Invocation usage recorded",
+          payload: { ...terminalPayload, report: event.payload.invocationUsage },
+        },
+        terminal,
+      ];
+    }
     case "request.opened": {
       if (event.payload.requestType === "tool_user_input") {
         return [];

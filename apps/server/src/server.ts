@@ -1,3 +1,4 @@
+import * as DelegationUsageService from "./usage/DelegationUsageService.ts";
 import { EnvironmentHttpApi, ProviderDriverKind } from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Deferred from "effect/Deferred";
@@ -532,7 +533,8 @@ const RuntimeCoreWithQuotaLive = Layer.mergeAll(
   SubscriptionQuotaLayerLive,
 );
 
-const RuntimeDependenciesLive = RuntimeCoreWithQuotaLive.pipe(
+const RuntimeDependenciesLive = DelegationUsageService.layer.pipe(
+  Layer.provideMerge(RuntimeCoreWithQuotaLive),
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),

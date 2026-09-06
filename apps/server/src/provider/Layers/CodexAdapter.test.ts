@@ -1695,6 +1695,90 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       }),
   );
 
+  it.effect(
+    "attaches normalized invocation usage to completion without adding repeated snapshots",
+    () =>
+      Effect.gen(function* () {
+        const { adapter, runtime } = yield* startLifecycleRuntime();
+        const completion = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.type === "turn.completed"),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        const base = {
+          kind: "notification",
+          provider: ProviderDriverKind.make("codex"),
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("usage-turn"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+        } as const;
+        yield* runtime.emit({
+          ...base,
+          id: asEventId("usage-start"),
+          method: "turn/started",
+          payload: {},
+        });
+        for (const id of ["usage-first", "usage-repeat"]) {
+          yield* runtime.emit({
+            ...base,
+            id: asEventId(id),
+            method: "thread/tokenUsage/updated",
+            payload: {
+              threadId: "thread-1",
+              turnId: "usage-turn",
+              tokenUsage: {
+                total: {
+                  inputTokens: 100,
+                  cachedInputTokens: 40,
+                  outputTokens: 20,
+                  reasoningOutputTokens: 5,
+                  totalTokens: 120,
+                },
+                last: {
+                  inputTokens: 100,
+                  cachedInputTokens: 40,
+                  outputTokens: 20,
+                  reasoningOutputTokens: 5,
+                  totalTokens: 120,
+                },
+                modelContextWindow: null,
+              },
+            },
+          });
+        }
+        yield* runtime.emit({
+          ...base,
+          id: asEventId("usage-completed"),
+          method: "turn/completed",
+          payload: {
+            threadId: "thread-1",
+            turn: { id: "usage-turn", status: "completed", items: [], error: null },
+          },
+        });
+        const event = yield* Fiber.join(completion);
+        NodeAssert.equal(event._tag, "Some");
+        if (event._tag === "Some" && event.value.type === "turn.completed") {
+          NodeAssert.deepEqual(event.value.payload.invocationUsage, {
+            source: "codex/thread.tokenUsage.delta",
+            attribution: "reportingWindow",
+            completeness: "reported",
+            nativeSubagentUsage: "unknown",
+            models: [
+              {
+                model: null,
+                inputTokens: 100,
+                cachedInputTokens: 40,
+                outputTokens: 20,
+                reasoningTokens: 5,
+                cacheCreationTokens: null,
+                costUsd: null,
+              },
+            ],
+          });
+        }
+      }),
+  );
+
   it.effect("unwraps Codex token usage payloads for context window events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

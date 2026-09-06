@@ -1,3 +1,4 @@
+import * as DelegationUsageService from "../../../usage/DelegationUsageService.ts";
 import {
   SubscriptionQuotaScopedReport,
   UsageReadError,
@@ -28,6 +29,12 @@ export const sanitizeUsageReadError = (error: UsageReadError): UsageReadError =>
   new UsageReadError({ reason: error.reason, detail: error.detail });
 
 const handlers = {
+  usage_delegations: (input) =>
+    Effect.gen(function* () {
+      const invocation = yield* McpInvocationContext.requireUsageCapability();
+      const service = yield* DelegationUsageService.DelegationUsageService;
+      return yield* service.read(invocation.threadId, input);
+    }),
   usage_snapshot: () =>
     Effect.gen(function* () {
       const invocation = yield* McpInvocationContext.requireUsageCapability();

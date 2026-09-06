@@ -129,3 +129,11 @@ selection remains necessary when escalation must differ from the caller's saved 
 The MCP contract is shared across web, desktop, mobile, and connection modes; no client UI change
 is required. Each harness still needs its provider adapter to attach the tools. Read the attachment
 status and handle invocation errors rather than infer support from the provider name.
+
+## Delegation usage
+
+`usage_delegations` reads at most eight unique delegation IDs, gated by `usage.read` and the
+caller's project. It joins the persisted delegation's worker and turn to indexed activity IDs.
+It does not hydrate messages, scan transcripts, or infer the model from the requested selection.
+There is no new ledger or database migration. See [usage attribution](usage-attribution.md) for
+provider semantics and the rules for consuming these reports.

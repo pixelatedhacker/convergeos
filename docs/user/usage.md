@@ -29,6 +29,33 @@ visible at environment scope but is withheld from the instance-scoped MCP tool.
 
 Agents can use `usage_summary` for the same transcript-backed, pre-aggregated history shown on the
 Usage page. It returns token and API-equivalent cost buckets plus source and pricing health; it does
-not return transcript text, host identity, or transcript filesystem paths. Agent access to both
+not return transcript text, host identity, or transcript filesystem paths. Agent access to these
 tools is controlled independently under
 **Settings > Integrations > Agents > Agent usage access** and is off until you enable it.
+
+## Usage for delegated work
+
+After delegating through ConvergeOS, agents can call `usage_delegations` with the delegation IDs
+returned by `agents_spawn` or `agents_send`. It returns the requester, worker, completion turn,
+provider instance, outcome, elapsed time when known, and the provider's saved usage report.
+The same Agent usage access setting controls this tool. It reads only delegations in the caller's
+project and returns no prompts or transcript text.
+
+Claude reports model-level input, output, cache usage, and estimated API cost. OpenCode reports
+observed model usage from completed steps. Codex reports token counters; its usage notifications
+do not identify the executed model, so that field remains unknown. Subscription-backed calls can
+report these statistics too. Availability depends on what the provider sends.
+
+A report marked `reportingWindow` describes changes in provider counters between observations.
+Background native agents can contribute work started in an earlier turn. It is not an exact bill
+for the prompt attached to that completion. A `partial` report may omit work after a stream gap,
+missing baseline, failure, or cancellation. Missing values mean unknown, never zero.
+
+Cursor, Grok, OMP, and Antigravity currently return no normalized invocation report. Their
+existing usage history and quota support are unchanged. This tool does not add OpenCode to the
+Usage page's historical charts.
+
+Read `usage_snapshot` separately for subscription allowance and reset times. Do not convert
+reported tokens or API-equivalent cost into a precise fraction of a subscription. Native child
+usage and transcript history can overlap these reports and must not be added to them.
+Usage may arrive just after completion; retry a missing report before treating it as unavailable.
