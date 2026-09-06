@@ -19,6 +19,7 @@ export * from "./providerRuntime.ts";
 export * from "./model.ts";
 export * from "./keybindings.ts";
 export * from "./kanban.ts";
+export * from "./pages.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
 export * from "./git.ts";

@@ -108,6 +108,15 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Named bot profiles bound to canonical thread inboxes. */
   botProfiles: Schema.optionalKey(Schema.Boolean),
   kanban: Schema.optionalKey(Schema.Boolean),
+  /** Server persists saved pages (generated documents and hosted links)
+      with query, publication, and archive APIs. Advertises the per-document
+      byte limit so clients and agents fail before uploading. Absent on
+      servers from before pages shipped — clients hide Pages entirely. */
+  pages: Schema.optionalKey(
+    Schema.Struct({
+      maxDocumentBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+    }),
+  ),
   /** Server understands schedule.create/update/delete and fires scheduled
       turns without a client. Same version-skew contract as threadSettlement. */
   scheduledTurns: Schema.optionalKey(Schema.Boolean),

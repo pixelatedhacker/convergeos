@@ -16,6 +16,8 @@ import {
   KanbanCardId,
   MessageId,
   NonNegativeInt,
+  PageId,
+  PageRevisionId,
   PositiveInt,
   ProjectId,
   ProviderItemId,
@@ -27,6 +29,14 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { KanbanCard, KanbanCardDescription, KanbanCardTitle, KanbanPlacement } from "./kanban.ts";
+import {
+  Page,
+  PageContentInput,
+  PageContentRef,
+  PageRevision,
+  PageRevisionAuthor,
+  PageTitle,
+} from "./pages.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -36,6 +46,9 @@ export const ORCHESTRATION_WS_METHODS = {
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   listSchedules: "orchestration.listSchedules",
+  listPages: "orchestration.listPages",
+  getPage: "orchestration.getPage",
+  getPageContent: "orchestration.getPageContent",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
@@ -638,6 +651,8 @@ export const OrchestrationReadModel = Schema.Struct({
   threads: Schema.Array(OrchestrationThread),
   kanbanCards: Schema.optional(Schema.Array(KanbanCard)),
   schedules: Schema.optional(Schema.Array(Schedule)),
+  pages: Schema.optional(Schema.Array(Page)),
+  pageRevisions: Schema.optional(Schema.Array(PageRevision)),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
@@ -1157,6 +1172,126 @@ export const KanbanCardDelegationStartCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+/**
+ * Client-facing page content arrives inline (or as a hosted URL); the
+ * server stages inline HTML into owned storage and swaps in the digest
+ * reference before the command is decided, so persisted events only ever
+ * reference durable bytes.
+ */
+const ClientPageCreateCommand = Schema.Struct({
+  type: Schema.Literal("page.create"),
+  commandId: CommandId,
+  pageId: PageId,
+  projectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  title: PageTitle,
+  sourceThreadId: Schema.NullOr(ThreadId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  content: PageContentInput,
+  dataAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  createdAt: IsoDateTime,
+});
+
+const PageCreateCommand = Schema.Struct({
+  type: Schema.Literal("page.create"),
+  commandId: CommandId,
+  pageId: PageId,
+  projectId: Schema.NullOr(ProjectId),
+  title: PageTitle,
+  sourceThreadId: Schema.NullOr(ThreadId),
+  content: PageContentRef,
+  dataAt: Schema.NullOr(IsoDateTime),
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+const PageRenameCommand = Schema.Struct({
+  type: Schema.Literal("page.rename"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  title: PageTitle,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Client-facing publication: inline HTML (staged server-side) or a hosted
+ * URL. `baseRevisionId` is the current revision the caller observed — two
+ * writers against the same base cannot overwrite each other.
+ */
+const ClientPagePublishCommand = Schema.Struct({
+  type: Schema.Literal("page.publish"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  content: PageContentInput,
+  dataAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  createdAt: IsoDateTime,
+});
+
+const PagePublishCommand = Schema.Struct({
+  type: Schema.Literal("page.publish"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  content: PageContentRef,
+  dataAt: Schema.NullOr(IsoDateTime),
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Re-publish the retained content of an older revision as a new current
+ * revision. History is immutable: returning to an older revision appends a
+ * publication instead of rewriting the past.
+ */
+const ClientPageRestoreRevisionCommand = Schema.Struct({
+  type: Schema.Literal("page.restore-revision"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  sourceRevisionId: PageRevisionId,
+  createdAt: IsoDateTime,
+});
+
+const PageRestoreRevisionCommand = Schema.Struct({
+  type: Schema.Literal("page.restore-revision"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  sourceRevisionId: PageRevisionId,
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+const PageArchiveCommand = Schema.Struct({
+  type: Schema.Literal("page.archive"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+const PageRestoreCommand = Schema.Struct({
+  type: Schema.Literal("page.restore"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Move a page between projects, or unfile it with null. Moving clears the
+ * maintainer (maintenance schedule disabling arrives with page maintenance),
+ * so a bot never keeps a page outside its own project.
+ */
+const PageAssignProjectCommand = Schema.Struct({
+  type: Schema.Literal("page.assign-project"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  projectId: Schema.NullOr(ProjectId),
+  createdAt: IsoDateTime,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1461,6 +1596,13 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   KanbanCardMoveCommand,
   KanbanCardDeleteCommand,
   KanbanCardRetryCommand,
+  PageCreateCommand,
+  PageRenameCommand,
+  PagePublishCommand,
+  PageRestoreRevisionCommand,
+  PageArchiveCommand,
+  PageRestoreCommand,
+  PageAssignProjectCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1499,6 +1641,13 @@ export const ClientOrchestrationCommand = Schema.Union([
   KanbanCardMoveCommand,
   KanbanCardDeleteCommand,
   KanbanCardRetryCommand,
+  ClientPageCreateCommand,
+  PageRenameCommand,
+  ClientPagePublishCommand,
+  ClientPageRestoreRevisionCommand,
+  PageArchiveCommand,
+  PageRestoreCommand,
+  PageAssignProjectCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1658,6 +1807,12 @@ export const OrchestrationEventType = Schema.Literals([
   "kanban.card-delegation-linked",
   "kanban.card-delegation-started",
   "kanban.card-delegation-completed",
+  "page.created",
+  "page.published",
+  "page.renamed",
+  "page.project-assigned",
+  "page.archived",
+  "page.restored",
   "delegation.requested",
   "delegation.provision-started",
   "delegation.target-bound",
@@ -1675,6 +1830,7 @@ export const OrchestrationAggregateKind = Schema.Literals([
   "kanban-card",
   "delegation",
   "schedule",
+  "page",
 ]);
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
@@ -1834,6 +1990,14 @@ export const KanbanCardDelegationLinkedPayload = Schema.Struct({ card: KanbanCar
 export const KanbanCardDelegationStartedPayload = Schema.Struct({ card: KanbanCard });
 export const KanbanCardDelegationCompletedPayload = Schema.Struct({ card: KanbanCard });
 
+/** `page` is the post-publication state; `revision` is the newly accepted revision. */
+export const PageCreatedPayload = Schema.Struct({ page: Page, revision: PageRevision });
+export const PagePublishedPayload = Schema.Struct({ page: Page, revision: PageRevision });
+export const PageRenamedPayload = Schema.Struct({ page: Page });
+export const PageProjectAssignedPayload = Schema.Struct({ page: Page });
+export const PageArchivedPayload = Schema.Struct({ page: Page });
+export const PageRestoredPayload = Schema.Struct({ page: Page });
+
 export const ScheduleCreatedPayload = Schema.Struct({ schedule: Schedule });
 export const ScheduleUpdatedPayload = Schema.Struct({ schedule: Schedule });
 export const ScheduleDeletedPayload = Schema.Struct({
@@ -1979,7 +2143,14 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId, ScheduleId]),
+  aggregateId: Schema.Union([
+    ProjectId,
+    ThreadId,
+    KanbanCardId,
+    DelegationId,
+    ScheduleId,
+    PageId,
+  ]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -2182,6 +2353,36 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("kanban.card-delegation-completed"),
     payload: KanbanCardDelegationCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.created"),
+    payload: PageCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.published"),
+    payload: PagePublishedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.renamed"),
+    payload: PageRenamedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.project-assigned"),
+    payload: PageProjectAssignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.archived"),
+    payload: PageArchivedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.restored"),
+    payload: PageRestoredPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
