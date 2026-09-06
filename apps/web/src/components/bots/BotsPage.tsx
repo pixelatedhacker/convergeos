@@ -1,7 +1,7 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { BotComputerCapability, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpRightIcon,
@@ -57,6 +57,7 @@ import {
   updateBotDispatchDraft,
   updateBusyBotKeys,
 } from "./BotsPage.logic";
+import { BotComputerPanel } from "./BotComputerPanel";
 
 function threadKey(thread: Pick<EnvironmentThreadShell, "environmentId" | "id">): string {
   return `${thread.environmentId}:${thread.id}`;
@@ -304,6 +305,9 @@ export function BotsPage() {
             {selectedBot && (
               <BotWorkspace
                 busy={busyThreadKeys.has(threadKey(selectedBot))}
+                computerCapability={
+                  serverConfigs.get(selectedBot.environmentId)?.environment.capabilities.botComputer
+                }
                 message={dispatchDrafts.get(threadKey(selectedBot)) ?? ""}
                 projectName={
                   projectNameByRef.get(`${selectedBot.environmentId}:${selectedBot.projectId}`) ??
@@ -443,6 +447,7 @@ function BotFleetRow({
 
 function BotWorkspace({
   busy,
+  computerCapability,
   message,
   projectName,
   thread,
@@ -453,6 +458,7 @@ function BotWorkspace({
   onOpen,
 }: {
   readonly busy: boolean;
+  readonly computerCapability: BotComputerCapability | undefined;
   readonly message: string;
   readonly projectName: string;
   readonly thread: EnvironmentThreadShell;
@@ -497,6 +503,14 @@ function BotWorkspace({
           <Button aria-label="Edit bot" size="icon-sm" variant="ghost" onClick={onEdit}>
             <PencilIcon />
           </Button>
+        </div>
+
+        <div className="pt-7">
+          <BotComputerPanel
+            capability={computerCapability}
+            environmentId={thread.environmentId}
+            threadId={thread.id}
+          />
         </div>
 
         <section className="py-7">
