@@ -1,3 +1,9 @@
+import {
+  SkillStoreTarget,
+  SkillStoreSnapshot,
+  SkillStoreMutation,
+  SkillStoreError,
+} from "./skillStore.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
@@ -333,6 +339,8 @@ export const WS_METHODS = {
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
+  serverGetSkillStore: "server.getSkillStore",
+  serverMutateSkillStore: "server.mutateSkillStore",
   serverGetUsageSummary: "server.getUsageSummary",
   serverGetSubscriptionQuota: "server.getSubscriptionQuota",
   serverRefreshUsageRates: "server.refreshUsageRates",
@@ -560,6 +568,17 @@ export const WsServerRetryResourceTelemetryRpc = Rpc.make(WS_METHODS.serverRetry
   payload: Schema.Struct({}),
   success: ResourceTelemetryRetryResult,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsServerGetSkillStoreRpc = Rpc.make(WS_METHODS.serverGetSkillStore, {
+  payload: SkillStoreTarget,
+  success: SkillStoreSnapshot,
+  error: Schema.Union([EnvironmentAuthorizationError, SkillStoreError]),
+});
+export const WsServerMutateSkillStoreRpc = Rpc.make(WS_METHODS.serverMutateSkillStore, {
+  payload: SkillStoreMutation,
+  success: Schema.Struct({ message: Schema.String }),
+  error: Schema.Union([EnvironmentAuthorizationError, SkillStoreError]),
 });
 
 export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
@@ -1254,6 +1273,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessResourceHistoryRpc,
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
+  WsServerGetSkillStoreRpc,
+  WsServerMutateSkillStoreRpc,
   WsServerGetUsageSummaryRpc,
   WsServerGetSubscriptionQuotaRpc,
   WsServerRefreshUsageRatesRpc,

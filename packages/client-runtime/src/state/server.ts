@@ -876,6 +876,15 @@ export function createServerEnvironmentAtoms<R, E>(
     }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan.
+    skillStore: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:skill-store",
+      tag: WS_METHODS.serverGetSkillStore,
+      staleTimeMs: 30_000,
+    }),
+    mutateSkillStore: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:mutate-skill-store",
+      tag: WS_METHODS.serverMutateSkillStore,
+    }),
     usageSummary: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:usage-summary",
       tag: WS_METHODS.serverGetUsageSummary,
