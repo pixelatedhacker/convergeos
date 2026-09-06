@@ -1,5 +1,6 @@
 import {
   type MeshKeyId,
+  type AgentLivenessObservation,
   type MeshReceipt,
   MeshKeyId as MeshKeyIdSchema,
 } from "@t3tools/contracts";
@@ -7,9 +8,11 @@ import { schnorr } from "@noble/curves/secp256k1";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import { LIVENESS_KIND, LIVENESS_TAG, LIVENESS_MAX_BYTES, NostrLivenessEvent } from "./liveness.ts";
 import { MESH_RECEIPT_SIGNING_KEY_SECRET } from "./MeshReceiptConfig.ts";
 import {
   MAX_NOSTR_EVENT_BYTES,
@@ -20,6 +23,8 @@ import {
   signNostrEvent,
   type NostrEvent,
 } from "./nostr.ts";
+
+const decodeLivenessEvent = Schema.decodeUnknownSync(NostrLivenessEvent);
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -48,6 +53,9 @@ export type MeshSignedReceiptResult =
 export class MeshReceiptSigner extends Context.Service<
   MeshReceiptSigner,
   {
+    readonly signLivenessSync: (
+      observation: AgentLivenessObservation,
+    ) => typeof NostrLivenessEvent.Type | null;
     readonly publicKeyHex: string;
     readonly keyId: MeshKeyId;
     readonly signReceiptSync: (receipt: MeshReceipt) => MeshSignedReceiptResult;
@@ -108,7 +116,24 @@ export const make = Effect.gen(function* () {
     };
   };
 
-  return MeshReceiptSigner.of({ publicKeyHex, keyId, signReceiptSync });
+  const signLivenessSync = (observation: AgentLivenessObservation) => {
+    const event = signNostrEvent(
+      {
+        pubkey: publicKeyHex,
+        created_at: Math.floor(Date.parse(observation.observedAt) / 1_000),
+        kind: LIVENESS_KIND,
+        tags: [
+          ["t", LIVENESS_TAG],
+          ["d", observation.delegationId],
+          ["expiration", String(Math.floor(Date.parse(observation.expiresAt) / 1_000))],
+        ],
+        content: JSON.stringify(observation),
+      },
+      secretKey,
+    );
+    return nostrEventByteLength(event) <= LIVENESS_MAX_BYTES ? decodeLivenessEvent(event) : null;
+  };
+  return MeshReceiptSigner.of({ publicKeyHex, keyId, signReceiptSync, signLivenessSync });
 });
 
 export const layer = Layer.effect(MeshReceiptSigner, make);

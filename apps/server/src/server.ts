@@ -77,6 +77,7 @@ import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import * as MeshReceiptExportReactor from "./mesh/MeshReceiptExportReactor.ts";
 import * as MeshReceiptExportStore from "./mesh/MeshReceiptExportStore.ts";
 import * as MeshReceiptSigner from "./mesh/MeshReceiptSigner.ts";
+import * as AgentLiveness from "./mesh/AgentLiveness.ts";
 import * as NostrRelay from "./mesh/NostrRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
@@ -303,6 +304,18 @@ const ReactorLayerLive = Layer.empty.pipe(
       Layer.provide(MeshReceiptSigner.layer.pipe(Layer.provide(ServerSecretStore.layer))),
       Layer.provide(MeshReceiptExportStore.layer),
       Layer.provide(NostrRelay.layer),
+    ),
+  ),
+  Layer.provideMerge(
+    Layer.effectDiscard(
+      Effect.flatMap(AgentLiveness.AgentLiveness, (service) => service.start()),
+    ).pipe(
+      Layer.provideMerge(
+        AgentLiveness.layer.pipe(
+          Layer.provide(MeshReceiptSigner.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+          Layer.provide(MeshReceiptExportStore.layer),
+        ),
+      ),
     ),
   ),
   Layer.provideMerge(RuntimeReceiptBusLive),

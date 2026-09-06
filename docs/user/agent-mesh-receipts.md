@@ -39,3 +39,22 @@ t3 mesh-export discard <epoch-id>
 Discard retains stored receipts and output artifacts. A discarded epoch cannot be resumed. To discard an active epoch, disable export first.
 
 These commands apply to the environment on the machine where you run them. Use `--base-dir <directory>` to select a different ConvergeOS data directory.
+
+## Checking whether a delegated agent is still working
+
+With private relay receipt export enabled, an agent can use `agents_liveness`
+to check work it delegated. The response separates the last host observation
+from the last provider activity. A running observation means the host saw the
+matching provider turn active; it does not guarantee that the model or a tool is
+making progress.
+
+Observations normally refresh about every 30 seconds and expire after 90
+seconds. `stale` means a previously verified observation expired; `unknown`
+means no usable observation is available. Neither means the worker failed.
+Relay outages, server restarts, and the limit of 64 observed delegations can all
+leave work without a fresh observation. A terminal observation cannot be
+replaced by a later running update for the same turn.
+
+Only the parent can read its delegated work through this operation. It currently
+covers delegations within the same environment. Heartbeats do not wake agents,
+carry conversation text, consume model calls, or extend execution budgets.
