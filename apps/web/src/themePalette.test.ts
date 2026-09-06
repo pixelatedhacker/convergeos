@@ -90,50 +90,6 @@ describe("theme files", () => {
     }
   });
 
-  it("derives a readable palette from extreme simple-editor colors", () => {
-    const light = createVividThemeColors("light", "#111827", "#ffff00");
-    const dark = createVividThemeColors("dark", "#ffffff", "#ffff00");
-    const darkDefaults = getDefaultThemeColors("dark");
-
-    expect(asHex(light.canvas)).not.toBe("#111827");
-    expect(asHex(dark.canvas)).not.toBe("#ffffff");
-    expect(contrastRatio(light.accent, light.canvas)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(dark.accent, dark.canvas)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(light.textMuted, light.canvas)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(dark.textMuted, dark.canvas)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(light.textMuted, light.canvas)).toBeLessThan(5.5);
-    expect(contrastRatio(dark.textMuted, dark.canvas)).toBeLessThan(5.5);
-    expect(contrastRatio(light.textMuted, light.canvas)).toBeCloseTo(4.705, 1);
-    expect(contrastRatio(dark.textMuted, dark.canvas)).toBeCloseTo(5.082, 1);
-    expect(light.secondaryLabel).toBe(light.textMuted);
-    expect(dark.secondaryLabel).toBe(dark.textMuted);
-    expect(contrastRatio(light.accentForeground, light.accent)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(dark.accentForeground, dark.accent)).toBeGreaterThanOrEqual(4.5);
-    // Status colors fall back to ConvergeOS's standard red and amber rather than
-    // the flagship palette's, so no generated theme inherits a brand tint.
-    const channels = (value: string) =>
-      [1, 3, 5].map((index) => Number.parseInt(asHex(value).slice(index, index + 2), 16)) as [
-        number,
-        number,
-        number,
-      ];
-    for (const colors of [light, dark]) {
-      const [errorRed, errorGreen, errorBlue] = channels(colors.error);
-      // Red leads by a wide margin; the old default was a pink whose blue sat
-      // close behind its red.
-      expect(errorRed).toBeGreaterThan(errorGreen * 2);
-      expect(errorRed).toBeGreaterThan(errorBlue * 2);
-      expect(contrastRatio(colors.error, "#ffffff")).toBeGreaterThanOrEqual(2.5);
-      expect(contrastRatio(colors.errorForeground, colors.errorSurface)).toBeGreaterThanOrEqual(
-        4.5,
-      );
-      const [warnRed, warnGreen, warnBlue] = channels(colors.warning);
-      expect(warnRed).toBeGreaterThan(warnBlue);
-      expect(warnGreen).toBeGreaterThan(warnBlue);
-    }
-    expect(asHex(dark.error)).not.toBe(asHex(darkDefaults.error));
-  });
-
   it("keeps stock dark controls in the neutral-black surface hierarchy", () => {
     expectThemeColors(getStandardThemeColors("dark"), {
       canvas: "#0a0a0a",

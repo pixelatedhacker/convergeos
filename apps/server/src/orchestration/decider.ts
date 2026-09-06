@@ -187,6 +187,10 @@ function openRequests(thread: Pick<OrchestrationThread, "activities">) {
   return requests;
 }
 
+function hasOpenBlockingRequest(thread: Pick<OrchestrationThread, "activities">): boolean {
+  return openRequests(thread).size > 0;
+}
+
 /** Apply the shared shell-level rule to the detailed command read model. */
 function hasQueuedTurnStartForThread(
   thread: Pick<OrchestrationThread, "messages" | "latestTurn" | "session">,
