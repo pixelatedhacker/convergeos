@@ -128,6 +128,7 @@ import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinar
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as CodexBarCollector from "./subscriptionQuota/CodexBarCollector.ts";
+import * as ProviderRateLimitObserver from "./subscriptionQuota/ProviderRateLimitObserver.ts";
 import * as SubscriptionQuotaService from "./subscriptionQuota/SubscriptionQuotaService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import {
@@ -203,8 +204,12 @@ const BackgroundLayerLive = BackgroundPolicy.layer.pipe(
 
 const UsageLayerLive = UsageService.layer.pipe(Layer.provide(ServerSettingsLayerLive));
 
+// One observer instance feeds both runtime ingestion and quota reads.
+const ProviderRateLimitObserverLayerLive = ProviderRateLimitObserver.layer;
+
 const SubscriptionQuotaLayerLive = SubscriptionQuotaService.layer.pipe(
   Layer.provide(CodexBarCollector.layer.pipe(Layer.provide(ProcessRunner.layer))),
+  Layer.provide(ProviderRateLimitObserverLayerLive),
 );
 
 const ResourceDiagnosticsLayerLive = Layer.mergeAll(
@@ -281,7 +286,9 @@ const PlatformServicesLive = Layer.unwrap(
 
 const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(OrchestrationReactorLive),
-  Layer.provideMerge(ProviderRuntimeIngestionLive),
+  Layer.provideMerge(
+    ProviderRuntimeIngestionLive.pipe(Layer.provide(ProviderRateLimitObserverLayerLive)),
+  ),
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
   // Later provideMerge entries feed earlier ones. The scheduler launches runs

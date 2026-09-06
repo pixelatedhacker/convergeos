@@ -16,6 +16,7 @@ import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
 
 import * as CodexBarCollector from "./CodexBarCollector.ts";
+import * as ProviderRateLimitObserver from "./ProviderRateLimitObserver.ts";
 
 const CACHE_TTL_MS = 60_000;
 
@@ -96,10 +97,44 @@ export const bindQuotaSubjects = (
   });
 };
 
+/**
+ * Provider-reported subjects are bound exactly, so a CodexBar subject that
+ * resolves to the same instance would only duplicate them.
+ */
+export const mergeQuotaSubjects = (
+  collected: ReadonlyArray<SubscriptionQuotaSubject>,
+  reported: ReadonlyArray<SubscriptionQuotaSubject>,
+): ReadonlyArray<SubscriptionQuotaSubject> => {
+  const reportedInstances = new Set(
+    reported.flatMap((subject) => subject.binding.providerInstanceIds),
+  );
+  return [
+    ...reported,
+    ...collected.filter(
+      (subject) => !subject.binding.providerInstanceIds.some((id) => reportedInstances.has(id)),
+    ),
+  ];
+};
+
 export const make = Effect.gen(function* () {
   const collector = yield* CodexBarCollector.CodexBarCollector;
+  const rateLimits = yield* ProviderRateLimitObserver.ProviderRateLimitObserver;
   const refreshLock = yield* Semaphore.make(1);
   let lastGood: CachedQuota | undefined;
+
+  const reportedSubjects = (nowMs: number, attemptedAt: string) =>
+    Effect.map(rateLimits.subjects, (subjects) => ({
+      subjects: subjects.map((subject) => applyFreshness(subject, nowMs)),
+      collector: {
+        collectorId: ProviderRateLimitObserver.PROVIDER_EVENTS_COLLECTOR_ID,
+        status: subjects.length > 0 ? "ok" : "missing",
+        attemptedAt,
+        message:
+          subjects.length > 0
+            ? null
+            : "No provider has reported rate limits during this server run.",
+      } satisfies SubscriptionQuotaCollector,
+    }));
 
   const read = Effect.fn("SubscriptionQuotaService.read")(function* (
     context: SubscriptionQuotaReadContext,
@@ -109,15 +144,20 @@ export const make = Effect.gen(function* () {
         const nowMs = yield* Clock.currentTimeMillis;
         const readAt = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
 
+        const reported = yield* reportedSubjects(nowMs, readAt);
+
         if (lastGood && nowMs - lastGood.collectedAtMs < CACHE_TTL_MS) {
           return {
             contractVersion: SUBSCRIPTION_QUOTA_CONTRACT_VERSION,
             environmentId: context.environmentId,
             readAt,
-            subjects: bindQuotaSubjects(lastGood.subjects, context.instances).map((subject) =>
-              applyFreshness(subject, nowMs),
+            subjects: mergeQuotaSubjects(
+              bindQuotaSubjects(lastGood.subjects, context.instances).map((subject) =>
+                applyFreshness(subject, nowMs),
+              ),
+              reported.subjects,
             ),
-            collectors: [lastGood.collector],
+            collectors: [lastGood.collector, reported.collector],
           } satisfies SubscriptionQuotaReport;
         }
 
@@ -132,10 +172,13 @@ export const make = Effect.gen(function* () {
             contractVersion: SUBSCRIPTION_QUOTA_CONTRACT_VERSION,
             environmentId: context.environmentId,
             readAt,
-            subjects: bindQuotaSubjects(result.snapshot.subjects, context.instances).map(
-              (subject) => applyFreshness(subject, nowMs),
+            subjects: mergeQuotaSubjects(
+              bindQuotaSubjects(result.snapshot.subjects, context.instances).map((subject) =>
+                applyFreshness(subject, nowMs),
+              ),
+              reported.subjects,
             ),
-            collectors: [result.collector],
+            collectors: [result.collector, reported.collector],
           } satisfies SubscriptionQuotaReport;
         }
 
@@ -153,8 +196,11 @@ export const make = Effect.gen(function* () {
           contractVersion: SUBSCRIPTION_QUOTA_CONTRACT_VERSION,
           environmentId: context.environmentId,
           readAt,
-          subjects: bindQuotaSubjects(fallbackSubjects, context.instances),
-          collectors: [result.collector],
+          subjects: mergeQuotaSubjects(
+            bindQuotaSubjects(fallbackSubjects, context.instances),
+            reported.subjects,
+          ),
+          collectors: [result.collector, reported.collector],
         } satisfies SubscriptionQuotaReport;
       }),
     );

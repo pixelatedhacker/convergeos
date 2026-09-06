@@ -30,6 +30,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import * as ProviderRateLimitObserver from "../../subscriptionQuota/ProviderRateLimitObserver.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 import { isGitRepository } from "../../git/Utils.ts";
@@ -907,6 +908,7 @@ const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerService = yield* ProviderService;
+  const rateLimitObserver = yield* ProviderRateLimitObserver.ProviderRateLimitObserver;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
@@ -2103,7 +2105,12 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       yield* forkParked(
         Stream.runForEach(providerService.streamEvents, (event) =>
-          worker.enqueue({ source: "runtime", event }),
+          event.type === "account.rate-limits.updated"
+            ? Effect.andThen(
+                rateLimitObserver.observe(event),
+                worker.enqueue({ source: "runtime", event }),
+              )
+            : worker.enqueue({ source: "runtime", event }),
         ),
       );
       yield* forkParked(
