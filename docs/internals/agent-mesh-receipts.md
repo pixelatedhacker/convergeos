@@ -144,3 +144,63 @@ the source completion sequence, so later updates do not change old output eviden
 - Per-provider tool evidence and verifier assessment receipts.
 - Public discovery, federation, and per-token relay streaming: one explicitly
   configured private relay per environment is the whole transport surface.
+
+## Delegated worker liveness
+
+`AgentLiveness` is a separate, expiring Nostr channel (kind `9902`, protocol
+`convergeos.liveness.v1`). It uses the existing export-enabled flag, private relay
+URL, active export epoch/destination binding, and enrolled environment signer.
+Nothing enables it or changes live relay configuration automatically.
+
+A background sampler observes up to 64 locally owned thread delegations. It
+checks `ProviderService.listSessions()` for a running runtime session with the
+exact worker thread and turn; persisted `running` state or a `turn.started`
+receipt alone is insufficient. Pending approval or input becomes `waiting` only
+while that matching runtime is present. Missing runtime means `unknown`, not
+failed. Terminal delegation state is authoritative for that exact turn. A
+separate `providerActivityAt` records the last locally received, turn-tagged
+provider runtime event. It stays null until observed and is not refreshed by a
+heartbeat. A running runtime may still be stuck; these are host observations,
+not proof of ongoing model inference or tool progress.
+
+Unchanged observations publish on a 30-second schedule; relevant runtime and
+delegation transitions also request a sample, coalesced to one pending sweep.
+Per-delegation publication is limited to once a second for transitions. There
+are at most four concurrent publications, each with a one-second timeout, so a
+64-item sweep cannot queue work beyond its 90-second validity window. The timer
+waits for the preceding sweep to drain: a slow relay can extend the interval to
+about 46 seconds. Excess delegations can remain unobserved while the first 64
+remain active. Parents must treat those absent observations as unknown.
+
+Liveness has no durable publication backlog. Failed live observations are
+replaced by a new host sample on a later sweep. Terminal publication failures
+retry while the terminal change is less than 90 seconds old; accepted terminal
+publications stop. The original observation and expiry are signed and never
+rewritten on delivery. Relay acceptance is only an acknowledgement; it cannot
+populate the parent-side receipt cache.
+
+`agents_liveness` requires `agents.read` and accepts one to eight delegation IDs.
+The credential caller must own each delegation and share its project. A bounded
+NIP-01 historical subscription receives at most 64 events (128 frames/256 KiB,
+4 KiB per event, two-second timeout). Only one query can be active, and new
+queries are limited to one per second per environment. Busy or rate-limited
+reads report `unavailable` and can return previously verified observations.
+The reader verifies NIP-01 hash/signature, active signer enrollment, environment,
+export epoch, destination digest, project, parent, worker, turn, sequence,
+observation time and expiry. It accepts only locally known delegations issued
+by this environment; this adds no federation or remote dispatch authority.
+
+The bounded cache distinguishes `fresh`, `stale` (previously verified but
+expired), and `unknown` (no usable observation). Lower-sequence/older observations
+cannot replace newer ones, and a terminal observation cannot be revived within
+the same turn. Current local terminal state rejects incompatible cached running
+observations. Disabled export, epoch/destination changes and revoked signer keys
+invalidate usable cached observations. Restart loses this optional cache; recent
+signed observations can be queried again while valid.
+
+Routine heartbeats neither create orchestration events nor wake a parent model.
+They contain no prompt, output delta, tool argument, or usage counter. Parents
+explicitly read liveness as needed; `agents_wait` continues to handle normal
+completion and attention. Relay outages never block local execution, and silence
+never proves failure or successful cancellation. Heartbeats do not extend task
+budgets or deadlines.
