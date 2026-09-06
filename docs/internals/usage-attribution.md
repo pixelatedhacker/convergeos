@@ -66,3 +66,28 @@ step replay, failure/cancellation, duplicate terminal events, native child exclu
 SQL reads, project isolation, and MCP capability/parameter validation. The persistence test uses
 SQLite and the real activity projector repository. No test contacts a live account or writes to
 provider credentials or the user's ConvergeOS database.
+
+## Subscription-backed reporting coverage
+
+Subscription-backed usage remains a product requirement beyond the normalized test coverage above.
+Acceptance requires an actual subscribed invocation through each supported ConvergeOS adapter,
+with the native observation matched to its persisted turn and MCP report. Synthetic SDK fixtures
+prove parsing and accounting rules; they do not prove that an installed subscription-backed
+provider emits the same data.
+
+The required statistics are observed provider/model identity where available, input/output/cache
+and reasoning counters, elapsed time, outcome and coverage for the parent and delegated work.
+The environment should expose unavailable fields and unsupported adapters explicitly. Historical
+charts must retain source identity when they gain additional harness coverage, so importing an
+invocation report cannot double-count the provider transcript that already contains it.
+
+Subscription allowance stays a separate read of fresh provider windows and reset times. Prefer
+native account-bound observations where a provider exposes them; keep the current optional
+CodexBar collector and label ambiguous account bindings. Stable account identity and shared-account
+coordination are prerequisites for an account-wide reservation system. A response-scoped quota
+subject ID, requested model, token-price estimate, or before/after percentage difference cannot
+stand in for that evidence.
+
+The remaining gaps are real subscription-path verification, verified actual-model attribution
+when usage notifications omit it, native child accounting, and normalized invocation reporting for
+Cursor, Grok, OMP and Antigravity. The task budget gate must remain useful with those gaps present.
