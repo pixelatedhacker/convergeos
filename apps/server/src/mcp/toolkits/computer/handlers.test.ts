@@ -83,6 +83,9 @@ it.layer(TestLayer)("Bot computer MCP toolkit", (it) => {
   it.effect("registers annotations and returns snapshot image content", () =>
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
+      for (const { tool } of server.tools) {
+        expect(tool.inputSchema.type, `${tool.name} input schema`).toBe("object");
+      }
       const statusTool = server.tools.find(({ tool }) => tool.name === "computer_status");
       const clickTool = server.tools.find(({ tool }) => tool.name === "computer_click");
       expect(statusTool?.tool.annotations?.readOnlyHint).toBe(true);
