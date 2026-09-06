@@ -14,9 +14,10 @@ the normal sidebar stream.
 
 ## Agent access
 
-Agent access is off by default. Turn on **Settings → Integrations → Agents → Agent Kanban access**
-to give newly started sessions the `kanban_read` and `kanban_write` tools. An agent can access only
-the project containing its own thread. It cannot name a different project.
+Agent access is off by default. Under **Settings → Integrations → Agents → Agent Kanban access**,
+choose **Read only** to give newly started sessions the `kanban_read` tool, or **Read and write** to
+also give them `kanban_write`. An agent can access only the project containing its own thread. It
+cannot name a different project.
 
 Mutations use revisions to prevent one client from silently overwriting another. When a write says
 the revision changed, read the board again and retry against the current card. Reuse the same
