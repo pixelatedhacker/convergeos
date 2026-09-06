@@ -20,6 +20,7 @@ import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { serviceCommand } from "./cli/service.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
 import { themeCommand } from "./cli/theme.ts";
+import { meshExportCommand } from "./cli/meshExport.ts";
 import { triageCommand } from "./cli/triage.ts";
 
 applyConvergeOsEnvironmentAliases(process.env);
@@ -64,6 +65,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       serviceCommand,
       servicePreflightCommand,
       themeCommand,
+      meshExportCommand,
       triageCommand,
       cloudEnabled ? connectCommand : connectUnavailableCommand,
     ]),

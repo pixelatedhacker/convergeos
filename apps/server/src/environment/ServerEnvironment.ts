@@ -223,6 +223,7 @@ export const make = Effect.gen(function* () {
       environmentThemes: true,
       threadPinning: true,
       botProfiles: true,
+      agentMeshReceiptExport: true,
       kanban: true,
       scheduledTurns: true,
       threadPinReorder: true,
@@ -248,7 +249,10 @@ export const make = Effect.gen(function* () {
     getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
       Effect.map((agentActivityPublishing) => ({
         ...descriptor,
-        capabilities: { ...descriptor.capabilities, agentActivityPublishing },
+        capabilities: {
+          ...descriptor.capabilities,
+          agentActivityPublishing,
+        },
       })),
     ),
   });

@@ -14,6 +14,7 @@ import * as SchedulerReactor from "../SchedulerReactor.ts";
 import { OrchestrationReactor } from "../Services/OrchestrationReactor.ts";
 import { makeOrchestrationReactor } from "./OrchestrationReactor.ts";
 import * as AgentAwarenessRelay from "../../relay/AgentAwarenessRelay.ts";
+import * as MeshReceiptExportReactor from "../../mesh/MeshReceiptExportReactor.ts";
 
 describe("OrchestrationReactor", () => {
   let runtime: ManagedRuntime.ManagedRuntime<OrchestrationReactor, never> | null = null;
@@ -93,6 +94,16 @@ describe("OrchestrationReactor", () => {
             },
           }),
         ),
+        Layer.provideMerge(
+          Layer.succeed(MeshReceiptExportReactor.MeshReceiptExportReactor, {
+            start: () => {
+              started.push("mesh-receipt-export-reactor");
+              return Effect.void;
+            },
+            drain: Effect.void,
+            sweep: () => Effect.succeed({ captured: 0 }),
+          }),
+        ),
       ),
     );
 
@@ -108,6 +119,7 @@ describe("OrchestrationReactor", () => {
       "thread-settlement-reactor",
       "scheduler-reactor",
       "agent-awareness-relay",
+      "mesh-receipt-export-reactor",
     ]);
 
     await Effect.runPromise(Scope.close(scope, Exit.void));

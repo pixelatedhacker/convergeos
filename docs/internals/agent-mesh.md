@@ -103,6 +103,9 @@ Kanban cards may name bot inboxes as assignees. A Ready assignment creates the s
 aggregate and starts through the same thread path, preserving the authorization, exclusivity, and
 workspace invariants above.
 
+For signed, verifiable export of delegation history to a private Nostr relay, see
+`docs/internals/agent-mesh-receipts.md`.
+
 ## Model discovery and escalation
 
 `agents_models` exposes a bounded projection of the existing `ProviderRegistry` cache to callers

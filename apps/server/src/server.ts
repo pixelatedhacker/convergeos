@@ -73,6 +73,10 @@ import * as ThreadSettlementReactor from "./orchestration/ThreadSettlementReacto
 import * as SchedulerReactor from "./orchestration/SchedulerReactor.ts";
 import * as ThreadLaunchService from "./orchestration/Services/ThreadLaunchService.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
+import * as MeshReceiptExportReactor from "./mesh/MeshReceiptExportReactor.ts";
+import * as MeshReceiptExportStore from "./mesh/MeshReceiptExportStore.ts";
+import * as MeshReceiptSigner from "./mesh/MeshReceiptSigner.ts";
+import * as NostrRelay from "./mesh/NostrRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
 import * as ServerSettings from "./serverSettings.ts";
@@ -293,6 +297,13 @@ const ReactorLayerLive = Layer.empty.pipe(
     ).pipe(Layer.provideMerge(KanbanDelegationReactor.layer)),
   ),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+  Layer.provideMerge(
+    MeshReceiptExportReactor.layer.pipe(
+      Layer.provide(MeshReceiptSigner.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+      Layer.provide(MeshReceiptExportStore.layer),
+      Layer.provide(NostrRelay.layer),
+    ),
+  ),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
 
