@@ -73,3 +73,24 @@ Existing bot listings include their configured model and reasoning options. Thes
 not proof that a particular turn ran with that model. The lead should collect the completed result
 and check its evidence. Unavailable credentials, incompatible runtime modes, and missing tools still
 need resolution before that path can work.
+
+## Bot computers
+
+Compatible Linux and macOS environments can give an active Bot a persistent Linux desktop. The
+computer belongs to the Bot's existing thread and isolated worktree; it is not another agent or
+conversation. Starting, resuming, suspending, resetting, and destroying the computer are safe to
+retry. Suspending retains its Chromium profile. Destroying removes both the container and profile,
+while resetting removes both and starts a clean computer immediately.
+
+Open **Bots**, select a Bot, then use the **Computer** pane at the top of its workspace. The pane
+shows the live desktop on the environment host. The Bot's provider can inspect and control the same
+desktop through ConvergeOS MCP screenshot, pointer, keyboard, and scroll tools.
+
+The first version requires you to explicitly allow outbound network access when starting,
+resuming, or resetting. It never injects host credentials or mounts your home directory, but files
+and secrets already present inside the Bot worktree remain available because that worktree is the
+computer's workspace. The viewer listens on the environment host's loopback interface, so remote
+clients cannot open it directly in this version.
+
+Bot computers use constrained Docker containers. This is useful isolation, not containment for
+hostile code. Do not use one to run code you would not trust inside a local container.
