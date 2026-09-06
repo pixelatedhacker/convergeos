@@ -8,6 +8,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { BotComputerCapability } from "./botComputer.ts";
 
 export const ExecutionEnvironmentPlatformOs = Schema.Literals([
   "darwin",
@@ -107,6 +108,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadPinning: Schema.optionalKey(Schema.Boolean),
   /** Named bot profiles bound to canonical thread inboxes. */
   botProfiles: Schema.optionalKey(Schema.Boolean),
+  botComputer: Schema.optionalKey(BotComputerCapability),
   kanban: Schema.optionalKey(Schema.Boolean),
   /** Server understands schedule.create/update/delete and fires scheduled
       turns without a client. Same version-skew contract as threadSettlement. */

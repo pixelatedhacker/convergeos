@@ -3,6 +3,7 @@ export * from "./agentMesh.ts";
 export * from "./meshReceipt.ts";
 export * from "./assistantCitations.ts";
 export * from "./background.ts";
+export * from "./botComputer.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
