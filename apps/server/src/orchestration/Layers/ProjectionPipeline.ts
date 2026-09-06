@@ -7,6 +7,8 @@ import {
   ModelSelection,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
+  PageContentRef,
+  PageRevisionAuthor,
   ScheduleRecurrence,
   ThreadId,
 } from "@t3tools/contracts";
@@ -66,6 +68,8 @@ const encodeDelegationTarget = Schema.encodeSync(Schema.fromJsonString(Delegatio
 const encodeDelegationFailure = Schema.encodeSync(Schema.fromJsonString(DelegationFailure));
 const encodeScheduleRecurrence = Schema.encodeSync(Schema.fromJsonString(ScheduleRecurrence));
 const encodeScheduleModelSelection = Schema.encodeSync(Schema.fromJsonString(ModelSelection));
+const encodePageContentRef = Schema.encodeSync(Schema.fromJsonString(PageContentRef));
+const encodePageRevisionAuthor = Schema.encodeSync(Schema.fromJsonString(PageRevisionAuthor));
 
 export const ORCHESTRATION_PROJECTOR_NAMES = {
   projects: "projection.projects",
@@ -81,6 +85,7 @@ export const ORCHESTRATION_PROJECTOR_NAMES = {
   delegations: "projection.delegations",
   schedules: "projection.schedules",
   scheduleRuns: "projection.schedule-runs",
+  pages: "projection.pages",
 } as const;
 
 type ProjectorName =
@@ -2012,6 +2017,111 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.scheduleRuns:insert")));
     });
 
+    const applyPagesProjection: ProjectorDefinition["apply"] = Effect.fn("applyPagesProjection")(
+      function* (event) {
+        switch (event.type) {
+          // Publications carry the full post-publication page plus the new
+          // revision. Revision rows are immutable, so re-running a replayed
+          // event over an existing row stays a no-op write.
+          case "page.created":
+          case "page.published": {
+            const { page, revision } = event.payload;
+            yield* sql`
+              INSERT INTO projection_pages (
+                page_id,
+                project_id,
+                title,
+                kind,
+                source_thread_id,
+                maintainer_thread_id,
+                current_revision_id,
+                current_revision,
+                metadata_revision,
+                created_at,
+                updated_at,
+                archived_at
+              ) VALUES (
+                ${page.id},
+                ${page.projectId},
+                ${page.title},
+                ${page.kind},
+                ${page.sourceThreadId},
+                ${page.maintainerThreadId},
+                ${page.currentRevisionId},
+                ${page.currentRevision},
+                ${page.metadataRevision},
+                ${page.createdAt},
+                ${page.updatedAt},
+                ${page.archivedAt}
+              )
+              ON CONFLICT(page_id) DO UPDATE SET
+                project_id = excluded.project_id,
+                title = excluded.title,
+                kind = excluded.kind,
+                source_thread_id = excluded.source_thread_id,
+                maintainer_thread_id = excluded.maintainer_thread_id,
+                current_revision_id = excluded.current_revision_id,
+                current_revision = excluded.current_revision,
+                metadata_revision = excluded.metadata_revision,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                archived_at = excluded.archived_at
+            `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.pages:upsert")));
+            yield* sql`
+              INSERT INTO projection_page_revisions (
+                revision_id,
+                page_id,
+                predecessor_revision_id,
+                revision,
+                content_json,
+                data_at,
+                author_json,
+                accepted_at
+              ) VALUES (
+                ${revision.id},
+                ${revision.pageId},
+                ${revision.predecessorRevisionId},
+                ${revision.revision},
+                ${encodePageContentRef(revision.content)},
+                ${revision.dataAt},
+                ${encodePageRevisionAuthor(revision.author)},
+                ${revision.acceptedAt}
+              )
+              ON CONFLICT(revision_id) DO NOTHING
+            `.pipe(
+              Effect.mapError(toPersistenceSqlError("ProjectionPipeline.pages:insertRevision")),
+            );
+            return;
+          }
+          case "page.renamed":
+          case "page.project-assigned":
+          case "page.archived":
+          case "page.restored": {
+            const page = event.payload.page;
+            yield* sql`
+              UPDATE projection_pages
+              SET
+                project_id = ${page.projectId},
+                title = ${page.title},
+                kind = ${page.kind},
+                source_thread_id = ${page.sourceThreadId},
+                maintainer_thread_id = ${page.maintainerThreadId},
+                current_revision_id = ${page.currentRevisionId},
+                current_revision = ${page.currentRevision},
+                metadata_revision = ${page.metadataRevision},
+                created_at = ${page.createdAt},
+                updated_at = ${page.updatedAt},
+                archived_at = ${page.archivedAt}
+              WHERE page_id = ${page.id}
+            `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.pages:update")));
+            return;
+          }
+          default:
+            return;
+        }
+      },
+    );
+
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -2060,6 +2170,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.scheduleRuns,
         apply: applyScheduleRunsProjection,
+      },
+      {
+        name: ORCHESTRATION_PROJECTOR_NAMES.pages,
+        apply: applyPagesProjection,
       },
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.threads,

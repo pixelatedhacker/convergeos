@@ -9,6 +9,7 @@ This is a living glossary for ConvergeOS. It explains what common terms mean in 
 - [Project and workspace](#project-and-workspace)
 - [Thread timeline](#thread-timeline)
 - [Orchestration](#orchestration)
+- [Pages](#pages)
 - [Provider runtime](#provider-runtime)
 - [Checkpointing](#checkpointing)
 - [Appearance](#appearance)
@@ -88,6 +89,22 @@ A typed signal emitted when an async milestone completes, such as `checkpoint.ba
 #### Quiesced
 
 "Quiesced" means a turn has gone quiet and stable: follow-up work such as [CheckpointReactor.ts][6] has settled. It appears in [the receipt schema][13], so in practice it is something tests wait on rather than a production signal.
+
+### Pages
+
+Pages are durable homes for generated websites, reports, and small tools. See [pages.md](pages.md).
+
+#### Page
+
+A saved result owned by one environment and optionally one project. A page holds a title, a kind (`htmlDocument` or `hostedUrl`), source-thread provenance, and a current content revision. Unfiled pages have no project yet. Archive is reversible and preserves content and history. See [the Page contract][1] and [decider.ts][8].
+
+#### Page revision
+
+An immutable publication of a page's content. Managed HTML references content-addressed bytes stored under the environment's userdata; hosted URLs reference an external site without a durability guarantee. Restoring an older revision appends a new publication instead of rewriting history.
+
+#### Maintainer
+
+The bot thread assigned to keep a page up to date. The maintainer reference is stored on the page; maintenance dispatch and schedules are part of page maintenance and reuse the existing orchestration lifecycle.
 
 ### Provider runtime
 

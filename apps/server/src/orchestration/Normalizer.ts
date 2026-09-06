@@ -7,6 +7,9 @@ import {
   type IsoDateTime,
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
+  type PageContentInput,
+  type PageContentRef,
+  PAGE_MAX_DOCUMENT_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
 } from "@t3tools/contracts";
 
@@ -18,6 +21,7 @@ import {
   resolveAttachmentPath,
 } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
+import { makePageContentStore } from "../pages/pageContentStore.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
@@ -71,6 +75,41 @@ const removeClaimedAttachmentPaths = Effect.fn("Normalizer.removeClaimedAttachme
     );
   },
 );
+
+const stagePageContent = Effect.fn("Normalizer.stagePageContent")(function* (
+  content: PageContentInput,
+) {
+  if (content.kind === "hostedUrl") {
+    return { kind: "hostedUrl", url: content.url } satisfies PageContentRef;
+  }
+  const bytes = Buffer.from(content.html, "utf8");
+  if (bytes.byteLength === 0) {
+    return yield* new OrchestrationDispatchCommandError({
+      message: "A page document cannot be empty.",
+    });
+  }
+  // The schema bounds characters; storage limits are defined in bytes, so
+  // the authoritative check happens here on the encoded payload.
+  if (bytes.byteLength > PAGE_MAX_DOCUMENT_BYTES) {
+    return yield* new OrchestrationDispatchCommandError({
+      message: `Page document is too large: ${bytes.byteLength} bytes exceeds the ${PAGE_MAX_DOCUMENT_BYTES} byte limit.`,
+    });
+  }
+  const serverConfig = yield* ServerConfig;
+  const fileSystem = yield* FileSystem.FileSystem;
+  return yield* makePageContentStore(fileSystem, serverConfig.pagesDir)
+    .stage(content.html)
+    .pipe(
+      Effect.map(({ digest, byteSize }) => ({ kind: "html", digest, byteSize }) as PageContentRef),
+      Effect.mapError(
+        (cause) =>
+          new OrchestrationDispatchCommandError({
+            message: `Failed to store the page document: ${cause.detail}`,
+            cause,
+          }),
+      ),
+    );
+});
 
 export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
   Effect.gen(function* () {
@@ -126,6 +165,25 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       return {
         ...canonicalCommand,
         workspaceRoot: yield* normalizeProjectWorkspaceRoot(canonicalCommand.workspaceRoot),
+      } satisfies OrchestrationCommand;
+    }
+
+    // Saved pages: inline HTML must move into owned, content-addressed
+    // storage before the command is decided, so the persisted event
+    // references durable bytes instead of an invocation-scoped payload.
+    if (canonicalCommand.type === "page.create" || canonicalCommand.type === "page.publish") {
+      const content = yield* stagePageContent(canonicalCommand.content);
+      return {
+        ...canonicalCommand,
+        content,
+        author: { kind: "client" },
+      } satisfies OrchestrationCommand;
+    }
+
+    if (canonicalCommand.type === "page.restore-revision") {
+      return {
+        ...canonicalCommand,
+        author: { kind: "client" },
       } satisfies OrchestrationCommand;
     }
 

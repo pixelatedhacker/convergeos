@@ -1,5 +1,6 @@
 import {
   EnvironmentId,
+  PAGE_MAX_DOCUMENT_BYTES,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
@@ -225,6 +226,7 @@ export const make = Effect.gen(function* () {
       botProfiles: true,
       agentMeshReceiptExport: true,
       kanban: true,
+      pages: { maxDocumentBytes: PAGE_MAX_DOCUMENT_BYTES },
       scheduledTurns: true,
       threadPinReorder: true,
       threadTitleRegeneration: true,

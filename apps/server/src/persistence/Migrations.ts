@@ -67,6 +67,7 @@ import Migration0052 from "./Migrations/052_ProjectionThreadSessionMcpAttachment
 import Migration0053 from "./Migrations/053_ProjectionSchedules.ts";
 import Migration0054 from "./Migrations/054_MeshReceiptExport.ts";
 import Migration0055 from "./Migrations/055_MeshExportPublication.ts";
+import Migration0056 from "./Migrations/056_ProjectionPages.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -134,6 +135,7 @@ export const migrationEntries = [
   [53, "ProjectionSchedules", Migration0053],
   [54, "MeshReceiptExport", Migration0054],
   [55, "MeshExportPublication", Migration0055],
+  [56, "ProjectionPages", Migration0056],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

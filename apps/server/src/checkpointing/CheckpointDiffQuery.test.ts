@@ -84,6 +84,9 @@ describe("CheckpointDiffQuery.layer", () => {
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
             listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listPages: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageDetail: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageContentRef: () => Effect.die("CheckpointDiffQuery should not request pages"),
             listDueSchedules: () =>
               Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
@@ -197,6 +200,9 @@ describe("CheckpointDiffQuery.layer", () => {
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
             listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listPages: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageDetail: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageContentRef: () => Effect.die("CheckpointDiffQuery should not request pages"),
             listDueSchedules: () =>
               Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
@@ -285,6 +291,9 @@ describe("CheckpointDiffQuery.layer", () => {
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
             listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listPages: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageDetail: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageContentRef: () => Effect.die("CheckpointDiffQuery should not request pages"),
             listDueSchedules: () =>
               Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
@@ -358,6 +367,9 @@ describe("CheckpointDiffQuery.layer", () => {
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
             listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listPages: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageDetail: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageContentRef: () => Effect.die("CheckpointDiffQuery should not request pages"),
             listDueSchedules: () =>
               Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
@@ -416,6 +428,9 @@ describe("CheckpointDiffQuery.layer", () => {
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
             listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listPages: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageDetail: () => Effect.die("CheckpointDiffQuery should not request pages"),
+            getPageContentRef: () => Effect.die("CheckpointDiffQuery should not request pages"),
             listDueSchedules: () =>
               Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),

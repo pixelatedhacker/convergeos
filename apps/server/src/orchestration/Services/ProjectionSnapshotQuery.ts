@@ -22,6 +22,11 @@ import type {
   OrchestrationThreadDetailSnapshot,
   OrchestrationThreadDetailWindow,
   OrchestrationThreadShell,
+  Page,
+  PageContentRef,
+  PageDetailSnapshot,
+  PageId,
+  PageRevisionId,
   ProjectId,
   Schedule,
   ScheduleListSnapshot,
@@ -85,6 +90,34 @@ export interface ProjectionSnapshotQueryShape {
 
   /** Read every active schedule plus the 10 most recent runs per schedule. */
   readonly listSchedules: () => Effect.Effect<ScheduleListSnapshot, ProjectionRepositoryError>;
+
+  /**
+   * List saved-page summaries without document bodies. `projectId` filters:
+   * absent returns every page, null only Unfiled pages, a value only that
+   * project's pages. Archived pages are included only on request.
+   */
+  readonly listPages: (input: {
+    readonly projectId?: ProjectId | null;
+    readonly includeArchived: boolean;
+    readonly limit: number;
+  }) => Effect.Effect<ReadonlyArray<Page>, ProjectionRepositoryError>;
+
+  /** Read one page with its newest revisions (newest first, bounded). */
+  readonly getPageDetail: (
+    pageId: PageId,
+  ) => Effect.Effect<Option.Option<PageDetailSnapshot>, ProjectionRepositoryError>;
+
+  /** Read the content reference for a page's current revision. */
+  readonly getPageContentRef: (
+    pageId: PageId,
+  ) => Effect.Effect<
+    Option.Option<{
+      readonly pageId: PageId;
+      readonly revisionId: PageRevisionId;
+      readonly content: PageContentRef;
+    }>,
+    ProjectionRepositoryError
+  >;
 
   /** Read enabled, non-deleted schedules whose next_run_at is due. */
   readonly listDueSchedules: (

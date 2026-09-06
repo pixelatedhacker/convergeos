@@ -19,6 +19,12 @@ import {
   KanbanCardDelegationLinkedPayload,
   KanbanCardDelegationStartedPayload,
   KanbanCardDelegationCompletedPayload,
+  PageCreatedPayload,
+  PagePublishedPayload,
+  PageRenamedPayload,
+  PageProjectAssignedPayload,
+  PageArchivedPayload,
+  PageRestoredPayload,
   ProjectCreatedPayload,
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
@@ -206,6 +212,8 @@ export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {
     threads: [],
     kanbanCards: [],
     schedules: [],
+    pages: [],
+    pageRevisions: [],
     updatedAt: nowIso,
   };
 }
@@ -925,6 +933,51 @@ export function projectEvent(
             ...(nextBase.schedules ?? []).filter((schedule) => schedule.id !== payload.schedule.id),
             payload.schedule,
           ],
+        })),
+      );
+    }
+
+    // Page publications carry the full post-publication page plus the new
+    // revision; metadata events carry the updated page alone. The command
+    // read model retains revisions so restore-revision decisions survive
+    // restarts.
+    case "page.created":
+    case "page.published": {
+      const payloadSchema =
+        event.type === "page.created" ? PageCreatedPayload : PagePublishedPayload;
+      return decodeForEvent(payloadSchema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          pages: [
+            ...(nextBase.pages ?? []).filter((page) => page.id !== payload.page.id),
+            payload.page,
+          ],
+          pageRevisions: [
+            ...(nextBase.pageRevisions ?? []).filter((revision) => revision.id !== payload.revision.id),
+            payload.revision,
+          ],
+        })),
+      );
+    }
+
+    case "page.renamed":
+    case "page.project-assigned":
+    case "page.archived":
+    case "page.restored": {
+      const payloadSchema =
+        event.type === "page.renamed"
+          ? PageRenamedPayload
+          : event.type === "page.project-assigned"
+            ? PageProjectAssignedPayload
+            : event.type === "page.archived"
+              ? PageArchivedPayload
+              : PageRestoredPayload;
+      return decodeForEvent(payloadSchema, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          pages: (nextBase.pages ?? []).some((page) => page.id === payload.page.id)
+            ? nextBase.pages?.map((page) => (page.id === payload.page.id ? payload.page : page))
+            : [...(nextBase.pages ?? []), payload.page],
         })),
       );
     }
