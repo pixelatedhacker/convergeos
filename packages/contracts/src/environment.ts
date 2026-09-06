@@ -135,6 +135,10 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       this is false — no update would ever repaint it. Absent on older
       servers, which may still publish, so only an explicit false skips. */
   agentActivityPublishing: Schema.optionalKey(Schema.Boolean),
+  /** Signed agent-mesh receipt export is configured and enabled on this
+      environment: receipts publish to the environment's private relay.
+      Absent means the server predates the feature or export is off. */
+  agentMeshReceiptExport: Schema.optionalKey(Schema.Boolean),
   /** Server detects `platform.machine` and persists the `environmentIcon`
       setting. Older servers drop the key on write, so clients show the
       picker inert rather than offering a choice that would never stick. */

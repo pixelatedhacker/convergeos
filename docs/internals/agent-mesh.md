@@ -102,3 +102,6 @@ therefore keep every agent-mesh authorization and workspace invariant above.
 Kanban cards may name bot inboxes as assignees. A Ready assignment creates the same delegation
 aggregate and starts through the same thread path, preserving the authorization, exclusivity, and
 workspace invariants above.
+
+For signed, verifiable export of delegation history to a private Nostr relay, see
+`docs/internals/agent-mesh-receipts.md`.
