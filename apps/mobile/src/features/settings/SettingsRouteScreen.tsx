@@ -130,6 +130,7 @@ function LocalSettingsRouteScreen() {
         }}
       >
         <SettingsSection title="Configuration">
+          <SettingsRow icon="square.stack.3d.up" label="Skills & plugins" target="SettingsSkills" />
           <SettingsRow
             icon="desktopcomputer"
             label="Environments"
@@ -478,6 +479,7 @@ function ConfiguredSettingsRouteScreen() {
         </View>
 
         <SettingsSection title="Configuration">
+          <SettingsRow icon="square.stack.3d.up" label="Skills & plugins" target="SettingsSkills" />
           <SettingsRow
             icon="desktopcomputer"
             label="Environments"
