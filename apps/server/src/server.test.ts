@@ -911,6 +911,7 @@ const buildAppUnderTest = (options?: {
             readEvents: () => Stream.empty,
             dispatch: () => Effect.succeed({ sequence: 0 }),
             streamDomainEvents: Stream.empty,
+            subscribeDomainEvents: Effect.succeed(Stream.empty),
             latestSequence: Effect.succeed(0),
             ...options?.layers?.orchestrationEngine,
           }),
