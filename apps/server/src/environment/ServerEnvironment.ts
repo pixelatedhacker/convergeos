@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
       threadPinning: true,
       botProfiles: true,
       kanban: true,
+      scheduledTurns: true,
       threadPinReorder: true,
       threadTitleRegeneration: true,
       threadPullRequestLinking: true,

@@ -34,6 +34,7 @@ import {
   type OrchestrationShellStreamItem,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetSnapshotError,
+  OrchestrationListSchedulesError,
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
@@ -1349,6 +1350,23 @@ const makeWsRpcLayer = (
                 (cause) =>
                   new OrchestrationGetSnapshotError({
                     message: "Failed to load archived orchestration shell snapshot",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.listSchedules]: (_input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.listSchedules,
+            projectionSnapshotQuery.listSchedules().pipe(
+              Effect.tapError((cause) =>
+                Effect.logError("orchestration schedule list load failed", { cause }),
+              ),
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationListSchedulesError({
+                    message: "Failed to load schedules",
                     cause,
                   }),
               ),

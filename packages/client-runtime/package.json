@@ -115,6 +115,10 @@
       "types": "./src/state/kanban.ts",
       "default": "./src/state/kanban.ts"
     },
+    "./state/schedules": {
+      "types": "./src/state/schedules.ts",
+      "default": "./src/state/schedules.ts"
+    },
     "./state/models": {
       "types": "./src/state/models.ts",
       "default": "./src/state/models.ts"

@@ -41,6 +41,7 @@ import {
   AlarmClockIcon,
   AlarmClockOffIcon,
   BotIcon,
+  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -1804,6 +1805,9 @@ export default function Sidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
   const isBotsRoute = useLocation({
     select: (location) => location.pathname === "/bots",
+  });
+  const isSchedulesRoute = useLocation({
+    select: (location) => location.pathname === "/schedules",
   });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -3594,6 +3598,10 @@ export default function Sidebar() {
     if (isMobile) setOpenMobile(false);
     void router.navigate({ to: "/bots" });
   }, [isMobile, router, setOpenMobile]);
+  const handleSchedulesClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({ to: "/schedules" });
+  }, [isMobile, router, setOpenMobile]);
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3856,6 +3864,15 @@ export default function Sidebar() {
             >
               <BotIcon className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">Bots</span>
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              aria-current={isSchedulesRoute ? "page" : undefined}
+              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+              isActive={isSchedulesRoute}
+              onClick={handleSchedulesClick}
+            >
+              <CalendarClockIcon className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Schedules</span>
             </SidebarMenuButton>
           </SidebarGroup>
         }

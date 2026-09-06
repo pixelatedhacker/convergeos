@@ -1,4 +1,6 @@
 import {
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  DEFAULT_RUNTIME_MODE,
   type Delegation,
   EventId,
   type KanbanCard,
@@ -7,11 +9,13 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationThread,
+  type Schedule,
 } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import type * as PlatformError from "effect/PlatformError";
 
 import {
@@ -19,6 +23,7 @@ import {
   OrchestrationThreadSettleBlockedError,
   type OrchestrationCommandRejection,
 } from "./Errors.ts";
+import { isValidScheduleTimeZone, nextRunAfter } from "./SchedulePolicy.ts";
 import {
   listThreadsByProjectId,
   requireActiveProject,
@@ -1064,6 +1069,206 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           previousRevision: thread.botProfile.revision,
           disabledAt,
         },
+      };
+    }
+
+    case "schedule.create": {
+      yield* requireActiveProject({ readModel, command, projectId: command.projectId });
+      if ((readModel.schedules ?? []).some((schedule) => schedule.id === command.scheduleId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} already exists`,
+        });
+      }
+      if (!isValidScheduleTimeZone(command.timeZone)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule time zone '${command.timeZone}' is not a valid IANA time zone`,
+        });
+      }
+      const nextRunAt = nextRunAfter(command.recurrence, command.timeZone, command.createdAt);
+      if (command.enabled && nextRunAt === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} has no future run time`,
+        });
+      }
+      const updatedAt = yield* nowIso;
+      const schedule: Schedule = {
+        id: command.scheduleId,
+        projectId: command.projectId,
+        title: command.title,
+        prompt: command.prompt,
+        recurrence: command.recurrence,
+        timeZone: command.timeZone,
+        modelSelection: command.modelSelection,
+        runtimeMode: command.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        interactionMode: command.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE,
+        enabled: command.enabled,
+        nextRunAt: command.enabled ? nextRunAt : null,
+        lastRunAt: null,
+        revision: 1,
+        createdAt: command.createdAt,
+        updatedAt,
+        deletedAt: null,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "schedule",
+          aggregateId: command.scheduleId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "schedule.created",
+        payload: { schedule },
+      };
+    }
+
+    case "schedule.update": {
+      const current = (readModel.schedules ?? []).find(
+        (schedule) => schedule.id === command.scheduleId && schedule.deletedAt === null,
+      );
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} revision changed`,
+        });
+      }
+      const timeZone = command.timeZone ?? current.timeZone;
+      if (!isValidScheduleTimeZone(timeZone)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule time zone '${timeZone}' is not a valid IANA time zone`,
+        });
+      }
+      const recurrence = command.recurrence ?? current.recurrence;
+      const enabled = command.enabled ?? current.enabled;
+      const timingChanged =
+        command.recurrence !== undefined ||
+        command.timeZone !== undefined ||
+        enabled !== current.enabled;
+      const updatedAt = yield* nowIso;
+      const nextRunAt = enabled
+        ? timingChanged
+          ? nextRunAfter(recurrence, timeZone, updatedAt)
+          : current.nextRunAt
+        : null;
+      // Only a timing edit can make a schedule unfireable; unrelated edits
+      // (e.g. a title change on an exhausted "once") must stay legal.
+      if (timingChanged && enabled && nextRunAt === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} has no future run time`,
+        });
+      }
+      const schedule: Schedule = {
+        ...current,
+        ...(command.title === undefined ? {} : { title: command.title }),
+        ...(command.prompt === undefined ? {} : { prompt: command.prompt }),
+        ...(command.modelSelection === undefined ? {} : { modelSelection: command.modelSelection }),
+        ...(command.runtimeMode === undefined ? {} : { runtimeMode: command.runtimeMode }),
+        ...(command.interactionMode === undefined
+          ? {}
+          : { interactionMode: command.interactionMode }),
+        recurrence,
+        timeZone,
+        enabled,
+        nextRunAt,
+        revision: current.revision + 1,
+        updatedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "schedule",
+          aggregateId: command.scheduleId,
+          occurredAt: updatedAt,
+          commandId: command.commandId,
+        })),
+        type: "schedule.updated",
+        payload: { schedule },
+      };
+    }
+
+    case "schedule.delete": {
+      const current = (readModel.schedules ?? []).find(
+        (schedule) => schedule.id === command.scheduleId && schedule.deletedAt === null,
+      );
+      if (current === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} is unavailable`,
+        });
+      }
+      yield* requireActiveProject({ readModel, command, projectId: current.projectId });
+      if (current.revision !== command.expectedRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} revision changed`,
+        });
+      }
+      const deletedAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "schedule",
+          aggregateId: command.scheduleId,
+          occurredAt: deletedAt,
+          commandId: command.commandId,
+        })),
+        type: "schedule.deleted",
+        payload: {
+          projectId: current.projectId,
+          scheduleId: command.scheduleId,
+          previousRevision: current.revision,
+          deletedAt,
+        },
+      };
+    }
+
+    case "schedule.fire": {
+      const current = (readModel.schedules ?? []).find(
+        (schedule) => schedule.id === command.scheduleId && schedule.deletedAt === null,
+      );
+      if (current === undefined || !current.enabled || current.nextRunAt === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} is not runnable`,
+        });
+      }
+      const firedAt = DateTime.make(command.firedAt);
+      const dueAt = DateTime.make(current.nextRunAt);
+      if (
+        Option.isNone(firedAt) ||
+        Option.isNone(dueAt) ||
+        DateTime.toEpochMillis(dueAt.value) > DateTime.toEpochMillis(firedAt.value)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `schedule ${command.scheduleId} is not due until ${current.nextRunAt}`,
+        });
+      }
+      const schedule: Schedule = {
+        ...current,
+        lastRunAt: command.firedAt,
+        nextRunAt: nextRunAfter(current.recurrence, current.timeZone, command.firedAt),
+        revision: current.revision + 1,
+        updatedAt: command.firedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "schedule",
+          aggregateId: command.scheduleId,
+          occurredAt: command.firedAt,
+          commandId: command.commandId,
+        })),
+        type: "schedule.fired",
+        payload: { schedule, threadId: command.threadId, firedAt: command.firedAt },
       };
     }
 

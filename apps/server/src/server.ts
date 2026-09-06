@@ -70,6 +70,8 @@ import { ProviderCommandReactorLive } from "./orchestration/Layers/ProviderComma
 import { CheckpointReactorLive } from "./orchestration/Layers/CheckpointReactor.ts";
 import { ThreadDeletionReactorLive } from "./orchestration/Layers/ThreadDeletionReactor.ts";
 import * as ThreadSettlementReactor from "./orchestration/ThreadSettlementReactor.ts";
+import * as SchedulerReactor from "./orchestration/SchedulerReactor.ts";
+import * as ThreadLaunchService from "./orchestration/Services/ThreadLaunchService.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
@@ -278,6 +280,11 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
+  // Later provideMerge entries feed earlier ones. The scheduler launches runs
+  // through ThreadLaunchService, which in turn needs the ThreadDeletionReactor
+  // service, so the three sit in this order.
+  Layer.provideMerge(SchedulerReactor.layer),
+  Layer.provideMerge(ThreadLaunchService.layer),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(ThreadSettlementReactor.layer),
   Layer.provideMerge(

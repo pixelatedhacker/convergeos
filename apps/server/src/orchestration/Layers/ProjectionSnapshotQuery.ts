@@ -21,6 +21,10 @@ import {
   OrchestrationThreadDetailSnapshot,
   ProjectScript,
   ProjectIconOverride,
+  Schedule,
+  ScheduleListSnapshot,
+  ScheduleRecurrence,
+  ScheduleRun,
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
@@ -112,6 +116,14 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   }),
 );
 const ProjectionKanbanCardDbRowSchema = KanbanCard;
+const ProjectionScheduleDbRowSchema = Schedule.mapFields(
+  Struct.assign({
+    recurrence: Schema.fromJsonString(ScheduleRecurrence),
+    modelSelection: Schema.fromJsonString(ModelSelection),
+    enabled: Schema.Number,
+  }),
+);
+const ProjectionScheduleRunDbRowSchema = ScheduleRun;
 const ProjectionDelegationDbRowSchema = Delegation.mapFields(
   Struct.assign({
     requester: Schema.fromJsonString(DelegationRequester),
@@ -180,6 +192,9 @@ const ThreadIdLookupInput = Schema.Struct({
 });
 const DelegationIdsLookupInput = Schema.Struct({
   delegationIds: Schema.Array(DelegationId),
+});
+const DueSchedulesLookupInput = Schema.Struct({
+  nowIso: Schema.String,
 });
 const ThreadActivityKindsLookupInput = Schema.Struct({
   threadId: ThreadId,
@@ -377,6 +392,13 @@ function mapProjectShellRow(
     scripts: row.scripts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function mapScheduleRow(row: Schema.Schema.Type<typeof ProjectionScheduleDbRowSchema>): Schedule {
+  return {
+    ...row,
+    enabled: row.enabled === 1,
   };
 }
 
@@ -639,6 +661,90 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         WHERE project_id = ${projectId}
           AND deleted_at IS NULL
         ORDER BY status ASC, order_key ASC, card_id ASC
+      `,
+  });
+
+  const listActiveScheduleRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionScheduleDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          schedule_id AS "id",
+          project_id AS "projectId",
+          title,
+          prompt,
+          recurrence_json AS "recurrence",
+          time_zone AS "timeZone",
+          model_selection_json AS "modelSelection",
+          runtime_mode AS "runtimeMode",
+          interaction_mode AS "interactionMode",
+          enabled,
+          next_run_at AS "nextRunAt",
+          last_run_at AS "lastRunAt",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          deleted_at AS "deletedAt"
+        FROM projection_schedules
+        WHERE deleted_at IS NULL
+        ORDER BY created_at ASC, schedule_id ASC
+      `,
+  });
+
+  const listRecentScheduleRunRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionScheduleRunDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          ranked.schedule_id AS "scheduleId",
+          ranked.thread_id AS "threadId",
+          ranked.fired_at AS "firedAt"
+        FROM (
+          SELECT
+            schedule_id,
+            thread_id,
+            fired_at,
+            row_number() OVER (PARTITION BY schedule_id ORDER BY fired_at DESC) AS rn
+          FROM projection_schedule_runs
+        ) ranked
+        INNER JOIN projection_schedules schedules
+          ON schedules.schedule_id = ranked.schedule_id
+        WHERE ranked.rn <= 10
+          AND schedules.deleted_at IS NULL
+        ORDER BY ranked.fired_at DESC, ranked.schedule_id ASC, ranked.thread_id ASC
+      `,
+  });
+
+  const listDueScheduleRows = SqlSchema.findAll({
+    Request: DueSchedulesLookupInput,
+    Result: ProjectionScheduleDbRowSchema,
+    execute: ({ nowIso }) =>
+      sql`
+        SELECT
+          schedule_id AS "id",
+          project_id AS "projectId",
+          title,
+          prompt,
+          recurrence_json AS "recurrence",
+          time_zone AS "timeZone",
+          model_selection_json AS "modelSelection",
+          runtime_mode AS "runtimeMode",
+          interaction_mode AS "interactionMode",
+          enabled,
+          next_run_at AS "nextRunAt",
+          last_run_at AS "lastRunAt",
+          revision,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          deleted_at AS "deletedAt"
+        FROM projection_schedules
+        WHERE deleted_at IS NULL
+          AND enabled = 1
+          AND next_run_at IS NOT NULL
+          AND next_run_at <= ${nowIso}
+        ORDER BY next_run_at ASC, schedule_id ASC
       `,
   });
 
@@ -2181,6 +2287,14 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listActiveScheduleRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listSchedules:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listSchedules:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2201,6 +2315,7 @@ pending_approval_requests AS (
             latestTurnRows,
             kanbanCards,
             delegations,
+            scheduleRows,
             stateRows,
           ]) =>
             Effect.sync(() => {
@@ -2268,6 +2383,9 @@ pending_approval_requests AS (
               }
               for (const delegation of delegations) {
                 updatedAt = maxIso(updatedAt, delegation.updatedAt);
+              }
+              for (const row of scheduleRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
               }
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
@@ -2351,6 +2469,7 @@ pending_approval_requests AS (
                 threads,
                 kanbanCards,
                 delegations,
+                schedules: scheduleRows.map(mapScheduleRow),
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
             }),
@@ -3386,6 +3505,38 @@ pending_approval_requests AS (
         ),
       );
 
+  const listSchedules: ProjectionSnapshotQueryShape["listSchedules"] = () =>
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const scheduleRows = yield* listActiveScheduleRows(undefined);
+          const runs = yield* listRecentScheduleRunRows(undefined);
+          return {
+            schedules: scheduleRows.map(mapScheduleRow),
+            runs,
+          } satisfies ScheduleListSnapshot;
+        }),
+      )
+      .pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.listSchedules:query",
+            "ProjectionSnapshotQuery.listSchedules:decodeRows",
+          ),
+        ),
+      );
+
+  const listDueSchedules: ProjectionSnapshotQueryShape["listDueSchedules"] = (nowIso) =>
+    listDueScheduleRows({ nowIso }).pipe(
+      Effect.map((rows) => rows.map(mapScheduleRow)),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listDueSchedules:query",
+          "ProjectionSnapshotQuery.listDueSchedules:decodeRows",
+        ),
+      ),
+    );
+
   const getDelegations: NonNullable<ProjectionSnapshotQueryShape["getDelegations"]> = (
     delegationIds,
   ) =>
@@ -3414,6 +3565,8 @@ pending_approval_requests AS (
 
   return {
     getKanbanBoard,
+    listSchedules,
+    listDueSchedules,
     getDelegations,
     getOpenDelegationsForTarget,
     getCommandReadModel,

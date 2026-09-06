@@ -78,6 +78,7 @@ import {
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetSnapshotError,
+  OrchestrationListSchedulesError,
   OrchestrationSearchThreadsError,
   OrchestrationSearchThreadsInput,
   OrchestrationGetTurnDiffError,
@@ -1087,6 +1088,12 @@ export const WsOrchestrationGetArchivedShellSnapshotRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationListSchedulesRpc = Rpc.make(ORCHESTRATION_WS_METHODS.listSchedules, {
+  payload: OrchestrationRpcSchemas.listSchedules.input,
+  success: OrchestrationRpcSchemas.listSchedules.output,
+  error: Schema.Union([OrchestrationListSchedulesError, EnvironmentAuthorizationError]),
+});
+
 export const WsOrchestrationSubscribeShellRpc = Rpc.make(ORCHESTRATION_WS_METHODS.subscribeShell, {
   payload: OrchestrationRpcSchemas.subscribeShell.input,
   success: OrchestrationRpcSchemas.subscribeShell.output,
@@ -1286,6 +1293,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationSearchThreadsRpc,
   WsOrchestrationGetArchivedShellSnapshotRpc,
+  WsOrchestrationListSchedulesRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
 );

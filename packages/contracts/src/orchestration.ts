@@ -19,6 +19,7 @@ import {
   PositiveInt,
   ProjectId,
   ProviderItemId,
+  ScheduleId,
   ThreadId,
   TrimmedNonEmptyString,
   TrimmedString,
@@ -34,6 +35,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
+  listSchedules: "orchestration.listSchedules",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
@@ -499,6 +501,83 @@ export const BotProfile = Schema.Struct({
 });
 export type BotProfile = typeof BotProfile.Type;
 
+export const ScheduleTimeOfDay = Schema.Struct({
+  hour: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })),
+  minute: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 59 })),
+});
+export type ScheduleTimeOfDay = typeof ScheduleTimeOfDay.Type;
+
+/**
+ * When a scheduled turn recurs. Wall-clock kinds (daily/weekly/monthly) are
+ * evaluated in the schedule's IANA timeZone; "once" is an absolute instant.
+ * Months that lack a monthly `day` are skipped (e.g. day 31 in February).
+ */
+export const ScheduleRecurrence = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("once"), at: IsoDateTime }),
+  Schema.Struct({ kind: Schema.Literal("daily"), time: ScheduleTimeOfDay }),
+  Schema.Struct({
+    kind: Schema.Literal("weekly"),
+    // JS Date convention: 0 = Sunday.
+    weekday: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 6 })),
+    time: ScheduleTimeOfDay,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("monthly"),
+    day: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 31 })),
+    time: ScheduleTimeOfDay,
+  }),
+]);
+export type ScheduleRecurrence = typeof ScheduleRecurrence.Type;
+
+/** IANA time zone name. Validated against Intl when a command is decided. */
+export const ScheduleTimeZone = TrimmedNonEmptyString.check(Schema.isMaxLength(64));
+export type ScheduleTimeZone = typeof ScheduleTimeZone.Type;
+
+/**
+ * A prompt the server runs on a schedule. Each fire creates a fresh thread in
+ * the project (runs stay individually inspectable and no thread's context
+ * grows without bound); the run ledger is the schedule's `schedule.fired`
+ * events joined with the threads they created.
+ */
+export const Schedule = Schema.Struct({
+  id: ScheduleId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+  prompt: TrimmedNonEmptyString.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_INPUT_CHARS)),
+  recurrence: ScheduleRecurrence,
+  timeZone: ScheduleTimeZone,
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
+  interactionMode: ProviderInteractionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
+  ),
+  enabled: Schema.Boolean,
+  // Null while disabled, and permanently null after a "once" schedule fires.
+  // Recomputed by the decider whenever recurrence, timeZone, or enabled
+  // changes, and after every fire.
+  nextRunAt: Schema.NullOr(IsoDateTime),
+  lastRunAt: Schema.NullOr(IsoDateTime),
+  revision: PositiveInt,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  deletedAt: Schema.NullOr(IsoDateTime),
+});
+export type Schedule = typeof Schedule.Type;
+
+/** One past firing of a schedule, derived from schedule.fired events. */
+export const ScheduleRun = Schema.Struct({
+  scheduleId: ScheduleId,
+  threadId: ThreadId,
+  firedAt: IsoDateTime,
+});
+export type ScheduleRun = typeof ScheduleRun.Type;
+
+export const ScheduleListSnapshot = Schema.Struct({
+  schedules: Schema.Array(Schedule),
+  runs: Schema.Array(ScheduleRun),
+});
+export type ScheduleListSnapshot = typeof ScheduleListSnapshot.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -558,6 +637,7 @@ export const OrchestrationReadModel = Schema.Struct({
   projects: Schema.Array(OrchestrationProject),
   threads: Schema.Array(OrchestrationThread),
   kanbanCards: Schema.optional(Schema.Array(KanbanCard)),
+  schedules: Schema.optional(Schema.Array(Schedule)),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
@@ -949,6 +1029,61 @@ const ThreadBotDisableCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ScheduleCreateCommand = Schema.Struct({
+  type: Schema.Literal("schedule.create"),
+  commandId: CommandId,
+  scheduleId: ScheduleId,
+  projectId: ProjectId,
+  title: Schedule.fields.title,
+  prompt: Schedule.fields.prompt,
+  recurrence: ScheduleRecurrence,
+  timeZone: ScheduleTimeZone,
+  modelSelection: ModelSelection,
+  runtimeMode: Schema.optional(RuntimeMode),
+  interactionMode: Schema.optional(ProviderInteractionMode),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  createdAt: IsoDateTime,
+});
+
+const ScheduleUpdateCommand = Schema.Struct({
+  type: Schema.Literal("schedule.update"),
+  commandId: CommandId,
+  scheduleId: ScheduleId,
+  expectedRevision: PositiveInt,
+  title: Schema.optional(Schedule.fields.title),
+  prompt: Schema.optional(Schedule.fields.prompt),
+  recurrence: Schema.optional(ScheduleRecurrence),
+  timeZone: Schema.optional(ScheduleTimeZone),
+  modelSelection: Schema.optional(ModelSelection),
+  runtimeMode: Schema.optional(RuntimeMode),
+  interactionMode: Schema.optional(ProviderInteractionMode),
+  enabled: Schema.optional(Schema.Boolean),
+  createdAt: IsoDateTime,
+});
+
+const ScheduleDeleteCommand = Schema.Struct({
+  type: Schema.Literal("schedule.delete"),
+  commandId: CommandId,
+  scheduleId: ScheduleId,
+  expectedRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Server-only: the scheduler reactor's claim on one due occurrence. The
+ * decider validates the schedule is still due, then emits schedule.fired,
+ * which advances nextRunAt — so a retried or double sweep cannot fire the
+ * same occurrence twice. The reactor follows an accepted fire with a
+ * thread.turn.start (bootstrap.createThread) on `threadId`.
+ */
+const ScheduleFireCommand = Schema.Struct({
+  type: Schema.Literal("schedule.fire"),
+  commandId: CommandId,
+  scheduleId: ScheduleId,
+  threadId: ThreadId,
+  firedAt: IsoDateTime,
+});
+
 const KanbanCardCreateCommand = Schema.Struct({
   type: Schema.Literal("kanban.card.create"),
   commandId: CommandId,
@@ -1318,6 +1453,9 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadBotConfigureCommand,
   ThreadBotDisableCommand,
+  ScheduleCreateCommand,
+  ScheduleUpdateCommand,
+  ScheduleDeleteCommand,
   KanbanCardCreateCommand,
   KanbanCardUpdateCommand,
   KanbanCardMoveCommand,
@@ -1353,6 +1491,9 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadBotConfigureCommand,
   ThreadBotDisableCommand,
+  ScheduleCreateCommand,
+  ScheduleUpdateCommand,
+  ScheduleDeleteCommand,
   KanbanCardCreateCommand,
   KanbanCardUpdateCommand,
   KanbanCardMoveCommand,
@@ -1455,6 +1596,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadPeerTurnStartCommand,
   ThreadPeerTurnInterruptCommand,
   ThreadAutoSettleCommand,
+  ScheduleFireCommand,
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
@@ -1490,6 +1632,10 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.meta-updated",
   "thread.bot-configured",
   "thread.bot-disabled",
+  "schedule.created",
+  "schedule.updated",
+  "schedule.deleted",
+  "schedule.fired",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
@@ -1528,6 +1674,7 @@ export const OrchestrationAggregateKind = Schema.Literals([
   "thread",
   "kanban-card",
   "delegation",
+  "schedule",
 ]);
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
@@ -1687,6 +1834,21 @@ export const KanbanCardDelegationLinkedPayload = Schema.Struct({ card: KanbanCar
 export const KanbanCardDelegationStartedPayload = Schema.Struct({ card: KanbanCard });
 export const KanbanCardDelegationCompletedPayload = Schema.Struct({ card: KanbanCard });
 
+export const ScheduleCreatedPayload = Schema.Struct({ schedule: Schedule });
+export const ScheduleUpdatedPayload = Schema.Struct({ schedule: Schedule });
+export const ScheduleDeletedPayload = Schema.Struct({
+  projectId: ProjectId,
+  scheduleId: ScheduleId,
+  previousRevision: PositiveInt,
+  deletedAt: IsoDateTime,
+});
+/** `schedule` is the post-fire state: lastRunAt set, nextRunAt advanced. */
+export const ScheduleFiredPayload = Schema.Struct({
+  schedule: Schedule,
+  threadId: ThreadId,
+  firedAt: IsoDateTime,
+});
+
 export const DelegationTransitionPayload = Schema.Struct({ delegation: Delegation });
 export type DelegationTransitionPayload = typeof DelegationTransitionPayload.Type;
 
@@ -1817,7 +1979,7 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId]),
+  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId, ScheduleId]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -2020,6 +2182,26 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("kanban.card-delegation-completed"),
     payload: KanbanCardDelegationCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("schedule.created"),
+    payload: ScheduleCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("schedule.updated"),
+    payload: ScheduleUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("schedule.deleted"),
+    payload: ScheduleDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("schedule.fired"),
+    payload: ScheduleFiredPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
@@ -2263,6 +2445,10 @@ export const OrchestrationRpcSchemas = {
     input: Schema.Struct({}),
     output: OrchestrationShellSnapshot,
   },
+  listSchedules: {
+    input: Schema.Struct({}),
+    output: ScheduleListSnapshot,
+  },
   subscribeThread: {
     input: OrchestrationSubscribeThreadInput,
     output: OrchestrationThreadStreamItem,
@@ -2275,6 +2461,14 @@ export const OrchestrationRpcSchemas = {
 
 export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<OrchestrationGetSnapshotError>()(
   "OrchestrationGetSnapshotError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationListSchedulesError extends Schema.TaggedErrorClass<OrchestrationListSchedulesError>()(
+  "OrchestrationListSchedulesError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

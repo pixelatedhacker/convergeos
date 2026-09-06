@@ -83,6 +83,9 @@ describe("CheckpointDiffQuery.layer", () => {
               Effect.die("CheckpointDiffQuery should not request the orchestration shell snapshot"),
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
+            listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listDueSchedules: () =>
+              Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
             getEventReplayStats: () => Effect.die("unused"),
@@ -193,6 +196,9 @@ describe("CheckpointDiffQuery.layer", () => {
               Effect.die("CheckpointDiffQuery should not request the orchestration shell snapshot"),
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
+            listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listDueSchedules: () =>
+              Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
             getEventReplayStats: () => Effect.die("unused"),
@@ -278,6 +284,9 @@ describe("CheckpointDiffQuery.layer", () => {
               Effect.die("CheckpointDiffQuery should not request the orchestration shell snapshot"),
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
+            listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listDueSchedules: () =>
+              Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
             getEventReplayStats: () => Effect.die("unused"),
@@ -348,6 +357,9 @@ describe("CheckpointDiffQuery.layer", () => {
               Effect.die("CheckpointDiffQuery should not request the orchestration shell snapshot"),
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
+            listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listDueSchedules: () =>
+              Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
             getEventReplayStats: () => Effect.die("unused"),
@@ -403,6 +415,9 @@ describe("CheckpointDiffQuery.layer", () => {
               Effect.die("CheckpointDiffQuery should not request the orchestration shell snapshot"),
             getArchivedShellSnapshot: () =>
               Effect.die("CheckpointDiffQuery should not request archived shell snapshots"),
+            listSchedules: () => Effect.die("CheckpointDiffQuery should not request schedules"),
+            listDueSchedules: () =>
+              Effect.die("CheckpointDiffQuery should not request due schedules"),
             getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
             getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
             getEventReplayStats: () => Effect.die("unused"),

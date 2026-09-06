@@ -10,6 +10,10 @@ import {
   ProjectCreatedPayload as ContractsProjectCreatedPayloadSchema,
   ProjectMetaUpdatedPayload as ContractsProjectMetaUpdatedPayloadSchema,
   ProjectDeletedPayload as ContractsProjectDeletedPayloadSchema,
+  ScheduleCreatedPayload as ContractsScheduleCreatedPayloadSchema,
+  ScheduleUpdatedPayload as ContractsScheduleUpdatedPayloadSchema,
+  ScheduleDeletedPayload as ContractsScheduleDeletedPayloadSchema,
+  ScheduleFiredPayload as ContractsScheduleFiredPayloadSchema,
   ThreadCreatedPayload as ContractsThreadCreatedPayloadSchema,
   ThreadArchivedPayload as ContractsThreadArchivedPayloadSchema,
   ThreadSettledPayload as ContractsThreadSettledPayloadSchema,
@@ -43,6 +47,10 @@ import {
 export const ProjectCreatedPayload = ContractsProjectCreatedPayloadSchema;
 export const ProjectMetaUpdatedPayload = ContractsProjectMetaUpdatedPayloadSchema;
 export const ProjectDeletedPayload = ContractsProjectDeletedPayloadSchema;
+export const ScheduleCreatedPayload = ContractsScheduleCreatedPayloadSchema;
+export const ScheduleUpdatedPayload = ContractsScheduleUpdatedPayloadSchema;
+export const ScheduleDeletedPayload = ContractsScheduleDeletedPayloadSchema;
+export const ScheduleFiredPayload = ContractsScheduleFiredPayloadSchema;
 
 export const KanbanCardCreatedPayload = ContractsKanbanCardCreatedPayloadSchema;
 export const KanbanCardUpdatedPayload = ContractsKanbanCardUpdatedPayloadSchema;

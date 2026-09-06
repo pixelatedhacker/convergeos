@@ -207,6 +207,8 @@ describe("OrchestrationEngine", () => {
               threads: [],
               updatedAt: projectionSnapshot.updatedAt,
             }),
+          listSchedules: () => Effect.succeed({ schedules: [], runs: [] }),
+          listDueSchedules: () => Effect.succeed([]),
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),
