@@ -1,4 +1,6 @@
 import {
+  AgentMeshModelsInput,
+  AgentMeshModelsResult,
   AgentMeshDelegationDispatchReceipt,
   AgentMeshDispatchReceipt,
   AgentMeshError,
@@ -19,9 +21,23 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, AgentMesh.AgentMesh];
 
+export const AgentsModelsTool = Tool.make("agents_models", {
+  description:
+    "Discover configured provider model IDs, option descriptors, runtime modes, and cached readiness for delegation. Filter by instanceId or query and follow nextOffset for more results. Catalog entries are not proof of successful model execution. Use returned instanceId and model.slug in modelSelection; options are an array of {id,value} using model.capabilities.optionDescriptors.",
+  parameters: AgentMeshModelsInput,
+  success: AgentMeshModelsResult,
+  failure: AgentMeshError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Discover delegation models")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
 export const AgentsListTool = Tool.make("agents_list", {
   description:
-    "List durable agent threads in this agent's project. Returns bounded status metadata only, with the current thread first.",
+    "List durable agent threads in this agent's project. Returns configured model selection and bounded status metadata, with the current thread first.",
   parameters: AgentMeshListInput,
   success: AgentMeshListResult,
   failure: AgentMeshError,
@@ -104,6 +120,7 @@ export const AgentsReadTool = Tool.make("agents_read", {
   .annotate(Tool.OpenWorld, false);
 
 export const AgentsToolkit = Toolkit.make(
+  AgentsModelsTool,
   AgentsListTool,
   AgentsReadTool,
   AgentsSpawnTool,

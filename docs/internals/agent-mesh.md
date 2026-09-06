@@ -105,3 +105,27 @@ workspace invariants above.
 
 For signed, verifiable export of delegation history to a private Nostr relay, see
 `docs/internals/agent-mesh-receipts.md`.
+
+## Model discovery and escalation
+
+`agents_models` exposes a bounded projection of the existing `ProviderRegistry` cache to callers
+with `agents.read`. It returns instance IDs, model slugs and native option descriptors, readiness,
+supported runtime modes, and snapshot timestamps. Account identity, provider diagnostics, settings,
+and credentials are omitted. Filter by `instanceId` or case-insensitive `query`; use `nextOffset`
+to continue through the sorted results. Catalog refresh can change page contents, so recheck the
+selected entry before dispatch after a configuration change. A cached entry, including a custom
+model, is not a successful execution receipt.
+
+Use the selected `instanceId` and `model.slug` in an explicit spawn `modelSelection`. Encode options
+as an array of `{ id, value }` entries drawn from `model.capabilities.optionDescriptors`. Effort
+keys differ between drivers, such as `reasoningEffort`, `effort`, `thinking`, and `variant`. A null
+capability description does not establish support for an effort override.
+
+`agents_list` and `agents_read` expose each thread's configured `modelSelection`. This is useful
+for resolving an existing bot's role, but does not claim the actual model used by a particular
+turn. Turn-level selection overrides can differ from the saved thread selection. Explicit spawn
+selection remains necessary when escalation must differ from the caller's saved configuration.
+
+The MCP contract is shared across web, desktop, mobile, and connection modes; no client UI change
+is required. Each harness still needs its provider adapter to attach the tools. Read the attachment
+status and handle invocation errors rather than infer support from the provider name.

@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
-import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
+import { McpProtocol, McpSchema, McpServer, Tool, type Toolkit } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -209,7 +209,35 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
   });
 });
 
-const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
+// MCP requires an object root; Effect emits bare anyOf for object unions.
+const mcpInputSchema = (schema: McpSchema.Tool["inputSchema"]) => ({
+  ...schema,
+  type: "object" as const,
+});
+
+export const registerMcpToolkit = <Tools extends Record<string, Tool.Any>>(
+  toolkit: Toolkit.Toolkit<Tools>,
+) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      yield* McpServer.registerToolkit(toolkit).pipe(
+        Effect.provideService(McpServer.McpServer, {
+          ...server,
+          addTool: (options) =>
+            server.addTool({
+              ...options,
+              tool: new McpSchema.Tool({
+                ...options.tool,
+                inputSchema: mcpInputSchema(options.tool.inputSchema),
+              }),
+            }),
+        }),
+      );
+    }),
+  ).pipe(Layer.provide(McpServer.McpServer.layer));
+
+const PreviewStandardToolkitRegistrationLive = registerMcpToolkit(PreviewStandardToolkit).pipe(
   Layer.provide(PreviewStandardToolkitHandlersLive),
 );
 
@@ -222,15 +250,15 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
-export const AgentsToolkitRegistrationLive = McpServer.toolkit(AgentsToolkit).pipe(
+export const AgentsToolkitRegistrationLive = registerMcpToolkit(AgentsToolkit).pipe(
   Layer.provide(AgentsToolkitHandlersLive),
 );
 
-export const KanbanToolkitRegistrationLive = McpServer.toolkit(KanbanToolkit).pipe(
+export const KanbanToolkitRegistrationLive = registerMcpToolkit(KanbanToolkit).pipe(
   Layer.provide(KanbanToolkitHandlersLive),
 );
 
-export const UsageToolkitRegistrationLive = McpServer.toolkit(UsageToolkit).pipe(
+export const UsageToolkitRegistrationLive = registerMcpToolkit(UsageToolkit).pipe(
   Layer.provide(UsageToolkitHandlersLive),
 );
 
