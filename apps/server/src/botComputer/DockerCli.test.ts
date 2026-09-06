@@ -30,9 +30,7 @@ describe("DockerCli inspection boundary", () => {
         _tag: "DockerCliError",
         detail: "Docker returned invalid container inspection output.",
       });
-      const invalidShape = yield* Effect.flip(
-        parseDockerContainerInspect('{"Id":"partial"}'),
-      );
+      const invalidShape = yield* Effect.flip(parseDockerContainerInspect('{"Id":"partial"}'));
       expect(invalidShape).toMatchObject({
         _tag: "DockerCliError",
         detail: "Docker returned invalid container inspection output.",

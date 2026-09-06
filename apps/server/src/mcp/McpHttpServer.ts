@@ -290,7 +290,7 @@ const registerComputerSnapshot = Effect.fn("McpHttpServer.registerComputerSnapsh
     tool: new McpSchema.Tool({
       name: tool.name,
       description: Tool.getDescription(tool),
-      inputSchema: Tool.getJsonSchema(tool),
+      inputSchema: mcpInputSchema(Tool.getJsonSchema(tool)),
       annotations: {
         ...Context.getOption(tool.annotations, Tool.Title).pipe(
           Option.map((title) => ({ title })),
@@ -345,7 +345,7 @@ const registerComputerSnapshot = Effect.fn("McpHttpServer.registerComputerSnapsh
   });
 });
 
-const ComputerStandardToolkitRegistrationLive = McpServer.toolkit(ComputerStandardToolkit).pipe(
+const ComputerStandardToolkitRegistrationLive = registerMcpToolkit(ComputerStandardToolkit).pipe(
   Layer.provide(ComputerStandardToolkitHandlersLive),
 );
 
