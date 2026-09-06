@@ -48,16 +48,13 @@ export const make = Effect.gen(function* () {
       return;
     }
     const threadId = ThreadId.make(`scheduled-run:${schedule.id}:${occurrence}`);
-    // A rejected fire (deleted, disabled, or already claimed) must not launch:
-    // the fire is the claim on the occurrence, the launch is the follow-through.
-    yield* engine.dispatch({
-      type: "schedule.fire",
-      commandId: CommandId.make(`server:schedule-fire:${schedule.id}:${occurrence}`),
-      scheduleId: schedule.id,
-      threadId,
-      firedAt: DateTime.formatIso(yield* DateTime.now),
-    });
     const createdAt = DateTime.formatIso(yield* DateTime.now);
+    // Launch before firing: both commands carry deterministic per-occurrence
+    // commandIds, so when the process dies between them the next sweep retries
+    // safely — the launch dedups and the fire still lands. Firing first would
+    // permanently drop the occurrence on launch failure, because the fire
+    // advances nextRunAt. The trade-off: a schedule deleted mid-launch leaves
+    // an orphan thread the user can see and delete.
     yield* threadLauncher.launch({
       command: {
         type: "thread.turn.start",
@@ -87,6 +84,13 @@ export const make = Effect.gen(function* () {
         },
         createdAt,
       },
+    });
+    yield* engine.dispatch({
+      type: "schedule.fire",
+      commandId: CommandId.make(`server:schedule-fire:${schedule.id}:${occurrence}`),
+      scheduleId: schedule.id,
+      threadId,
+      firedAt: DateTime.formatIso(yield* DateTime.now),
     });
   });
 

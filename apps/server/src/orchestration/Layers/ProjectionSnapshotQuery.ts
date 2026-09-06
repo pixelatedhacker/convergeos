@@ -2287,6 +2287,14 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listActiveScheduleRows(undefined).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listSchedules:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listSchedules:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2307,6 +2315,7 @@ pending_approval_requests AS (
             latestTurnRows,
             kanbanCards,
             delegations,
+            scheduleRows,
             stateRows,
           ]) =>
             Effect.sync(() => {
@@ -2374,6 +2383,9 @@ pending_approval_requests AS (
               }
               for (const delegation of delegations) {
                 updatedAt = maxIso(updatedAt, delegation.updatedAt);
+              }
+              for (const row of scheduleRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
               }
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
@@ -2457,6 +2469,7 @@ pending_approval_requests AS (
                 threads,
                 kanbanCards,
                 delegations,
+                schedules: scheduleRows.map(mapScheduleRow),
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
             }),
