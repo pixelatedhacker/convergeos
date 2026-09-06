@@ -43,6 +43,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
+import { makeCodexInvocationUsage } from "./codexInvocationUsage.ts";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
@@ -2065,10 +2066,33 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         // this a child of `startSession`, and Effect interrupts a fiber's
         // children when it completes, so the consumer died on return and every
         // runtime event the session emitted afterwards was dropped.
+        const invocationUsage = makeCodexInvocationUsage(
+          !isCodexResumeCursorSchema(input.resumeCursor),
+        );
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
             yield* writeNativeEvent(event);
-            const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
+            if (event.method === "turn/started" && event.turnId) {
+              invocationUsage.start(event.turnId);
+            }
+            if (event.method === "thread/tokenUsage/updated") {
+              const payload = readPayload(
+                EffectCodexSchema.V2ThreadTokenUsageUpdatedNotification,
+                event.payload,
+              );
+              if (payload) invocationUsage.update(payload);
+            }
+            const runtimeEvents = mapToRuntimeEvents(event, event.threadId).map((runtimeEvent) => {
+              if (runtimeEvent.type !== "turn.completed" || !runtimeEvent.turnId)
+                return runtimeEvent;
+              const report = invocationUsage.complete(
+                runtimeEvent.turnId,
+                runtimeEvent.payload.state !== "completed",
+              );
+              return report
+                ? { ...runtimeEvent, payload: { ...runtimeEvent.payload, invocationUsage: report } }
+                : runtimeEvent;
+            });
             if (runtimeEvents.length === 0) {
               yield* Effect.logDebug("ignoring unhandled Codex provider event", {
                 method: event.method,

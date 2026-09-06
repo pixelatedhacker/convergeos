@@ -5,6 +5,9 @@ import {
   KanbanMcpWriteInput,
   KanbanMcpWriteResult,
 } from "@t3tools/contracts";
+import * as FileSystem from "effect/FileSystem";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { ServerConfig } from "../../../config.ts";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -37,7 +40,7 @@ export const KanbanWriteTool = Tool.make("kanban_write", {
   parameters: KanbanMcpWriteInput,
   success: KanbanMcpWriteResult,
   failure: KanbanMcpError,
-  dependencies,
+  dependencies: [...dependencies, SqlClient.SqlClient, FileSystem.FileSystem, ServerConfig],
 })
   .annotate(Tool.Title, "Update project Kanban")
   .annotate(Tool.Readonly, false)

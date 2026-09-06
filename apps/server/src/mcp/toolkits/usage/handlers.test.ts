@@ -1,3 +1,4 @@
+import * as DelegationUsageService from "../../../usage/DelegationUsageService.ts";
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -89,7 +90,14 @@ const usageSummary: UsageSummary = {
   scanDurationMs: 2,
 };
 
+const readDelegationUsage =
+  vi.fn<DelegationUsageService.DelegationUsageService["Service"]["read"]>();
 const TestLayer = McpHttpServer.UsageToolkitRegistrationLive.pipe(
+  Layer.provide(
+    Layer.succeed(DelegationUsageService.DelegationUsageService, {
+      read: (caller, input) => readDelegationUsage(caller, input),
+    }),
+  ),
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provide(
     Layer.succeed(
@@ -270,5 +278,58 @@ it.effect("removes host paths from usage_summary failures", () =>
     expect(text).toContain("Server settings could not be read.");
     expect(text).not.toContain("/Users/private");
     expect(text).not.toContain("settings.json");
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("usage_delegations binds reads to the authenticated caller and validates limits", () =>
+  Effect.gen(function* () {
+    readDelegationUsage.mockReset();
+    readDelegationUsage.mockReturnValue(Effect.succeed({ contractVersion: 1, delegations: [] }));
+    const server = yield* McpServer.McpServer;
+    const scope = {
+      environmentId,
+      threadId: ThreadId.make("delegation-usage-caller"),
+      providerSessionId: "session-usage-mcp",
+      providerInstanceId,
+      capabilities: new Set(["usage.read"] as const),
+      issuedAt: 1,
+    };
+    const result = yield* server
+      .callTool({ name: "usage_delegations", arguments: { delegationIds: ["delegation-one"] } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(result.isError).toBe(false);
+    expect(readDelegationUsage).toHaveBeenCalledExactlyOnceWith(scope.threadId, {
+      delegationIds: ["delegation-one"],
+    });
+
+    const denied = yield* server
+      .callTool({ name: "usage_delegations", arguments: { delegationIds: ["delegation-one"] } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...scope,
+          capabilities: new Set<McpInvocationContext.McpCapability>(),
+        }),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(denied.isError).toBe(true);
+    expect(readDelegationUsage).toHaveBeenCalledTimes(1);
+
+    const oversized = yield* server
+      .callTool({
+        name: "usage_delegations",
+        arguments: {
+          delegationIds: Array.from({ length: 9 }, (_, index) => `delegation-${index}`),
+        },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+        Effect.flip,
+      );
+    expect(oversized._tag).toBe("InvalidParams");
+    expect(readDelegationUsage).toHaveBeenCalledTimes(1);
   }).pipe(Effect.provide(TestLayer)),
 );

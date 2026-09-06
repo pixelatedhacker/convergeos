@@ -235,6 +235,7 @@ describe("OrchestrationEngine", () => {
       Layer.provide(ThreadBackgroundLiveness.layer),
       Layer.provide(OrchestrationCommandReceiptRepositoryLive),
       Layer.provide(SqlitePersistenceMemory),
+      Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "task-budget-engine-" })),
       Layer.provideMerge(NodeServices.layer),
     );
 
@@ -1299,6 +1300,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(OrchestrationCommandReceiptRepositoryLive),
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
+        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "task-budget-engine-" })),
         Layer.provide(NodeServices.layer),
       ),
     );
@@ -1446,6 +1448,7 @@ describe("OrchestrationEngine", () => {
         Layer.provide(OrchestrationCommandReceiptRepositoryLive),
         Layer.provide(RepositoryIdentityResolver.layer),
         Layer.provide(SqlitePersistenceMemory),
+        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "task-budget-engine-" })),
         Layer.provide(NodeServices.layer),
       ),
     );

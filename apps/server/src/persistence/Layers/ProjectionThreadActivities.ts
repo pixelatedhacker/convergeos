@@ -83,7 +83,14 @@ const makeProjectionThreadActivityRepository = Effect.gen(function* () {
               summary = excluded.summary,
               payload_json = excluded.payload_json,
               sequence = excluded.sequence,
-              created_at = excluded.created_at
+              created_at = CASE
+                WHEN excluded.kind IN ('invocation.started', 'invocation.finished')
+                  AND projection_thread_activities.kind = excluded.kind
+                  AND projection_thread_activities.thread_id = excluded.thread_id
+                  AND projection_thread_activities.turn_id = excluded.turn_id
+                THEN MIN(projection_thread_activities.created_at, excluded.created_at)
+                ELSE excluded.created_at
+              END
           `,
   });
 

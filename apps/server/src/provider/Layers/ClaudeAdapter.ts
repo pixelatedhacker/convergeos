@@ -76,6 +76,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { makeClaudeInvocationUsage } from "./claudeInvocationUsage.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { CONVERGEOS_MCP_SERVER_NAME } from "../../mcp/McpIdentity.ts";
@@ -281,6 +282,7 @@ function rememberPendingTaskModel(
 }
 
 interface ClaudeSessionContext {
+  readonly invocationUsage: ReturnType<typeof makeClaudeInvocationUsage>;
   session: ProviderSession;
   readonly promptQueue: Queue.Queue<PromptQueueItem>;
   readonly query: ClaudeQueryRuntime;
@@ -2252,6 +2254,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     errorMessage?: string,
     result?: SDKResultMessage,
   ) {
+    if (!result) context.invocationUsage.missing();
+    const invocationUsage = result
+      ? context.invocationUsage.result(
+          result,
+          status !== "completed" || context.liveTaskIds.size > 0,
+        )
+      : undefined;
     const resultContextWindow = maxClaudeContextWindowFromModelUsage(result?.modelUsage);
     if (resultContextWindow !== undefined) {
       context.lastKnownContextWindow = resultContextWindow;
@@ -2417,6 +2426,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       turnId: turnState.turnId,
       payload: {
         state: status,
+        ...(invocationUsage ? { invocationUsage } : {}),
         ...(result?.stop_reason !== undefined ? { stopReason: result.stop_reason } : {}),
         ...(result?.usage ? { usage: result.usage } : {}),
         ...(result?.modelUsage ? { modelUsage: result.modelUsage } : {}),
@@ -4455,6 +4465,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       };
 
       const context: ClaudeSessionContext = {
+        invocationUsage: makeClaudeInvocationUsage(),
         session,
         promptQueue,
         query: queryRuntime,

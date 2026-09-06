@@ -1,3 +1,4 @@
+import * as TaskBudgets from "../../budgets/TaskBudgets.ts";
 import type {
   OrchestrationClientOrigin,
   OrchestrationEvent,
@@ -119,6 +120,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
 
 const makeOrchestrationEngine = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const taskBudgets = yield* TaskBudgets.make;
   const eventStore = yield* OrchestrationEventStore;
   const commandReceiptRepository = yield* OrchestrationCommandReceiptRepository;
   const projectionPipeline = yield* OrchestrationProjectionPipeline;
@@ -272,12 +274,34 @@ const makeOrchestrationEngine = Effect.gen(function* () {
         const committedCommand = yield* sql
           .withTransaction(
             Effect.gen(function* () {
+              const budgetModelSelection = yield* taskBudgets
+                .applyCommand(envelope.command, commandReadModel)
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new OrchestrationCommandInvariantError({
+                        commandType: envelope.command.type,
+                        detail:
+                          cause._tag === "TaskBudgetError"
+                            ? cause.detail
+                            : "Task budget policy or ledger is unavailable; admission is blocked.",
+                      }),
+                  ),
+                );
               const committedEvents: OrchestrationEvent[] = [];
               const attachmentCleanups: Effect.Effect<void>[] = [];
               let nextCommandReadModel = commandReadModel;
 
               for (const nextEvent of eventBases) {
-                const savedEvent = yield* eventStore.append(nextEvent);
+                const savedEvent = yield* eventStore.append(
+                  budgetModelSelection !== undefined &&
+                    nextEvent.type === "thread.turn-start-requested"
+                    ? {
+                        ...nextEvent,
+                        payload: { ...nextEvent.payload, modelSelection: budgetModelSelection },
+                      }
+                    : nextEvent,
+                );
                 nextCommandReadModel = yield* projectCommandEvent(nextCommandReadModel, savedEvent);
                 const cleanup = yield* projectionPipeline.projectEventDeferred(savedEvent);
                 attachmentCleanups.push(cleanup);

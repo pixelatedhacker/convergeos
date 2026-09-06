@@ -14,6 +14,7 @@ import { CONVERGEOS_MCP_SERVER_NAME } from "./McpIdentity.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
+import { LivenessToolkit, LivenessToolkitHandlersLive } from "./toolkits/liveness/tools.ts";
 import { AgentsToolkitHandlersLive } from "./toolkits/agents/handlers.ts";
 import { AgentsToolkit } from "./toolkits/agents/tools.ts";
 import { KanbanToolkitHandlersLive } from "./toolkits/kanban/handlers.ts";
@@ -269,7 +270,12 @@ const McpTransportLive = McpServer.layerHttp({
   protocols: [McpProtocol.v2025_06_18],
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
+export const LivenessToolkitRegistrationLive = registerMcpToolkit(LivenessToolkit).pipe(
+  Layer.provide(LivenessToolkitHandlersLive),
+);
+
 export const layer = Layer.mergeAll(
+  LivenessToolkitRegistrationLive,
   PreviewToolkitRegistrationLive,
   AgentsToolkitRegistrationLive,
   KanbanToolkitRegistrationLive,

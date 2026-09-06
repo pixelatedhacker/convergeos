@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import {
+  TaskBudgetConfiguration,
   ModelSelection,
   ProviderRuntimeEvent,
   ProviderSession,
@@ -30,6 +31,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as PubSub from "effect/PubSub";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -88,6 +90,7 @@ const assistantCitation = {
   suffix: "",
 };
 
+const encodeBudgetConfiguration = Schema.encodeSync(Schema.fromJsonString(TaskBudgetConfiguration));
 const deriveServerPathsSync = (baseDir: string, devUrl: URL | undefined) =>
   Effect.runSync(deriveServerPaths(baseDir, devUrl).pipe(Effect.provide(NodeServices.layer)));
 
@@ -583,6 +586,80 @@ describe("ProviderCommandReactor", () => {
       },
     };
   }
+
+  effectIt.effect(
+    "blocks budgeted dispatch when its deadline is shortened during session preparation",
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            startSessionEffect: (session) =>
+              Deferred.succeed(entered, undefined).pipe(
+                Effect.andThen(Deferred.await(release)),
+                Effect.as(session),
+              ),
+          }),
+        );
+        const budgetPolicy = {
+          rootThreadId: ThreadId.make("thread-1"),
+          maxCalls: 2,
+          maxConsultations: 0,
+          maxConcurrentWorkers: 1,
+          maxTokens: 2000,
+          deadline: "2040-01-01T00:00:00.000Z",
+          models: [
+            {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+              consultation: false,
+              reserveTokens: 1000,
+            },
+          ],
+        };
+        const writePolicy = (deadline: string) =>
+          NodeFS.writeFileSync(
+            NodePath.join(harness.stateDir, "task-budgets.json"),
+            encodeBudgetConfiguration({
+              version: 1,
+              policies: [{ ...budgetPolicy, deadline }],
+            }),
+          );
+        writePolicy(budgetPolicy.deadline);
+        const failure = yield* harness.engine.streamDomainEvents.pipe(
+          Stream.filter(
+            (event) =>
+              event.type === "thread.activity-appended" &&
+              event.payload.activity.kind === "provider.turn.start.failed",
+          ),
+          Stream.take(1),
+          Stream.toPull,
+          Scope.provide(scope!),
+        );
+        yield* harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("budget-start"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: MessageId.make("budget-message"),
+            role: "user",
+            text: "Please work",
+            attachments: [],
+          },
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        yield* Deferred.await(entered);
+        writePolicy("2000-01-01T00:00:00.000Z");
+        yield* Deferred.succeed(release, undefined);
+        yield* failure;
+        expect(harness.sendTurn).not.toHaveBeenCalled();
+        expect(harness.generateThreadTitle).not.toHaveBeenCalled();
+        expect(harness.generateBranchName).not.toHaveBeenCalled();
+      }),
+  );
 
   effectIt.effect.each(["new", "ready", "stopped"] as const)(
     "handles sign-out for a %s thread before worktree repair, text helpers, or startup",

@@ -57,6 +57,7 @@ import {
   type OpenCodeServerConnection,
 } from "../opencodeRuntime.ts";
 import * as Option from "effect/Option";
+import { OpenCodeInvocationUsage } from "../openCodeInvocationUsage.ts";
 
 const PROVIDER = ProviderDriverKind.make("opencode");
 
@@ -270,6 +271,9 @@ function openCodeEventSessionId(event: OpenCodeSubscribedEvent): string | undefi
     return sessionIDFromProperties;
   }
 
+  if (event.type === "message.updated") return event.properties.info.sessionID;
+  if (event.type === "message.part.updated") return event.properties.part.sessionID;
+
   const info = (properties as { readonly info?: { readonly id?: unknown } }).info;
   return info && typeof info.id === "string" ? info.id : undefined;
 }
@@ -339,6 +343,7 @@ interface OpenCodeSessionContext {
   readonly emittedTextByPartId: Map<string, string>;
   readonly completedAssistantPartIds: Set<string>;
   readonly turns: Array<OpenCodeTurnSnapshot>;
+  readonly invocationUsage: OpenCodeInvocationUsage;
   activeTurnId: TurnId | undefined;
   activeAgent: string | undefined;
   activeVariant: string | undefined;
@@ -1080,6 +1085,7 @@ export function makeOpenCodeAdapter(
         type: "turn.completed",
         payload: {
           state: "completed",
+          invocationUsage: context.invocationUsage.report(false),
         },
       });
     });
@@ -1238,6 +1244,7 @@ export function makeOpenCodeAdapter(
         payload: {
           state: "failed",
           errorMessage: detail,
+          invocationUsage: context.invocationUsage.report(true),
         },
       });
       yield* emit({
@@ -1434,6 +1441,7 @@ export function makeOpenCodeAdapter(
         type: "turn.aborted",
         payload: {
           reason: "Interrupted by user.",
+          invocationUsage: context.invocationUsage.report(true),
         },
       });
       if (cancellation) {
@@ -1954,6 +1962,7 @@ export function makeOpenCodeAdapter(
           return;
         }
         const isFirstConnection = !(yield* Deferred.isDone(context.firstConnection));
+        if (!isFirstConnection && context.activeTurnId) context.invocationUsage.markPartial();
         if (isFirstConnection) {
           const updatedAt = yield* nowIso;
           if (
@@ -2093,6 +2102,7 @@ export function makeOpenCodeAdapter(
           }
           context.messageRoleById.set(event.properties.info.id, event.properties.info.role);
           if (event.properties.info.role === "assistant") {
+            if (turnId) context.invocationUsage.observeMessage(event.properties.info);
             for (const part of context.partById.values()) {
               if (part.messageID !== event.properties.info.id) {
                 continue;
@@ -2155,6 +2165,7 @@ export function makeOpenCodeAdapter(
 
         case "message.part.updated": {
           const part = event.properties.part;
+          if (turnId && part.type === "step-finish") context.invocationUsage.observeStep(part);
           context.partById.set(part.id, part);
           const messageRole = messageRoleForPart(context, part);
 
@@ -2339,6 +2350,7 @@ export function makeOpenCodeAdapter(
               payload: {
                 state: "failed",
                 errorMessage: message,
+                invocationUsage: context.invocationUsage.report(true),
               },
             });
           }
@@ -2384,6 +2396,9 @@ export function makeOpenCodeAdapter(
         runOpenCodeSdk("event.subscribe", () =>
           context.client.event.subscribe(undefined, {
             signal: eventsAbortController.signal,
+            onSseError: () => {
+              if (context.activeTurnId) context.invocationUsage.markPartial();
+            },
           }),
         ),
         (subscription) =>
@@ -2627,6 +2642,7 @@ export function makeOpenCodeAdapter(
           messageRoleById: new Map(),
           completedAssistantPartIds: new Set(),
           turns: [],
+          invocationUsage: new OpenCodeInvocationUsage(started.openCodeSession.id),
           activeTurnId: undefined,
           activeAgent: undefined,
           activeVariant: undefined,
@@ -2798,6 +2814,7 @@ export function makeOpenCodeAdapter(
           context.promptGeneration = promptGeneration;
           context.promptAdmission = promptAdmission;
 
+          context.invocationUsage.startPrompt(messageId, steeringTurnId !== undefined);
           context.activeTurnId = turnId;
           context.activeAgent = agent ?? (input.interactionMode === "plan" ? "plan" : undefined);
           context.activeVariant = variant;

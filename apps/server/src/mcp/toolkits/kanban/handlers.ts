@@ -1,3 +1,4 @@
+import * as TaskBudgets from "../../../budgets/TaskBudgets.ts";
 import {
   CommandId,
   KanbanMcpError,
@@ -63,6 +64,21 @@ const handlers = {
         "kanban.write",
         input.action,
       );
+      const budgets = yield* TaskBudgets.make;
+      const status = yield* budgets
+        .read(invocation.threadId)
+        .pipe(
+          Effect.mapError(() =>
+            fail(input.action, "commandFailed", "Unable to verify the task budget."),
+          ),
+        );
+      if (status.policy !== null) {
+        return yield* fail(
+          input.action,
+          "commandFailed",
+          "Budgeted agents cannot change Kanban cards; use agents_spawn or agents_send so task budget ownership is inherited.",
+        );
+      }
       const { projectId } = yield* callerProject(invocation.threadId, input.action);
       const commandId = CommandId.make(`mcp-kanban:${invocation.threadId}:${input.requestId}`);
       const createdAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));

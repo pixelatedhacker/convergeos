@@ -16,6 +16,8 @@ import {
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 import { ProviderApprovalOption } from "./orchestration.ts";
 
+import { InvocationUsageReport } from "./invocationUsage.ts";
+
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -366,6 +368,7 @@ const TurnStartedPayload = Schema.Struct({
 export type TurnStartedPayload = typeof TurnStartedPayload.Type;
 
 const TurnCompletedPayload = Schema.Struct({
+  invocationUsage: Schema.optional(InvocationUsageReport),
   state: RuntimeTurnState,
   stopReason: Schema.optional(Schema.NullOr(TrimmedNonEmptyStringSchema)),
   usage: Schema.optional(Schema.Unknown),
@@ -376,6 +379,7 @@ const TurnCompletedPayload = Schema.Struct({
 export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 
 const TurnAbortedPayload = Schema.Struct({
+  invocationUsage: Schema.optional(InvocationUsageReport),
   reason: TrimmedNonEmptyStringSchema,
 });
 export type TurnAbortedPayload = typeof TurnAbortedPayload.Type;

@@ -1,3 +1,4 @@
+import * as DelegationUsageService from "./usage/DelegationUsageService.ts";
 import { EnvironmentHttpApi, ProviderDriverKind } from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Deferred from "effect/Deferred";
@@ -76,6 +77,7 @@ import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import * as MeshReceiptExportReactor from "./mesh/MeshReceiptExportReactor.ts";
 import * as MeshReceiptExportStore from "./mesh/MeshReceiptExportStore.ts";
 import * as MeshReceiptSigner from "./mesh/MeshReceiptSigner.ts";
+import * as AgentLiveness from "./mesh/AgentLiveness.ts";
 import * as NostrRelay from "./mesh/NostrRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
@@ -302,6 +304,18 @@ const ReactorLayerLive = Layer.empty.pipe(
       Layer.provide(MeshReceiptSigner.layer.pipe(Layer.provide(ServerSecretStore.layer))),
       Layer.provide(MeshReceiptExportStore.layer),
       Layer.provide(NostrRelay.layer),
+    ),
+  ),
+  Layer.provideMerge(
+    Layer.effectDiscard(
+      Effect.flatMap(AgentLiveness.AgentLiveness, (service) => service.start()),
+    ).pipe(
+      Layer.provideMerge(
+        AgentLiveness.layer.pipe(
+          Layer.provide(MeshReceiptSigner.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+          Layer.provide(MeshReceiptExportStore.layer),
+        ),
+      ),
     ),
   ),
   Layer.provideMerge(RuntimeReceiptBusLive),
@@ -532,7 +546,8 @@ const RuntimeCoreWithQuotaLive = Layer.mergeAll(
   SubscriptionQuotaLayerLive,
 );
 
-const RuntimeDependenciesLive = RuntimeCoreWithQuotaLive.pipe(
+const RuntimeDependenciesLive = DelegationUsageService.layer.pipe(
+  Layer.provideMerge(RuntimeCoreWithQuotaLive),
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),

@@ -2254,6 +2254,12 @@ describe("ClaudeAdapterLive", () => {
         },
         modelUsage: {
           [SYNTHETIC_CLAUDE_CAPABLE_MODEL]: {
+            inputTokens: 400,
+            outputTokens: 50,
+            cacheReadInputTokens: 100,
+            cacheCreationInputTokens: 20,
+            costUSD: 0.1,
+            webSearchRequests: 0,
             contextWindow: 200000,
             maxOutputTokens: 64000,
           },
@@ -2274,10 +2280,27 @@ describe("ClaudeAdapterLive", () => {
           maxTokens: 200000,
         });
       }
-      assert.equal(
-        runtimeEvents.find((event) => event.type === "turn.completed")?.type,
-        "turn.completed",
-      );
+      const completed = runtimeEvents.find((event) => event.type === "turn.completed");
+      assert.equal(completed?.type, "turn.completed");
+      if (completed?.type === "turn.completed") {
+        assert.deepEqual(completed.payload.invocationUsage, {
+          source: "claude/result.modelUsage.delta",
+          attribution: "reportingWindow",
+          completeness: "reported",
+          nativeSubagentUsage: "included",
+          models: [
+            {
+              model: SYNTHETIC_CLAUDE_CAPABLE_MODEL,
+              inputTokens: 520,
+              outputTokens: 50,
+              cachedInputTokens: 100,
+              cacheCreationTokens: 20,
+              reasoningTokens: null,
+              costUsd: 0.1,
+            },
+          ],
+        });
+      }
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
