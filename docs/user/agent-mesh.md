@@ -61,3 +61,15 @@ identity but keeps the thread and its history.
 
 Project Kanban cards can name an active bot as their assignee. Moving an assigned card to Ready
 queues it for that bot; ConvergeOS starts it when the bot is available.
+
+## Choosing a model for delegated work
+
+Agents with mesh read access can discover configured models, their reasoning options, and cached
+readiness before assigning work. An agent can keep routine work on a cheaper model and request a
+bounded review from a model you selected for stronger judgment, including through another provider.
+An explicit selection determines the spawned worker; omitting it inherits the caller's saved model.
+
+Existing bot listings include their configured model and reasoning options. These are configuration,
+not proof that a particular turn ran with that model. The lead should collect the completed result
+and check its evidence. Unavailable credentials, incompatible runtime modes, and missing tools still
+need resolution before that path can work.
