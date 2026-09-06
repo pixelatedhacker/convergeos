@@ -92,6 +92,7 @@ const decodeTransferShellSnapshot = Schema.decodeUnknownEffect(
 );
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
+import * as BotComputer from "./botComputer/BotComputerService.ts";
 import * as ServerConfig from "./config.ts";
 import { HTTP_ROUTER_CONFIG, makeRoutesLayer } from "./server.ts";
 import {
@@ -514,6 +515,7 @@ const buildAppUnderTest = (options?: {
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
     browserTraceCollector?: Partial<BrowserTraceCollector.BrowserTraceCollector["Service"]>;
+    botComputer?: Partial<BotComputer.BotComputerService["Service"]>;
     serverLifecycleEvents?: Partial<ServerLifecycleEvents.ServerLifecycleEvents["Service"]>;
     serverRuntimeStartup?: Partial<ServerRuntimeStartup.ServerRuntimeStartup["Service"]>;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
@@ -878,9 +880,14 @@ const buildAppUnderTest = (options?: {
         }),
       ),
       Layer.provide(
-        Layer.mock(TerminalManager.TerminalManager)({
-          ...options?.layers?.terminalManager,
-        }),
+        Layer.mergeAll(
+          Layer.mock(TerminalManager.TerminalManager)({
+            ...options?.layers?.terminalManager,
+          }),
+          Layer.mock(BotComputer.BotComputerService)({
+            ...options?.layers?.botComputer,
+          }),
+        ),
       ),
       Layer.provide(
         Layer.mergeAll(
@@ -9145,25 +9152,33 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
 
-      assert.equal(response.sequence, 4);
+      assert.equal(response.sequence, 5);
       assert.deepEqual(
         dispatchedCommands.map((command) => command.type),
-        ["thread.create", "thread.meta.update", "thread.activity.append", "thread.turn.start"],
+        [
+          "thread.create",
+          "thread.meta.update",
+          "thread.activity.append",
+          "thread.activity.append",
+          "thread.turn.start",
+        ],
       );
       const setupFailureActivity = dispatchedCommands.find(
         (command): command is Extract<OrchestrationCommand, { type: "thread.activity.append" }> =>
-          command.type === "thread.activity.append",
+          command.type === "thread.activity.append" &&
+          command.activity.kind === "setup-script.failed",
       );
       assert.equal(setupFailureActivity?.activity.kind, "setup-script.failed");
       assert.deepEqual(setupFailureActivity?.activity.payload, {
         detail: "pty unavailable",
         worktreePath: "/tmp/bootstrap-worktree",
+        launchCommandId: "cmd-bootstrap-turn-start-setup-failure",
       });
       assertTrue(dispatchedCommands.every((command) => command.type !== "thread.delete"));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("does not misattribute setup activity dispatch failures as setup launch failures", () =>
+  it.effect("reports an uncertain outcome when setup activity dispatch fails", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];
       const createWorktree = vi.fn(
@@ -9228,7 +9243,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const createdAt = "2026-01-01T00:00:00.000Z";
       const wsUrl = yield* getWsServerUrl("/ws");
-      const response = yield* Effect.scoped(
+      const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
             type: "thread.turn.start",
@@ -9263,14 +9278,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             },
             createdAt,
           }),
-        ),
+        ).pipe(Effect.result),
       );
 
-      assert.equal(response.sequence, 4);
-      assert.deepEqual(
-        dispatchedCommands.map((command) => command.type),
-        ["thread.create", "thread.meta.update", "thread.activity.append", "thread.turn.start"],
-      );
+      assertTrue(result._tag === "Failure");
+      assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+      assert.include(result.failure.message, "outcome is uncertain");
       const setupActivities = dispatchedCommands.filter(
         (command): command is Extract<OrchestrationCommand, { type: "thread.activity.append" }> =>
           command.type === "thread.activity.append",
@@ -9282,7 +9295,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assertTrue(
         setupActivities.every((command) => command.activity.kind !== "setup-script.failed"),
       );
-      assertTrue(dispatchedCommands.every((command) => command.type !== "thread.delete"));
+      assert.strictEqual(result.failure.bootstrapThreadDisposition, "deleted");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

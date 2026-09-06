@@ -1,4 +1,5 @@
 import {
+  BOT_COMPUTER_ISOLATION_WARNING,
   EnvironmentId,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
@@ -224,6 +225,16 @@ export const make = Effect.gen(function* () {
       threadPinning: true,
       botProfiles: true,
       agentMeshReceiptExport: true,
+      ...(hostPlatform === "linux" || hostPlatform === "darwin"
+        ? {
+            botComputer: {
+              viewerAccess: "host-local",
+              isolation: "container",
+              networkAccessModes: ["outbound"],
+              warning: BOT_COMPUTER_ISOLATION_WARNING,
+            },
+          }
+        : {}),
       kanban: true,
       scheduledTurns: true,
       threadPinReorder: true,
