@@ -17,13 +17,17 @@ pricing update.
 ## Subscription quota
 
 Subscription quota is a separate live signal. It reports provider allowance windows, utilization,
-and reset times instead of estimating spend from session transcripts. ConvergeOS can collect this data
-when CodexBar is installed on the environment host. CodexBar remains optional, and a missing or
-failed collector is reported as unavailable rather than as zero usage.
+and reset times instead of estimating spend from session transcripts. Claude Code and Codex report
+their session and weekly windows while they run, and ConvergeOS keeps the latest report for each
+provider instance until the server restarts; these are the same figures the provider shows in its
+own usage screen. ConvergeOS can also collect quota through CodexBar when it is installed on the
+environment host, which covers providers and accounts that do not report windows themselves.
+CodexBar remains optional, and a missing or failed collector is reported as unavailable rather than
+as zero usage.
 
 Connected clients can read the environment-wide quota snapshot. Agents with an active ConvergeOS MCP
 session can use `usage_snapshot` to read only quota that can be safely associated with their own
-provider instance. Account labels are omitted from the agent-facing result. If several configured
+provider instance. Windows the provider reported itself are always associated with that instance. Account labels are omitted from the agent-facing result. If several configured
 instances use the same provider subscription and the account cannot be proven, the quota remains
 visible at environment scope but is withheld from the instance-scoped MCP tool.
 
