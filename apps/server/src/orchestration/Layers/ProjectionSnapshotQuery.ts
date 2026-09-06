@@ -90,6 +90,13 @@ const decodeThread = Schema.decodeUnknownEffect(OrchestrationThread);
 // activity window. Applying the limit in SQL avoids decoding an unbounded
 // payload_json set before the projector can enforce that invariant.
 const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
+// Usage bookkeeping rows serve MCP usage reads; clients never render them, so
+// keep them out of thread snapshots to hold the per-turn wire budget.
+const CLIENT_HIDDEN_ACTIVITY_KINDS = [
+  "invocation.started",
+  "invocation.finished",
+  "invocation.usage",
+] as const;
 // Snapshot payloads are decoded and projected in small sequential batches so
 // one client read does not retain the raw payloads for the full activity window.
 const THREAD_DETAIL_ACTIVITY_PAYLOAD_BATCH_SIZE = 25;
@@ -1387,6 +1394,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         SELECT activity_id AS "activityId"
         FROM projection_thread_activities
         WHERE thread_id = ${threadId}
+          AND NOT ${sql.in("kind", CLIENT_HIDDEN_ACTIVITY_KINDS)}
         ORDER BY
           sequence DESC,
           created_at DESC,
@@ -1847,6 +1855,7 @@ pending_approval_requests AS (
         SELECT activity_id AS "activityId"
         FROM projection_thread_activities
         WHERE thread_id = ${threadId}
+          AND NOT ${sql.in("kind", CLIENT_HIDDEN_ACTIVITY_KINDS)}
           AND (
             turn_id IN (
               SELECT turn_id FROM projection_turns
