@@ -29,6 +29,12 @@ The root filesystem path for a project. In [the orchestration model][1], it is t
 
 A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
 
+#### Bot computer
+
+A constrained Docker desktop attached to an active Bot's existing thread and isolated worktree.
+Docker inspection is its lifecycle source of truth; it does not create another agent identity or
+conversation. See [bot-computers.md][27].
+
 ### Thread timeline
 
 #### Thread
@@ -203,3 +209,4 @@ ships ConvergeOS already matching it.
 [24]: ./overview.md
 [25]: ../../apps/server/src/environmentTheme.ts
 [26]: ../user/environment-theme.md
+[27]: ./bot-computers.md

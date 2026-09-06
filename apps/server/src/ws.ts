@@ -121,6 +121,7 @@ import * as ReviewService from "./review/ReviewService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
+import * as BotComputer from "./botComputer/BotComputerService.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
@@ -566,6 +567,7 @@ const makeWsRpcLayer = (
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const environmentTheme = yield* EnvironmentTheme.EnvironmentThemeService;
+      const botComputer = yield* BotComputer.BotComputerService;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
@@ -2351,6 +2353,30 @@ const makeWsRpcLayer = (
             previewAutomationBroker.focusHost(input),
             { "rpc.aggregate": "preview-automation" },
           ),
+        [WS_METHODS.botComputerInspect]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerInspect, botComputer.inspect(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
+        [WS_METHODS.botComputerStart]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerStart, botComputer.start(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
+        [WS_METHODS.botComputerSuspend]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerSuspend, botComputer.suspend(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
+        [WS_METHODS.botComputerResume]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerResume, botComputer.resume(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
+        [WS_METHODS.botComputerReset]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerReset, botComputer.reset(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
+        [WS_METHODS.botComputerDestroy]: (input) =>
+          observeRpcEffect(WS_METHODS.botComputerDestroy, botComputer.destroy(input), {
+            "rpc.aggregate": "bot-computer",
+          }),
         [WS_METHODS.subscribePreviewEvents]: (_input) =>
           observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
             "rpc.aggregate": "preview",

@@ -3,6 +3,12 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
+  BotComputerError,
+  BotComputerInput,
+  BotComputerStartInput,
+  BotComputerState,
+} from "./botComputer.ts";
+import {
   ProviderAuthCancelInput,
   ProviderAuthCompleteInput,
   ProviderAuthState,
@@ -297,6 +303,13 @@ export const WS_METHODS = {
   previewAutomationConnect: "previewAutomation.connect",
   previewAutomationRespond: "previewAutomation.respond",
   previewAutomationFocusHost: "previewAutomation.focusHost",
+
+  botComputerInspect: "botComputer.inspect",
+  botComputerStart: "botComputer.start",
+  botComputerSuspend: "botComputer.suspend",
+  botComputerResume: "botComputer.resume",
+  botComputerReset: "botComputer.reset",
+  botComputerDestroy: "botComputer.destroy",
 
   // Server meta
   serverProbe: "server.probe",
@@ -1021,6 +1034,44 @@ export const WsPreviewAutomationFocusHostRpc = Rpc.make(WS_METHODS.previewAutoma
   error: EnvironmentAuthorizationError,
 });
 
+const BotComputerRpcError = Schema.Union([BotComputerError, EnvironmentAuthorizationError]);
+
+export const WsBotComputerInspectRpc = Rpc.make(WS_METHODS.botComputerInspect, {
+  payload: BotComputerInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
+export const WsBotComputerStartRpc = Rpc.make(WS_METHODS.botComputerStart, {
+  payload: BotComputerStartInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
+export const WsBotComputerSuspendRpc = Rpc.make(WS_METHODS.botComputerSuspend, {
+  payload: BotComputerInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
+export const WsBotComputerResumeRpc = Rpc.make(WS_METHODS.botComputerResume, {
+  payload: BotComputerStartInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
+export const WsBotComputerResetRpc = Rpc.make(WS_METHODS.botComputerReset, {
+  payload: BotComputerStartInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
+export const WsBotComputerDestroyRpc = Rpc.make(WS_METHODS.botComputerDestroy, {
+  payload: BotComputerInput,
+  success: BotComputerState,
+  error: BotComputerRpcError,
+});
+
 export const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewEvents, {
   payload: Schema.Struct({}),
   success: PreviewEvent,
@@ -1279,6 +1330,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewAutomationConnectRpc,
   WsPreviewAutomationRespondRpc,
   WsPreviewAutomationFocusHostRpc,
+  WsBotComputerInspectRpc,
+  WsBotComputerStartRpc,
+  WsBotComputerSuspendRpc,
+  WsBotComputerResumeRpc,
+  WsBotComputerResetRpc,
+  WsBotComputerDestroyRpc,
   WsSubscribePreviewEventsRpc,
   WsSubscribeDiscoveredLocalServersRpc,
   WsSubscribeServerConfigRpc,
