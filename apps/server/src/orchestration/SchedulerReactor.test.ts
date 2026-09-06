@@ -1,4 +1,5 @@
 import {
+  OrchestrationDispatchCommandError,
   ProjectId,
   ProviderInstanceId,
   ScheduleId,
@@ -91,6 +92,7 @@ interface HarnessOptions {
   readonly onDispatch?: (
     command: FireCommand,
   ) => Effect.Effect<void, OrchestrationCommandInvariantError>;
+  readonly onLaunch?: (threadId: ThreadId) => Effect.Effect<void, OrchestrationDispatchCommandError>;
 }
 
 const makeHarness = Effect.fn("makeSchedulerHarness")(function* (options: HarnessOptions) {
@@ -128,7 +130,10 @@ const makeHarness = Effect.fn("makeSchedulerHarness")(function* (options: Harnes
         Ref.update(launches, (recorded) => [
           ...recorded,
           { threadId: input.command.threadId, command: input.command },
-        ]).pipe(Effect.as({ sequence: 1 })),
+        ]).pipe(
+          Effect.andThen(options.onLaunch?.(input.command.threadId) ?? Effect.void),
+          Effect.as({ sequence: 1 }),
+        ),
     }),
     Layer.succeed(ServerActivation, Deferred.await(activation)),
     Layer.succeed(Crypto.Crypto, testCrypto),
@@ -229,7 +234,7 @@ describe("SchedulerReactor", () => {
     ),
   );
 
-  it.effect("does not launch when the fire is rejected and keeps sweeping", () =>
+  it.effect("keeps sweeping when the fire is rejected after the launch", () =>
     Effect.scoped(
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(NOW));
@@ -254,12 +259,54 @@ describe("SchedulerReactor", () => {
         yield* Effect.gen(function* () {
           yield* runOneSweep(fixture);
 
+          // Launch-first ordering means a rejected fire (deleted or disabled in
+          // the race window) leaves an orphan thread rather than dropping the
+          // occurrence; the sweep still fires the remaining due schedules.
           assert.strictEqual((yield* Ref.get(fixture.commands)).length, 2);
           const launches = yield* Ref.get(fixture.launches);
           assert.deepStrictEqual(
             launches.map(({ threadId }) => threadId),
-            [ThreadId.make(`scheduled-run:schedule-hourly:${OCCURRENCE}`)],
+            [
+              ThreadId.make(`scheduled-run:schedule-daily:${OCCURRENCE}`),
+              ThreadId.make(`scheduled-run:schedule-hourly:${OCCURRENCE}`),
+            ],
           );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("does not claim the occurrence when the launch fails", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const failing = makeSchedule();
+        const next = makeSchedule({
+          id: ScheduleId.make("schedule-hourly"),
+          title: "Hourly sync",
+        });
+        const fixture = yield* makeHarness({
+          due: [failing, next],
+          onLaunch: (threadId) =>
+            threadId === ThreadId.make(`scheduled-run:${SCHEDULE_ID}:${OCCURRENCE}`)
+              ? Effect.fail(
+                  new OrchestrationDispatchCommandError({
+                    message: "transient launch failure",
+                  }),
+                )
+              : Effect.void,
+        });
+
+        yield* Effect.gen(function* () {
+          yield* runOneSweep(fixture);
+
+          // The failed launch must not fire: nextRunAt stays put and the next
+          // sweep retries the occurrence. The healthy schedule still fires.
+          assert.deepStrictEqual(
+            (yield* Ref.get(fixture.commands)).map(({ scheduleId }) => scheduleId),
+            [ScheduleId.make("schedule-hourly")],
+          );
+          assert.strictEqual((yield* Ref.get(fixture.launches)).length, 2);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),

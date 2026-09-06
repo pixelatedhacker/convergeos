@@ -19,16 +19,19 @@ timing edit can make a schedule unfireable.
 
 ## Firing
 
-The scheduler reactor sweeps once a minute. For each due schedule it dispatches `schedule.fire`, a
-server-only command whose decider case revalidates that the occurrence is still due and atomically
-advances `nextRunAt`. The fire is the claim on the occurrence; the accepted event is what
-authorizes the reactor to follow with a `thread.turn.start` (bootstrap createThread) on a
-deterministic thread ID, `scheduled-run:{scheduleId}:{occurrence}`.
+The scheduler reactor sweeps once a minute. For each due schedule it first launches a
+`thread.turn.start` (bootstrap createThread) on a deterministic thread ID,
+`scheduled-run:{scheduleId}:{occurrence}`, then dispatches `schedule.fire`, a server-only command
+whose decider case revalidates that the occurrence is still due and atomically advances
+`nextRunAt`. The fire is the claim on the occurrence; launching first means a transient launch
+failure leaves the schedule due and the next sweep retries, instead of dropping the occurrence.
 
 All command and entity IDs are deterministic per occurrence
-(`server:schedule-fire:{scheduleId}:{occurrence}`), so a crash between claim and launch replays
-into engine command-receipt dedup instead of a second run, and overlapping sweeps cannot
-double-fire. A schedule whose project is gone is skipped with a warning, not retried forever.
+(`server:schedule-turn:{scheduleId}:{occurrence}`, `server:schedule-fire:{scheduleId}:{occurrence}`),
+so a crash between launch and claim replays into engine command-receipt dedup instead of a second
+run, and overlapping sweeps cannot double-fire. The trade-off of launching first: a schedule
+deleted in the race window leaves an orphan thread the user can see and delete. A schedule whose
+project is gone is skipped with a warning, not retried forever.
 
 ## Projection and transport
 

@@ -4,6 +4,7 @@ import {
   EventId,
   MessageId,
   ProjectId,
+  ScheduleId,
   ThreadId,
   TurnId,
   ProviderInstanceId,
@@ -1649,6 +1650,39 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const fullSnapshot = yield* snapshotQuery.getSnapshot();
       assert.equal(fullSnapshot.threads[0]?.latestTurn?.turnId, asTurnId("turn-running"));
       assert.equal(fullSnapshot.threads[0]?.latestTurn?.state, "running");
+    }),
+  );
+
+  it.effect("hydrates schedules into the command read model", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_schedules`;
+      yield* sql`
+        INSERT INTO projection_schedules (
+          schedule_id, project_id, title, prompt, recurrence_json, time_zone,
+          model_selection_json, runtime_mode, interaction_mode, enabled,
+          next_run_at, last_run_at, revision, created_at, updated_at, deleted_at
+        ) VALUES (
+          'schedule-boot', 'project-1', 'Morning briefing', 'Summarize changes.',
+          '{"kind":"daily","time":{"hour":9,"minute":0}}', 'America/New_York',
+          '{"instanceId":"codex","model":"gpt-5"}', 'full-access', 'default', 1,
+          '2026-04-06T13:00:00.000Z', NULL, 1,
+          '2026-04-05T00:00:00.000Z', '2026-04-05T00:00:00.000Z', NULL
+        )
+      `;
+
+      // After a restart the engine bootstraps its command read model from
+      // these rows; a schedule missing here would reject every schedule.fire
+      // the sweep dispatches.
+      const readModel = yield* snapshotQuery.getCommandReadModel();
+      const schedule = (readModel.schedules ?? []).find(
+        (entry) => entry.id === ScheduleId.make("schedule-boot"),
+      );
+      assert.equal(schedule?.title, "Morning briefing");
+      assert.equal(schedule?.nextRunAt, "2026-04-06T13:00:00.000Z");
+      assert.equal(schedule?.enabled, true);
     }),
   );
 
