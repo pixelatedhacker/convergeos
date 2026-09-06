@@ -1,4 +1,6 @@
 import { assert, it } from "@effect/vitest";
+import { MESH_RECEIPT_VERSION, MeshReceipt } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 
 import {
   MESH_NOSTR_EVENT_KIND,
@@ -23,26 +25,29 @@ const params = {
   created_at: 1_757_040_000,
   kind: MESH_NOSTR_EVENT_KIND,
   tags: meshTagsFor(null),
-  content: encodeMeshReceiptContent({
-    protocol: "convergeos.mesh",
-    version: 1,
-    issuerEnvironmentId: "env-1",
-    keyId: "mk_1b84c5567b126440",
-    projectId: "project-1",
-    threadId: "thread-1",
-    sourceEventId: "evt-1",
-    sourceSequence: 41,
-    exportEpoch: "epoch-1",
-    streamId: "project-1",
-    streamSequence: 1,
-    previousEventId: null,
-    cause: { environmentId: "env-1", sourceEventId: "evt-0", sourceSequence: 40 },
-    occurredAt: "2026-09-05T00:00:00.000Z",
-    recordedAt: "2026-09-05T00:00:01.000Z",
-    evidence: "runtime-observed",
-    type: "delegation.accepted",
-    payload: { requesterThreadId: "thread-1", targetThreadId: "thread-2", title: "Audit" },
-  } as never),
+  content: encodeMeshReceiptContent(
+    Schema.decodeUnknownSync(MeshReceipt)({
+      protocol: "convergeos.mesh",
+      version: MESH_RECEIPT_VERSION,
+      delegationId: "delegation-1",
+      issuerEnvironmentId: "env-1",
+      keyId: "mk_1b84c5567b126440",
+      projectId: "project-1",
+      threadId: "thread-1",
+      sourceEventId: "evt-1",
+      sourceSequence: 41,
+      exportEpoch: "epoch-1",
+      streamId: "project-1",
+      streamSequence: 1,
+      previousEventId: null,
+      cause: { environmentId: "env-1", sourceEventId: "evt-0", sourceSequence: 40 },
+      occurredAt: "2026-09-05T00:00:00.000Z",
+      recordedAt: "2026-09-05T00:00:01.000Z",
+      evidence: "runtime-observed",
+      type: "delegation.accepted",
+      payload: { requesterThreadId: "thread-1", targetThreadId: "thread-2", title: "Audit" },
+    }),
+  ),
 };
 
 it("pins the kind, protocol tag, and event size ceiling", () => {
@@ -64,7 +69,10 @@ it("serializes the canonical NIP-01 id payload and derives a stable id", () => {
     ]),
   );
   assert.equal(computeNostrEventId(params), computeNostrEventId({ ...params }));
-  assert.notEqual(computeNostrEventId(params), computeNostrEventId({ ...params, created_at: params.created_at + 1 }));
+  assert.notEqual(
+    computeNostrEventId(params),
+    computeNostrEventId({ ...params, created_at: params.created_at + 1 }),
+  );
 });
 
 it("signs and verifies, and fails verification on any content byte change", () => {
@@ -78,15 +86,15 @@ it("signs and verifies, and fails verification on any content byte change", () =
   const tamperedId = { ...event, id: "0".repeat(64) };
   assert.isFalse(verifyNostrEvent(tamperedId));
 
-  const foreignSignature = signNostrEvent(params, Uint8Array.from({ length: 32 }, (_, i) => 32 - i));
+  const foreignSignature = signNostrEvent(
+    params,
+    Uint8Array.from({ length: 32 }, (_, i) => 32 - i),
+  );
   assert.isFalse(verifyNostrEvent({ ...event, sig: foreignSignature.sig }));
 });
 
 it("bounds encoded events under the size ceiling for receipt-shaped content", () => {
-  const event = signNostrEvent(
-    { ...params, content: "x".repeat(8_000) },
-    SECRET_KEY,
-  );
+  const event = signNostrEvent({ ...params, content: "x".repeat(8_000) }, SECRET_KEY);
   assert.isBelow(nostrEventByteLength(event), MAX_NOSTR_EVENT_BYTES);
 });
 
@@ -100,9 +108,30 @@ it("round-trips the publish handshake frames", () => {
 
   const rejected = parseNostrRelayMessage(`["OK","${event.id}",false,"invalid: bad"]`);
   assert.equal(rejected._tag, "Ok");
-  assert.isTrue(rejected._tag === "Ok" && !rejected.accepted && rejected.message === "invalid: bad");
+  assert.isTrue(
+    rejected._tag === "Ok" && !rejected.accepted && rejected.message === "invalid: bad",
+  );
 
   assert.equal(parseNostrRelayMessage('["NOTICE","relay is saturated"]')._tag, "Notice");
   assert.equal(parseNostrRelayMessage("not json")._tag, "Other");
   assert.equal(parseNostrRelayMessage('["REQ","sub",{}]')._tag, "Other");
+});
+
+it("ignores malformed acknowledgement and notice tuples", () => {
+  for (const frame of [
+    ["OK"],
+    ["OK", "event-id"],
+    ["OK", "event-id", false],
+    ["OK", "event-id", "false", "invalid"],
+    ["OK", 123, false, "invalid"],
+    ["OK", "event-id", false, null],
+    ["OK", "event-id", false, "invalid", "extra"],
+    ["NOTICE"],
+    ["NOTICE", 123],
+    ["NOTICE", "message", "extra"],
+    null,
+    {},
+  ]) {
+    assert.deepEqual(parseNostrRelayMessage(JSON.stringify(frame)), { _tag: "Other" });
+  }
 });

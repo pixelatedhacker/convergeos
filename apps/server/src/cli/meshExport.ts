@@ -1,27 +1,25 @@
-// `t3 mesh-export` - control outbound signed agent-mesh receipt export.
-//
-// Export is off until this command enables it against one private Nostr relay
-// (`t3 mesh-export enable wss://relay.example`). The relay URL and the opt-in
-// flag are server-owned secrets, so the command writes through the same secret
-// store the server reads; a running server picks the change up on its next
-// export sweep without a restart.
-
-import { Command, GlobalFlag } from "effect/unstable/cli";
+import { Argument, Command, GlobalFlag } from "effect/unstable/cli";
 import * as Console from "effect/Console";
+import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Argument } from "effect/unstable/cli";
 
 import {
   MESH_RECEIPT_EXPORT_ENABLED_SECRET,
   MESH_RECEIPT_RELAY_URL_SECRET,
+  meshRelayDestinationDigest,
   readMeshReceiptExportConfig,
 } from "../mesh/MeshReceiptConfig.ts";
+import * as MeshReceiptExportStore from "../mesh/MeshReceiptExportStore.ts";
+import * as Sqlite from "../persistence/Layers/Sqlite.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import { baseDirFlag, resolveCliAuthConfig } from "./config.ts";
+
+const decodeRelayUrl = Schema.decodeUnknownOption(Schema.URLFromString);
 
 const stringToBytes = (value: string) => new TextEncoder().encode(value);
 
@@ -34,16 +32,21 @@ class MeshExportCliError extends Schema.TaggedErrorClass<MeshExportCliError>()(
   }
 }
 
-const runWithSecrets = <A, E>(
+const runWithStore = <A, E, R>(
   flags: { readonly baseDir: Option.Option<string> },
-  run: Effect.Effect<A, E, ServerSecretStore.ServerSecretStore | ServerConfig.ServerConfig>,
+  run: Effect.Effect<
+    A,
+    E,
+    R | ServerSecretStore.ServerSecretStore | MeshReceiptExportStore.MeshReceiptExportStore
+  >,
 ) =>
   Effect.gen(function* () {
     const logLevel = yield* GlobalFlag.LogLevel;
     const config = yield* resolveCliAuthConfig(flags, logLevel);
-    const runtimeLayer = Layer.mergeAll(ServerSecretStore.layer).pipe(
-      Layer.provideMerge(ServerConfig.layer(config)),
-    );
+    const runtimeLayer = Layer.mergeAll(
+      ServerSecretStore.layer,
+      MeshReceiptExportStore.layer.pipe(Layer.provide(Sqlite.layerConfig)),
+    ).pipe(Layer.provide(ServerConfig.layer(config)));
     return yield* run.pipe(Effect.provide(runtimeLayer));
   });
 
@@ -54,61 +57,169 @@ const meshExportEnableCommand = Command.make("enable", {
   ),
 }).pipe(
   Command.withDescription(
-    "Publish signed agent-mesh receipts to the given private relay. Capture starts at the current watermark; no history is backfilled.",
+    "Start a new capture epoch at the current watermark; previous epochs stay paused.",
   ),
   Command.withHandler((flags) =>
-    runWithSecrets(flags, Effect.gen(function* () {
-      const relayUrl = flags.relayUrl.trim();
-      if (!/^wss?:\/\//.test(relayUrl)) {
-        return yield* new MeshExportCliError({
-          detail: "The relay URL must start with ws:// or wss://.",
+    runWithStore(
+      flags,
+      Effect.gen(function* () {
+        const relayUrl = flags.relayUrl.trim();
+        const parsedUrl = decodeRelayUrl(relayUrl);
+        if (Option.isNone(parsedUrl) || !["ws:", "wss:"].includes(parsedUrl.value.protocol)) {
+          return yield* new MeshExportCliError({
+            detail: "The relay URL must be a valid ws:// or wss:// URL.",
+          });
+        }
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const store = yield* MeshReceiptExportStore.MeshReceiptExportStore;
+        const config = yield* readMeshReceiptExportConfig(secrets);
+        const crypto = yield* Crypto.Crypto;
+        const exportEpoch = yield* crypto.randomUUIDv4;
+        yield* secrets.set(MESH_RECEIPT_RELAY_URL_SECRET, stringToBytes(relayUrl));
+        yield* store.enableExport({
+          exportEpoch,
+          startWatermark: yield* store.latestSourceSequence,
+          destinationDigest: meshRelayDestinationDigest(relayUrl),
+          quotaBytes: config.quotaBytes,
+          at: DateTime.formatIso(yield* DateTime.now),
         });
-      }
-      const secrets = yield* ServerSecretStore.ServerSecretStore;
-      yield* secrets.set(MESH_RECEIPT_RELAY_URL_SECRET, stringToBytes(relayUrl));
-      yield* secrets.set(MESH_RECEIPT_EXPORT_ENABLED_SECRET, stringToBytes("true"));
-      yield* Console.log(`Mesh receipt export enabled for ${relayUrl}.`);
-    })),
+        yield* secrets.set(MESH_RECEIPT_EXPORT_ENABLED_SECRET, stringToBytes("true"));
+        yield* Console.log(
+          `Mesh receipt export enabled. New epoch: ${exportEpoch}. Previous epochs remain paused.`,
+        );
+      }),
+    ),
   ),
 );
 
-const meshExportDisableCommand = Command.make("disable", {
+const meshExportDisableCommand = Command.make("disable", { baseDir: baseDirFlag }).pipe(
+  Command.withDescription(
+    "Pause capture and every publication epoch. Pending receipts are retained.",
+  ),
+  Command.withHandler((flags) =>
+    runWithStore(
+      flags,
+      Effect.gen(function* () {
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const store = yield* MeshReceiptExportStore.MeshReceiptExportStore;
+        yield* secrets.remove(MESH_RECEIPT_EXPORT_ENABLED_SECRET);
+        yield* store.disableExport({
+          stopWatermark: yield* store.latestSourceSequence,
+          at: DateTime.formatIso(yield* DateTime.now),
+        });
+        yield* Console.log(
+          "Mesh receipt export disabled. All publication epochs are paused; pending receipts are retained.",
+        );
+      }),
+    ),
+  ),
+);
+
+const meshExportStatusCommand = Command.make("status", { baseDir: baseDirFlag }).pipe(
+  Command.withDescription("Show capture status and publication permissions for retained epochs."),
+  Command.withHandler((flags) =>
+    runWithStore(
+      flags,
+      Effect.gen(function* () {
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const store = yield* MeshReceiptExportStore.MeshReceiptExportStore;
+        const config = yield* readMeshReceiptExportConfig(secrets);
+        const state = yield* store.readExportState;
+        const enabled =
+          config.enabled &&
+          config.relayUrl !== null &&
+          state?.status === "active" &&
+          state.destinationDigest === meshRelayDestinationDigest(config.relayUrl);
+        yield* Console.log(`Mesh receipt export is ${enabled ? "enabled" : "disabled"}.`);
+        for (const epoch of yield* store.listEpochs) {
+          yield* Console.log(
+            `${epoch.exportEpoch}: ${epoch.publication}; ${epoch.pending} pending, ${epoch.rejected} rejected.`,
+          );
+        }
+      }),
+    ),
+  ),
+);
+
+const meshExportResumeCommand = Command.make("resume", {
   baseDir: baseDirFlag,
+  epoch: Argument.string("epoch"),
 }).pipe(
   Command.withDescription(
-    "Pause capture and publication at a recorded watermark. Already-signed pending receipts are kept.",
+    "Authorize publication of a paused epoch to its original configured relay.",
   ),
   Command.withHandler((flags) =>
-    runWithSecrets(flags, Effect.gen(function* () {
-      const secrets = yield* ServerSecretStore.ServerSecretStore;
-      yield* secrets.remove(MESH_RECEIPT_EXPORT_ENABLED_SECRET);
-      yield* Console.log("Mesh receipt export disabled. Pending receipts are retained.");
-    })),
+    runWithStore(
+      flags,
+      Effect.gen(function* () {
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const store = yield* MeshReceiptExportStore.MeshReceiptExportStore;
+        const config = yield* readMeshReceiptExportConfig(secrets);
+        const state = yield* store.readExportState;
+        if (!config.enabled || config.relayUrl === null || state?.status !== "active") {
+          return yield* new MeshExportCliError({
+            detail: "Enable export to the epoch's original relay before resuming it.",
+          });
+        }
+        const epoch = (yield* store.listEpochs).find((item) => item.exportEpoch === flags.epoch);
+        if (epoch?.publication !== "paused") {
+          return yield* new MeshExportCliError({
+            detail: "Only a retained paused epoch can be resumed.",
+          });
+        }
+        const destinationDigest = meshRelayDestinationDigest(config.relayUrl);
+        if (
+          epoch.destinationDigest !== destinationDigest ||
+          state.destinationDigest !== destinationDigest
+        ) {
+          return yield* new MeshExportCliError({
+            detail:
+              "The epoch does not match the configured relay. Enable its original relay before resuming.",
+          });
+        }
+        yield* store.setEpochPublication({
+          exportEpoch: flags.epoch,
+          destinationDigest,
+          publication: "active",
+        });
+        yield* Console.log(`Publication resumed for epoch ${flags.epoch}.`);
+      }),
+    ),
   ),
 );
 
-const meshExportStatusCommand = Command.make("status", {
+const meshExportDiscardCommand = Command.make("discard", {
   baseDir: baseDirFlag,
+  epoch: Argument.string("epoch"),
 }).pipe(
-  Command.withDescription("Show whether signed receipt export is enabled and where it publishes."),
+  Command.withDescription(
+    "Permanently remove publication permission from a paused epoch; retain its stored receipts.",
+  ),
   Command.withHandler((flags) =>
-    runWithSecrets(flags, Effect.gen(function* () {
-      const secrets = yield* ServerSecretStore.ServerSecretStore;
-      const config = yield* readMeshReceiptExportConfig(secrets);
-      if (!config.enabled || config.relayUrl === null) {
+    runWithStore(
+      flags,
+      Effect.gen(function* () {
+        const store = yield* MeshReceiptExportStore.MeshReceiptExportStore;
+        yield* store.setEpochPublication({
+          exportEpoch: flags.epoch,
+          destinationDigest: "",
+          publication: "discarded",
+        });
         yield* Console.log(
-          "Mesh receipt export is disabled. Enable it with `t3 mesh-export enable <relay-url>`.",
+          `Publication discarded for epoch ${flags.epoch}. Stored receipts are retained.`,
         );
-        return;
-      }
-      yield* Console.log(
-        `Mesh receipt export is enabled, publishing to ${config.relayUrl}.`,
-      );
-    })),
+      }),
+    ),
   ),
 );
 
 export const meshExportCommand = Command.make("mesh-export", {}).pipe(
   Command.withDescription("Control outbound signed agent-mesh receipt export."),
-  Command.withSubcommands([meshExportEnableCommand, meshExportDisableCommand, meshExportStatusCommand]),
+  Command.withSubcommands([
+    meshExportEnableCommand,
+    meshExportDisableCommand,
+    meshExportStatusCommand,
+    meshExportResumeCommand,
+    meshExportDiscardCommand,
+  ]),
 );

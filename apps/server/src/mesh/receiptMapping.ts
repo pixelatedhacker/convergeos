@@ -1,6 +1,10 @@
+import { MESH_RECEIPT_VERSION } from "@t3tools/contracts";
 import type {
   Delegation,
   EnvironmentId,
+  EventId,
+  MessageId,
+  MeshOriginQualifiedEventRef,
   MeshArtifactReference,
   MeshKeyId,
   MeshReceipt,
@@ -12,7 +16,7 @@ import { sha256 } from "@noble/hashes/sha2";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type { MeshReceiptExportStoreError } from "./MeshReceiptExportStore.ts";
+import { MeshReceiptExportStoreError } from "./MeshReceiptExportStore.ts";
 
 export const ASSISTANT_TEXT_MEDIA_TYPE = "text/plain; charset=utf-8";
 
@@ -50,9 +54,7 @@ export interface MappedMeshReceiptDraft {
   readonly draft: MeshReceiptDraft;
   /** Output bytes retained locally and referenced by digest in the receipt.
       Retention may expire them later without erasing receipts. */
-  readonly artifact:
-    | { readonly reference: MeshArtifactReference; readonly content: string }
-    | null;
+  readonly artifact: { readonly reference: MeshArtifactReference; readonly content: string } | null;
 }
 
 /** Resolution failures (e.g. persistence errors) propagate; a missing project
@@ -60,6 +62,21 @@ export interface MappedMeshReceiptDraft {
 export type ThreadProjectResolver = (
   threadId: ThreadId,
 ) => Effect.Effect<Option.Option<ProjectId>, MeshReceiptExportStoreError>;
+
+export interface MeshReceiptSourceResolver {
+  readonly resolveProjectIdForThread: ThreadProjectResolver;
+  readonly readAssistantTextAt: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+    readonly sequenceInclusive: number;
+  }) => Effect.Effect<Option.Option<string>, MeshReceiptExportStoreError>;
+  readonly resolveSourceEvent: (
+    eventId: EventId,
+  ) => Effect.Effect<
+    Option.Option<{ readonly eventId: EventId; readonly sequence: number }>,
+    MeshReceiptExportStoreError
+  >;
+}
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -108,12 +125,24 @@ export const mapSourceEventToDraft = (
   event: OrchestrationEvent,
   issuerEnvironmentId: EnvironmentId,
   keyId: MeshKeyId,
-  resolveProjectIdForThread: ThreadProjectResolver,
+  sources: MeshReceiptSourceResolver,
 ): Effect.Effect<MappedMeshReceiptDraft | null, MeshReceiptExportStoreError> =>
   Effect.gen(function* () {
     if (!MESH_RECEIPT_SOURCE_EVENT_TYPES.has(event.type)) {
       return null;
     }
+
+    const cause: MeshOriginQualifiedEventRef | null =
+      event.causationEventId === null
+        ? null
+        : {
+            environmentId: issuerEnvironmentId,
+            sourceEventId: event.causationEventId,
+            ...Option.match(yield* sources.resolveSourceEvent(event.causationEventId), {
+              onNone: () => ({}),
+              onSome: (source) => ({ sourceSequence: source.sequence }),
+            }),
+          };
 
     if (isDelegationTransition(event)) {
       const delegation = event.payload.delegation;
@@ -128,7 +157,10 @@ export const mapSourceEventToDraft = (
         issuerEnvironmentId,
         keyId,
         delegation.projectId,
-        requesterThreadId,
+        event.type === "delegation.requested"
+          ? requesterThreadId
+          : (delegation.targetThreadId ?? requesterThreadId),
+        cause,
       );
       if (event.type === "delegation.requested") {
         return {
@@ -152,9 +184,13 @@ export const mapSourceEventToDraft = (
         draft: {
           ...common,
           delegationId: delegation.id,
-          ...(delegation.turnId === null ? {} : { turnId: delegation.turnId }),
+          ...(delegation.targetThreadId === null || delegation.turnId === null
+            ? {}
+            : { turnId: delegation.turnId }),
           type: "delegation.terminal",
           payload: {
+            requesterThreadId,
+            targetThreadId: delegation.targetThreadId,
             state:
               event.type === "delegation.completed"
                 ? "completed"
@@ -170,13 +206,13 @@ export const mapSourceEventToDraft = (
     if (event.type === "thread.turn-start-requested") {
       const threadId = threadAggregateId(event);
       if (threadId === null) return null;
-      const projectId = yield* resolveProjectId(threadId, resolveProjectIdForThread);
+      const projectId = yield* resolveProjectId(threadId, sources.resolveProjectIdForThread);
       if (projectId === null) return null;
       return {
         projectId,
         artifact: null,
         draft: {
-          ...draftBase(event, issuerEnvironmentId, keyId, projectId, threadId),
+          ...draftBase(event, issuerEnvironmentId, keyId, projectId, threadId, cause),
           type: "turn.started",
           payload: { messageId: event.payload.messageId, turnId: null },
         },
@@ -191,14 +227,25 @@ export const mapSourceEventToDraft = (
       }
       const threadId = threadAggregateId(event);
       if (threadId === null) return null;
-      const projectId = yield* resolveProjectId(threadId, resolveProjectIdForThread);
+      const projectId = yield* resolveProjectId(threadId, sources.resolveProjectIdForThread);
       if (projectId === null) return null;
-      const artifact = completeArtifactForText(event.payload.text);
+      const text = yield* sources.readAssistantTextAt({
+        threadId,
+        messageId: event.payload.messageId,
+        sequenceInclusive: event.sequence,
+      });
+      if (Option.isNone(text)) {
+        return yield* new MeshReceiptExportStoreError({
+          operation: "readAssistantTextAt",
+          cause: new Error(`Assistant output is unavailable for source event ${event.eventId}`),
+        });
+      }
+      const artifact = completeArtifactForText(text.value);
       return {
         projectId,
         artifact,
         draft: {
-          ...draftBase(event, issuerEnvironmentId, keyId, projectId, threadId),
+          ...draftBase(event, issuerEnvironmentId, keyId, projectId, threadId, cause),
           ...(event.payload.turnId === null ? {} : { turnId: event.payload.turnId }),
           type: "artifact.available",
           outputs: [artifact.reference],
@@ -225,21 +272,20 @@ const draftBase = (
   keyId: MeshKeyId,
   projectId: ProjectId,
   threadId: ThreadId,
-) => ({
-  protocol: "convergeos.mesh" as const,
-  version: 1 as const,
-  issuerEnvironmentId,
-  keyId,
-  projectId,
-  streamId: projectId,
-  threadId,
-  sourceEventId: event.eventId,
-  sourceSequence: event.sequence,
-  cause: {
-    environmentId: issuerEnvironmentId,
+  cause: MeshOriginQualifiedEventRef | null,
+) =>
+  ({
+    protocol: "convergeos.mesh",
+    version: MESH_RECEIPT_VERSION,
+    issuerEnvironmentId,
+    keyId,
+    projectId,
+    streamId: projectId,
+    threadId,
     sourceEventId: event.eventId,
     sourceSequence: event.sequence,
-  },
-  occurredAt: event.occurredAt,
-  evidence: "runtime-observed" as const,
-});
+    cause,
+    ...(event.commandId === null ? {} : { commandId: event.commandId }),
+    occurredAt: event.occurredAt,
+    evidence: "runtime-observed",
+  }) as const;

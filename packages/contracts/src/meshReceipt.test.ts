@@ -9,6 +9,10 @@ import {
   MeshReceiptFromJsonString,
 } from "./index.ts";
 
+const decodeReceipt = Schema.decodeUnknownEffect(MeshReceipt);
+const encodeReceiptJson = Schema.encodeEffect(MeshReceiptFromJsonString);
+const decodeReceiptJson = Schema.decodeEffect(MeshReceiptFromJsonString);
+
 const SHA256 = "a".repeat(64);
 const PREVIOUS_EVENT_ID = "b".repeat(64);
 
@@ -57,7 +61,12 @@ it.effect("round-trips every receipt type through JSON", () =>
         turnId: "turn-1",
         sourceEventId: "evt-3",
         outputs: [
-          { sha256: SHA256, byteLength: 11, mediaType: "text/plain; charset=utf-8", completeness: "complete" },
+          {
+            sha256: SHA256,
+            byteLength: 11,
+            mediaType: "text/plain; charset=utf-8",
+            completeness: "complete",
+          },
         ],
         payload: {},
       },
@@ -67,13 +76,18 @@ it.effect("round-trips every receipt type through JSON", () =>
         evidence: "runtime-observed",
         turnId: "turn-1",
         sourceEventId: "evt-4",
-        payload: { state: "completed", failure: null },
+        payload: {
+          requesterThreadId: "thread-1",
+          targetThreadId: "thread-2",
+          state: "completed",
+          failure: null,
+        },
       },
     ];
     for (const receipt of receipts) {
-      const decoded = yield* Schema.decodeUnknownEffect(MeshReceipt)(receipt);
-      const encoded = yield* Schema.encodeEffect(MeshReceiptFromJsonString)(decoded);
-      const reparsed = yield* Schema.decodeEffect(MeshReceiptFromJsonString)(encoded);
+      const decoded = yield* decodeReceipt(receipt);
+      const encoded = yield* encodeReceiptJson(decoded);
+      const reparsed = yield* decodeReceiptJson(encoded);
       assert.deepEqual(reparsed, decoded);
     }
   }),
@@ -82,17 +96,15 @@ it.effect("round-trips every receipt type through JSON", () =>
 it.effect("rejects unknown protocol, version, and type discriminators", () =>
   Effect.gen(function* () {
     const wrongProtocol = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({ ...acceptedReceipt, protocol: "other.mesh" }),
+      decodeReceipt({ ...acceptedReceipt, protocol: "other.mesh" }),
     );
     assert.equal(wrongProtocol._tag, "Failure");
 
-    const wrongVersion = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({ ...acceptedReceipt, version: 2 }),
-    );
+    const wrongVersion = yield* Effect.result(decodeReceipt({ ...acceptedReceipt, version: 99 }));
     assert.equal(wrongVersion._tag, "Failure");
 
     const unknownType = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({
+      decodeReceipt({
         ...acceptedReceipt,
         type: "tool.result",
         payload: {},
@@ -105,7 +117,7 @@ it.effect("rejects unknown protocol, version, and type discriminators", () =>
 it.effect("rejects malformed digests, oversized fields, and non-positive stream sequences", () =>
   Effect.gen(function* () {
     const badDigest = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({
+      decodeReceipt({
         ...acceptedReceipt,
         type: "artifact.available",
         evidence: "runtime-observed",
@@ -119,7 +131,7 @@ it.effect("rejects malformed digests, oversized fields, and non-positive stream 
     assert.equal(badDigest._tag, "Failure");
 
     const oversizedTitle = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({
+      decodeReceipt({
         ...acceptedReceipt,
         payload: { ...acceptedReceipt.payload, title: "x".repeat(161) },
       }),
@@ -127,8 +139,56 @@ it.effect("rejects malformed digests, oversized fields, and non-positive stream 
     assert.equal(oversizedTitle._tag, "Failure");
 
     const zeroSequence = yield* Effect.result(
-      Schema.decodeUnknownEffect(MeshReceipt)({ ...acceptedReceipt, streamSequence: 0 }),
+      decodeReceipt({ ...acceptedReceipt, streamSequence: 0 }),
     );
     assert.equal(zeroSequence._tag, "Failure");
   }),
+);
+
+it.effect("accepts absent and unresolved causes without inventing a source sequence", () =>
+  Effect.gen(function* () {
+    for (const cause of [null, { environmentId: "env-1", sourceEventId: "missing-event" }]) {
+      const decoded = yield* decodeReceipt({ ...acceptedReceipt, cause });
+      assert.deepEqual(decoded.cause, cause);
+    }
+  }),
+);
+
+it.effect("requires delegation identity and terminal requester and worker references", () =>
+  Effect.gen(function* () {
+    const { delegationId: _delegationId, ...withoutDelegationId } = acceptedReceipt;
+    const missingAcceptedId = yield* Effect.result(decodeReceipt(withoutDelegationId));
+    assert.equal(missingAcceptedId._tag, "Failure");
+    const terminal = {
+      ...acceptedReceipt,
+      type: "delegation.terminal",
+      payload: {
+        requesterThreadId: "thread-1",
+        targetThreadId: "thread-2",
+        state: "completed",
+        failure: null,
+      },
+    };
+    const { delegationId: _terminalId, ...withoutTerminalId } = terminal;
+    const missingTerminalId = yield* Effect.result(decodeReceipt(withoutTerminalId));
+    assert.equal(missingTerminalId._tag, "Failure");
+    const missingWorker = yield* Effect.result(
+      decodeReceipt({
+        ...terminal,
+        payload: { requesterThreadId: "thread-1", state: "completed", failure: null },
+      }),
+    );
+    assert.equal(missingWorker._tag, "Failure");
+  }),
+);
+
+it.effect(
+  "rejects version 1 receipts even when their remaining fields match the current schema",
+  () =>
+    Effect.gen(function* () {
+      const legacy = yield* Effect.result(decodeReceipt({ ...acceptedReceipt, version: 1 }));
+      assert.equal(legacy._tag, "Failure");
+      const current = yield* decodeReceipt(acceptedReceipt);
+      assert.equal(current.version, 2);
+    }),
 );

@@ -2,12 +2,9 @@ import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-import {
-  MESH_RECEIPT_PUBLISH_TIMEOUT_MS,
-  encodeEventPublishMessage,
-  parseNostrRelayMessage,
-} from "./nostr.ts";
+import { MESH_RECEIPT_PUBLISH_TIMEOUT_MS, parseNostrRelayMessage } from "./nostr.ts";
 
 /**
  * Outbound publish against one private Nostr relay.
@@ -23,24 +20,17 @@ export type NostrPublishOutcome =
   | { readonly _tag: "Rejected"; readonly reason: string }
   | { readonly _tag: "Transient"; readonly reason: string };
 
-interface MinimalWebSocket {
-  send: (data: string) => unknown;
-  close: () => unknown;
-  addEventListener: (
-    type: "open" | "message" | "error" | "close",
-    listener: (event: { data?: unknown }) => void,
-  ) => void;
-}
-
-const connectWebSocket = (url: string): MinimalWebSocket | null => {
-  const Ctor = (globalThis as Record<string, unknown>).WebSocket;
-  if (typeof Ctor !== "function") return null;
+const connectWebSocket = (url: string) => {
   try {
-    return new (Ctor as new (url: string) => MinimalWebSocket)(url);
+    return new globalThis.WebSocket(url);
   } catch {
     return null;
   }
 };
+
+const decodeStoredEvent = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ id: Schema.String })),
+);
 
 const publishOnce = (relayUrl: string, eventJson: string, eventId: string) =>
   Effect.callback<NostrPublishOutcome>((resume) => {
@@ -57,7 +47,7 @@ const publishOnce = (relayUrl: string, eventJson: string, eventId: string) =>
     }
     socket.addEventListener("open", () => {
       try {
-        socket.send(encodeEventPublishMessage(JSON.parse(eventJson)));
+        socket.send(`["EVENT",${eventJson}]`);
       } catch (cause) {
         settle({ _tag: "Transient", reason: `send failed: ${String(cause)}` });
         socket.close();
@@ -100,38 +90,31 @@ export const publishSignedEvent = (
   eventJson: string,
   timeoutMs: number = MESH_RECEIPT_PUBLISH_TIMEOUT_MS,
 ): Effect.Effect<NostrPublishOutcome> => {
-  let eventId: string;
-  try {
-    const parsed = JSON.parse(eventJson) as { id?: unknown };
-    if (typeof parsed.id !== "string") throw new Error("missing event id");
-    eventId = parsed.id;
-  } catch (cause) {
-    return Effect.succeed({ _tag: "Transient", reason: `stored event is not valid JSON: ${String(cause)}` });
+  const decoded = decodeStoredEvent(eventJson);
+  if (Option.isNone(decoded)) {
+    return Effect.succeed({
+      _tag: "Transient",
+      reason: "stored event is not valid JSON with an event id",
+    });
   }
-  return publishOnce(relayUrl, eventJson, eventId).pipe(
+  return publishOnce(relayUrl, eventJson, decoded.value.id).pipe(
     Effect.timeoutOption(timeoutMs),
     Effect.map(
       Option.match({
-        onNone: () => ({ _tag: "Transient" as const, reason: `relay timed out after ${timeoutMs}ms` }),
+        onNone: () => ({
+          _tag: "Transient" as const,
+          reason: `relay timed out after ${timeoutMs}ms`,
+        }),
         onSome: (outcome) => outcome,
       }),
     ),
   );
 };
 
-
-/**
- * The relay boundary as a service so the export worker stays deterministic
- * under test: tests substitute an in-memory relay speaking the same protocol
- * (EVENT frame in, NIP-01 OK frame out).
- */
 export class NostrRelay extends Context.Service<
   NostrRelay,
   {
-    readonly publish: (
-      relayUrl: string,
-      eventJson: string,
-    ) => Effect.Effect<NostrPublishOutcome>;
+    readonly publish: (relayUrl: string, eventJson: string) => Effect.Effect<NostrPublishOutcome>;
   }
 >()("t3/mesh/NostrRelay") {}
 
@@ -141,6 +124,9 @@ export const make = Effect.succeed(
   }),
 );
 
-export const layer = Layer.succeed(NostrRelay, NostrRelay.of({
-  publish: (relayUrl, eventJson) => publishSignedEvent(relayUrl, eventJson),
-}));
+export const layer = Layer.succeed(
+  NostrRelay,
+  NostrRelay.of({
+    publish: (relayUrl, eventJson) => publishSignedEvent(relayUrl, eventJson),
+  }),
+);

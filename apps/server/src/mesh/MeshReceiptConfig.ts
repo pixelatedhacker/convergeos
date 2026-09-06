@@ -1,3 +1,4 @@
+import { sha256 } from "@noble/hashes/sha2";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
@@ -26,8 +27,7 @@ export interface MeshReceiptExportConfig {
   readonly quotaBytes: number;
 }
 
-export const isMeshReceiptExportEnabledValue = (value: string | null): boolean =>
-  value === "true";
+export const isMeshReceiptExportEnabledValue = (value: string | null): boolean => value === "true";
 
 const readSecretString = (
   secrets: ServerSecretStore.ServerSecretStore["Service"],
@@ -59,3 +59,8 @@ export const readMeshReceiptExportConfig = (
       quotaBytes,
     };
   });
+
+export const meshRelayDestinationDigest = (relayUrl: string): string =>
+  Array.from(sha256(new TextEncoder().encode(relayUrl.trim())), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");

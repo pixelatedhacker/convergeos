@@ -15,7 +15,6 @@ import * as Schema from "effect/Schema";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { readAgentActivityPublishingActive } from "../cloud/config.ts";
-import { readMeshReceiptExportConfig } from "../mesh/MeshReceiptConfig.ts";
 import { resolveServerSelfUpdateCapability } from "../cloud/selfUpdate.ts";
 import { resolveServiceLauncherMode } from "../cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "../config.ts";
@@ -224,6 +223,7 @@ export const make = Effect.gen(function* () {
       environmentThemes: true,
       threadPinning: true,
       botProfiles: true,
+      agentMeshReceiptExport: true,
       kanban: true,
       scheduledTurns: true,
       threadPinReorder: true,
@@ -246,18 +246,12 @@ export const make = Effect.gen(function* () {
     // The publish opt-in and relay link change at runtime (`t3 connect
     // publish`, the client settings toggle), so the capability is read per
     // descriptor request rather than baked in at startup.
-    getDescriptor: Effect.all({
-      agentActivityPublishing: readAgentActivityPublishingActive(secrets),
-      meshReceiptExport: readMeshReceiptExportConfig(secrets).pipe(
-        Effect.map((config) => config.enabled),
-      ),
-    }).pipe(
-      Effect.map(({ agentActivityPublishing, meshReceiptExport }) => ({
+    getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
+      Effect.map((agentActivityPublishing) => ({
         ...descriptor,
         capabilities: {
           ...descriptor.capabilities,
           agentActivityPublishing,
-          ...(meshReceiptExport ? { agentMeshReceiptExport: true } : {}),
         },
       })),
     ),

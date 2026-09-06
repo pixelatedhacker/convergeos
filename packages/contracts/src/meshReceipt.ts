@@ -28,7 +28,7 @@ import { DelegationFailure, DelegationState } from "./orchestration.ts";
  * reject unknown `type` discriminators because the union is closed.
  */
 export const MESH_RECEIPT_PROTOCOL = "convergeos.mesh";
-export const MESH_RECEIPT_VERSION = 1;
+export const MESH_RECEIPT_VERSION = 2;
 
 /** How ConvergeOS came to know the recorded fact. Verifier assessments live in
     their own receipt payloads, never by upgrading this class. */
@@ -39,9 +39,9 @@ export const MeshEvidenceClass = Schema.Literals([
 ]);
 export type MeshEvidenceClass = typeof MeshEvidenceClass.Type;
 
-export const MeshSha256 = TrimmedNonEmptyString.check(
-  Schema.isPattern(/^[0-9a-f]{64}$/),
-).pipe(Schema.brand("MeshSha256"));
+export const MeshSha256 = TrimmedNonEmptyString.check(Schema.isPattern(/^[0-9a-f]{64}$/)).pipe(
+  Schema.brand("MeshSha256"),
+);
 export type MeshSha256 = typeof MeshSha256.Type;
 
 export const MeshKeyId = TrimmedNonEmptyString.check(Schema.isMaxLength(64)).pipe(
@@ -57,7 +57,7 @@ export type MeshExportEpoch = typeof MeshExportEpoch.Type;
 export const MeshOriginQualifiedEventRef = Schema.Struct({
   environmentId: EnvironmentId,
   sourceEventId: EventId,
-  sourceSequence: NonNegativeInt,
+  sourceSequence: Schema.optionalKey(NonNegativeInt),
 });
 export type MeshOriginQualifiedEventRef = typeof MeshOriginQualifiedEventRef.Type;
 
@@ -105,9 +105,9 @@ const MeshReceiptBase = {
   /** Nostr event id of the preceding signed record in this stream, or null at
       the head. Local source ids never masquerade as Nostr event ids. */
   previousEventId: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(64))),
-  /** What caused this record: an origin-qualified source record or another
-      signed receipt. An unresolved remote cause stays unresolved. */
-  cause: MeshOriginQualifiedEventRef,
+  /** What caused this record: an origin-qualified source record. Null means the source has no recorded cause; a missing
+      source sequence means the referenced record could not be resolved. */
+  cause: Schema.NullOr(MeshOriginQualifiedEventRef),
   /** Observation time and durable recording time. Neither orders globally. */
   occurredAt: IsoDateTime,
   recordedAt: IsoDateTime,
@@ -121,6 +121,7 @@ const MeshReceiptBase = {
 export const MeshReceiptDelegationAccepted = Schema.Struct({
   ...MeshReceiptBase,
   type: Schema.Literal("delegation.accepted"),
+  delegationId: DelegationId,
   evidence: Schema.Literal("runtime-observed"),
   payload: Schema.Struct({
     requesterThreadId: ThreadId,
@@ -143,8 +144,7 @@ export const MeshReceiptTurnStarted = Schema.Struct({
 export type MeshReceiptTurnStarted = typeof MeshReceiptTurnStarted.Type;
 
 /** artifact.available — output evidence is retained and addressable by digest.
-    The reference travels in `outputs`; content stays local and is resolved
-    through an authenticated environment endpoint with project authorization. */
+    The reference travels in `outputs`; content stays local. */
 export const MeshReceiptArtifactAvailable = Schema.Struct({
   ...MeshReceiptBase,
   type: Schema.Literal("artifact.available"),
@@ -158,8 +158,11 @@ export type MeshReceiptArtifactAvailable = typeof MeshReceiptArtifactAvailable.T
 export const MeshReceiptDelegationTerminal = Schema.Struct({
   ...MeshReceiptBase,
   type: Schema.Literal("delegation.terminal"),
+  delegationId: DelegationId,
   evidence: Schema.Literal("runtime-observed"),
   payload: Schema.Struct({
+    requesterThreadId: ThreadId,
+    targetThreadId: Schema.NullOr(ThreadId),
     state: Schema.Literals(["completed", "failed", "interrupted"]),
     failure: Schema.NullOr(DelegationFailure),
   }),

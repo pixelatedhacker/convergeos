@@ -2,7 +2,6 @@ import type { IsoDateTime, MeshArtifactReference } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -20,6 +19,7 @@ import type { OrchestrationEventStoreError } from "../persistence/Errors.ts";
 import { forkParked } from "../serverActivation.ts";
 import {
   readMeshReceiptExportConfig,
+  meshRelayDestinationDigest,
   type MeshReceiptExportConfig,
 } from "./MeshReceiptConfig.ts";
 import { MeshReceiptExportStore, MeshReceiptExportStoreError } from "./MeshReceiptExportStore.ts";
@@ -50,12 +50,7 @@ export class MeshReceiptExportReactor extends Context.Service<
   {
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly drain: Effect.Effect<void>;
-    /** One capture+publish pass. Exposed for deterministic tests and
-        administrative drains; the background loop calls it too. */
-    readonly sweep: () => Effect.Effect<
-      { readonly captured: number },
-      MeshReceiptExportSweepError
-    >;
+    readonly sweep: () => Effect.Effect<{ readonly captured: number }, MeshReceiptExportSweepError>;
   }
 >()("t3/mesh/MeshReceiptExportReactor") {}
 
@@ -71,7 +66,6 @@ export const make = Effect.gen(function* () {
   const store = yield* MeshReceiptExportStore;
   const signer = yield* MeshReceiptSigner;
   const environmentId = yield* (yield* ServerEnvironmentIdentity).getEnvironmentId;
-  const crypto = yield* Crypto.Crypto;
   const relay = yield* NostrRelay;
 
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -87,30 +81,22 @@ export const make = Effect.gen(function* () {
   ) {
     const pending = yield* store.pendingBytes;
     if (pending >= config.quotaBytes) {
-      // At capacity: pause capture with its cursor intact, expose the
-      // backlog, and keep local execution unblocked. The live configured
-      // quota applies, so raising it resumes without a new capture epoch.
-      yield* Effect.logWarning(
-        "mesh receipt export paused: outbox backlog reached its quota",
-        { pendingBytes: pending, quotaBytes: config.quotaBytes },
-      );
-      return 0;
+      yield* Effect.logWarning("mesh receipt export paused: outbox backlog reached its quota", {
+        pendingBytes: pending,
+        quotaBytes: config.quotaBytes,
+      });
+      return { captured: 0, advanced: false };
     }
     const batch = yield* Stream.runCollect(
       eventStore.readFromSequence(state.cursorSequence, CAPTURE_BATCH_SIZE),
     ).pipe(Effect.map((chunk) => Array.from(chunk)));
-    if (batch.length === 0) return 0;
+    if (batch.length === 0) return { captured: 0, advanced: false };
     const cursorTo = batch[batch.length - 1]!.sequence;
 
     const drafts: Array<MeshReceiptDraft> = [];
     const artifacts: Array<{ reference: MeshArtifactReference; content: string }> = [];
     for (const event of batch) {
-      const mapped = yield* mapSourceEventToDraft(
-        event,
-        environmentId,
-        signer.keyId,
-        store.resolveProjectIdForThread,
-      );
+      const mapped = yield* mapSourceEventToDraft(event, environmentId, signer.keyId, store);
       if (mapped === null) continue;
       drafts.push(mapped.draft);
       if (mapped.artifact !== null) artifacts.push(mapped.artifact);
@@ -125,7 +111,7 @@ export const make = Effect.gen(function* () {
       artifacts,
       signer,
     });
-    return result.captured;
+    return { captured: result.captured, advanced: cursorTo > state.cursorSequence };
   });
 
   const backoffSecondsFor = (attempts: number) =>
@@ -161,65 +147,38 @@ export const make = Effect.gen(function* () {
     relayUrl: string,
     now: IsoDateTime,
   ) {
-    const rows = yield* store.listDuePending({ now, limit: MAX_IN_FLIGHT_PUBLICATIONS });
-    if (rows.length === 0) return;
-    yield* Effect.forEach(
-      rows,
-      (row) =>
-        publishOne(relayUrl, row).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.failCause(cause)
-              : Effect.logWarning("mesh receipt publish attempt failed", {
-                  nostrEventId: row.nostrEventId,
-                  cause: Cause.pretty(cause),
-                }),
-          ),
-        ),
-      { concurrency: MAX_IN_FLIGHT_PUBLICATIONS, discard: true },
-    );
-  });
-
-  const ensureExportState = Effect.fn("MeshReceiptExportReactor.ensureExportState")(function* (
-    config: MeshReceiptExportConfig,
-  ) {
-    const state = yield* store.readExportState;
-    if (state !== null && state.status === "active") {
-      return state;
-    }
-    // Enable from the recorded current source watermark by default: no
-    // historical backfill, and every capture epoch gets a fresh stream.
-    yield* store.enableExport({
-      exportEpoch: yield* crypto.randomUUIDv4,
-      startWatermark: yield* engine.latestSequence,
-      quotaBytes: config.quotaBytes,
-      at: yield* nowIso,
+    const rows = yield* store.listDuePending({
+      now,
+      destinationDigest: meshRelayDestinationDigest(relayUrl),
+      limit: MAX_IN_FLIGHT_PUBLICATIONS,
     });
-    const fresh = yield* store.readExportState;
-    return fresh !== null && fresh.status === "active" ? fresh : null;
+    yield* Effect.forEach(rows, (row) => publishOne(relayUrl, row), {
+      concurrency: MAX_IN_FLIGHT_PUBLICATIONS,
+      discard: true,
+    });
+    return rows.length;
   });
 
   const sweep: MeshReceiptExportReactor["Service"]["sweep"] = Effect.fn(
     "MeshReceiptExportReactor.sweep",
   )(function* () {
-    const config = yield* readMeshReceiptExportConfig(secrets);
-    if (!config.enabled || config.relayUrl === null) {
-      // Disabling pauses capture and publication and records the stop
-      // watermark once, without discarding signed records.
+    let captured = 0;
+    while (true) {
+      const config = yield* readMeshReceiptExportConfig(secrets);
+      if (!config.enabled || config.relayUrl === null) return { captured };
       const state = yield* store.readExportState;
-      if (state !== null && state.status === "active") {
-        yield* store.disableExport({
-          stopWatermark: yield* engine.latestSequence,
-          at: yield* nowIso,
-        });
-      }
-      return { captured: 0 };
+      if (
+        state === null ||
+        state.status !== "active" ||
+        state.destinationDigest !== meshRelayDestinationDigest(config.relayUrl)
+      )
+        return { captured };
+      const capture = yield* captureNext(state, config, yield* nowIso);
+      captured += capture.captured;
+      const published = yield* publishDue(config.relayUrl, yield* nowIso);
+      if (!capture.advanced && published === 0) return { captured };
+      yield* Effect.yieldNow;
     }
-    const state = yield* ensureExportState(config);
-    if (state === null) return { captured: 0 };
-    const captured = yield* captureNext(state, config, yield* nowIso);
-    yield* publishDue(config.relayUrl, yield* nowIso);
-    return { captured };
   });
 
   const runSweep = sweep().pipe(
@@ -229,7 +188,13 @@ export const make = Effect.gen(function* () {
         : Effect.logWarning("mesh receipt export sweep failed", { cause: Cause.pretty(cause) }),
     ),
   );
-  const worker = yield* makeDrainableWorker(() => runSweep);
+  const wakePending = yield* Ref.make(false);
+  const worker = yield* makeDrainableWorker(() =>
+    Effect.gen(function* () {
+      yield* Ref.set(wakePending, false);
+      yield* runSweep;
+    }),
+  );
 
   const start: MeshReceiptExportReactor["Service"]["start"] = Effect.fn(
     "MeshReceiptExportReactor.start",
@@ -242,23 +207,14 @@ export const make = Effect.gen(function* () {
         publicKeyHex: signer.publicKeyHex,
         at,
       })
-      .pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning("mesh signer enrollment failed", { cause }),
-        ),
-      );
+      .pipe(Effect.catch((cause) => Effect.logWarning("mesh signer enrollment failed", { cause })));
 
-    // Live notifications wake the worker; replay provides recovery. The
-    // pending flag coalesces bursts into at most one queued sweep.
-    const wakePending = yield* Ref.make(false);
     yield* forkParked(
       Effect.gen(function* () {
         const domainEvents = yield* engine.subscribeDomainEvents;
         yield* Stream.runForEach(domainEvents, () =>
           Ref.getAndSet(wakePending, true).pipe(
-            Effect.flatMap((wasPending) =>
-              wasPending ? Effect.void : worker.enqueue(undefined),
-            ),
+            Effect.flatMap((wasPending) => (wasPending ? Effect.void : worker.enqueue(undefined))),
           ),
         );
       }),
@@ -266,7 +222,6 @@ export const make = Effect.gen(function* () {
 
     yield* forkParked(
       Effect.gen(function* () {
-        yield* Ref.set(wakePending, false);
         yield* worker.enqueue(undefined);
         yield* worker.drain;
       }).pipe(Effect.repeat(Schedule.spaced(`${SWEEP_INTERVAL_SECONDS} seconds`)), Effect.asVoid),
