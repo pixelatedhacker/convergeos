@@ -1,3 +1,4 @@
+import * as TaskBudgets from "../../../budgets/TaskBudgets.ts";
 import * as DelegationUsageService from "../../../usage/DelegationUsageService.ts";
 import {
   SubscriptionQuotaScopedReport,
@@ -29,6 +30,12 @@ export const sanitizeUsageReadError = (error: UsageReadError): UsageReadError =>
   new UsageReadError({ reason: error.reason, detail: error.detail });
 
 const handlers = {
+  budget_status: () =>
+    Effect.gen(function* () {
+      const invocation = yield* McpInvocationContext.requireUsageCapability();
+      const budgets = yield* TaskBudgets.make;
+      return yield* budgets.read(invocation.threadId);
+    }),
   usage_delegations: (input) =>
     Effect.gen(function* () {
       const invocation = yield* McpInvocationContext.requireUsageCapability();

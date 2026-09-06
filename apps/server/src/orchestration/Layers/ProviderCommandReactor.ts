@@ -1,3 +1,4 @@
+import * as TaskBudgets from "../../budgets/TaskBudgets.ts";
 import {
   type ChatAttachment,
   CommandId,
@@ -306,6 +307,7 @@ function buildGeneratedWorktreeBranchName(raw: string): string {
 }
 
 const make = Effect.gen(function* () {
+  const taskBudgets = yield* TaskBudgets.make;
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
@@ -1140,11 +1142,13 @@ const make = Effect.gen(function* () {
 
     const thread = yield* resolveThread(event.payload.threadId);
     if (!thread) {
+      yield* taskBudgets.releaseUnlaunched(event.payload.threadId, event.correlationId);
       return;
     }
 
     const message = thread.messages.find((entry) => entry.id === event.payload.messageId);
     if (!message || message.role !== "user") {
+      yield* taskBudgets.releaseUnlaunched(event.payload.threadId, event.correlationId);
       yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
         kind: "provider.turn.start.failed",
@@ -1161,11 +1165,14 @@ const make = Effect.gen(function* () {
         return Effect.void;
       }
       const detail = formatFailureDetail(cause);
-      return setThreadSessionErrorOnTurnStartFailure({
-        threadId: event.payload.threadId,
-        detail,
-        createdAt: event.payload.createdAt,
-      }).pipe(
+      return taskBudgets.releaseUnlaunched(event.payload.threadId, event.correlationId).pipe(
+        Effect.andThen(
+          setThreadSessionErrorOnTurnStartFailure({
+            threadId: event.payload.threadId,
+            detail,
+            createdAt: event.payload.createdAt,
+          }),
+        ),
         Effect.flatMap(() =>
           appendProviderFailureActivity({
             threadId: event.payload.threadId,
@@ -1240,14 +1247,20 @@ const make = Effect.gen(function* () {
       return true;
     }).pipe(Effect.catchCause((cause) => recoverTurnStartFailure(cause).pipe(Effect.as(true))));
     if (authCommandHandled) {
+      yield* taskBudgets.releaseUnlaunched(event.payload.threadId, event.correlationId);
       return;
     }
 
-    yield* ensureThreadWorktree(thread);
+    const preparation = yield* ensureThreadWorktree(thread).pipe(
+      Effect.andThen(taskBudgets.read(thread.id)),
+      Effect.map(Option.some),
+      Effect.catchCause((cause) => recoverTurnStartFailure(cause).pipe(Effect.as(Option.none()))),
+    );
+    if (Option.isNone(preparation)) return;
 
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
-    if (isFirstUserMessageTurn) {
+    if (isFirstUserMessageTurn && preparation.value.policy === null) {
       const project = yield* resolveProject(thread.projectId);
       const generationCwd =
         resolveThreadWorkspaceCwd({
@@ -1294,9 +1307,21 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    const dispatchAllowed = yield* taskBudgets
+      .claimDispatch({
+        threadId: thread.id,
+        commandId: event.correlationId,
+        modelSelection: sendTurnRequest.value.modelSelection,
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catchCause((cause) => recoverTurnStartFailure(cause).pipe(Effect.as(false))),
+      );
+    if (dispatchAllowed) {
+      yield* providerService
+        .sendTurn(sendTurnRequest.value)
+        .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    }
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (

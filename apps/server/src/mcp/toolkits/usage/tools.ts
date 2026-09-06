@@ -1,3 +1,7 @@
+import * as FileSystem from "effect/FileSystem";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { ServerConfig } from "../../../config.ts";
+import { TaskBudgetStatus, TaskBudgetError } from "@t3tools/contracts";
 import * as DelegationUsageService from "../../../usage/DelegationUsageService.ts";
 import {
   DelegationUsageInput,
@@ -66,4 +70,27 @@ export const DelegationUsageTool = Tool.make("usage_delegations", {
   .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, false);
 
-export const UsageToolkit = Toolkit.make(UsageSnapshotTool, UsageSummaryTool, DelegationUsageTool);
+export const BudgetStatusTool = Tool.make("budget_status", {
+  description:
+    "Read the host-owned inherited task budget. Calls, consultations, pending worker slots, deadline, and conservative token charges are enforced for managed calls on this host. No policy mutation. Tokens are not exact subscription consumption.",
+  parameters: Schema.Struct({}),
+  success: TaskBudgetStatus,
+  failure: Schema.Union([TaskBudgetError, SubscriptionQuotaMcpUnavailableError]),
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    SqlClient.SqlClient,
+    FileSystem.FileSystem,
+    ServerConfig,
+  ],
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, false);
+
+export const UsageToolkit = Toolkit.make(
+  UsageSnapshotTool,
+  UsageSummaryTool,
+  DelegationUsageTool,
+  BudgetStatusTool,
+);
