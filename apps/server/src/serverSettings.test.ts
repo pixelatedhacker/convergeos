@@ -643,6 +643,42 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("migrates legacy Kanban access and converges the persisted setting", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"enableAgentKanbanAccess":true}',
+      );
+
+      const migrated = yield* serverSettings.getSettings;
+      assert.equal(migrated.agentKanbanAccess, "write");
+
+      yield* serverSettings.updateSettings({ addProjectBaseDirectory: "~/Development" });
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.include(raw, '"agentKanbanAccess": "write"');
+      assert.notInclude(raw, "enableAgentKanbanAccess");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("denies malformed legacy Kanban access without discarding other settings", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"enableAgentKanbanAccess":"true","addProjectBaseDirectory":"~/Legacy"}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+      assert.equal(settings.agentKanbanAccess, "none");
+      assert.equal(settings.addProjectBaseDirectory, "~/Legacy");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("preserves provider history when no settings file exists", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;

@@ -310,8 +310,16 @@ describe("ServerSettings thread settlement", () => {
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("keeps agent mesh access opt-in", () => {
     expect(DEFAULT_SERVER_SETTINGS.enableAgentMeshAccess).toBe(false);
-    expect(DEFAULT_SERVER_SETTINGS.enableAgentKanbanAccess).toBe(false);
+    expect(DEFAULT_SERVER_SETTINGS.agentKanbanAccess).toBe("none");
     expect(DEFAULT_SERVER_SETTINGS.enableAgentUsageAccess).toBe(false);
+  });
+
+  it("accepts only constructive Kanban access levels", () => {
+    expect(decodeServerSettingsPatch({ agentKanbanAccess: "read" }).agentKanbanAccess).toBe("read");
+    expect(decodeServerSettingsPatch({ agentKanbanAccess: "write" }).agentKanbanAccess).toBe(
+      "write",
+    );
+    expect(() => decodeServerSettingsPatch({ agentKanbanAccess: "write-only" })).toThrow();
   });
 
   it("defaults text generation to Luna at low reasoning effort", () => {

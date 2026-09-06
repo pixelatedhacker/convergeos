@@ -339,7 +339,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "agent-kanban-access",
     title: "Agent Kanban access",
     to: "/settings/integrations",
-    searchTerms: ["agents bots board tasks cards mcp project workflow"],
+    searchTerms: ["agents bots board tasks cards mcp project workflow rbac read write permission"],
   },
   {
     id: "agent-usage-access",
