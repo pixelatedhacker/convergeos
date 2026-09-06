@@ -42,6 +42,7 @@ import {
   AlarmClockOffIcon,
   BotIcon,
   CalendarClockIcon,
+  LayoutDashboardIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -1803,6 +1804,9 @@ export default function Sidebar() {
   const threads = useThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
+  const isDashboardRoute = useLocation({
+    select: (location) => location.pathname === "/dashboard",
+  });
   const isBotsRoute = useLocation({
     select: (location) => location.pathname === "/bots",
   });
@@ -3594,6 +3598,10 @@ export default function Sidebar() {
     shortcutLabelForCommand(keybindings, "chat.new") ??
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
+  const handleDashboardClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({ to: "/dashboard" });
+  }, [isMobile, router, setOpenMobile]);
   const handleBotsClick = useCallback(() => {
     if (isMobile) setOpenMobile(false);
     void router.navigate({ to: "/bots" });
@@ -3864,6 +3872,15 @@ export default function Sidebar() {
             >
               <BotIcon className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">Bots</span>
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              aria-current={isDashboardRoute ? "page" : undefined}
+              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+              isActive={isDashboardRoute}
+              onClick={handleDashboardClick}
+            >
+              <LayoutDashboardIcon className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Dashboard</span>
             </SidebarMenuButton>
             <SidebarMenuButton
               aria-current={isSchedulesRoute ? "page" : undefined}

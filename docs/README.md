@@ -6,6 +6,7 @@
 - [Permission modes](./user/permission-modes.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Organizing threads](./user/thread-sidebar.md)
+- [Glance at the dashboard](./user/dashboard.md)
 - [Review usage](./user/usage.md)
 - [Use agent mesh](./user/agent-mesh.md)
 - [Plan work with Kanban](./user/kanban.md)
