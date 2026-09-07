@@ -17,9 +17,7 @@ const running = {
   threadId: invocationThreadId,
   status: "running",
   containerId: "container-id",
-  viewerPort: 49152,
-  viewerUrl: "http://127.0.0.1:49152/vnc.html",
-  viewerAccess: "host-local",
+  viewerAccess: "authenticated-remote",
   isolation: "container",
   networkAccess: "outbound",
   warning: "This computer uses container isolation. It is not containment for hostile code.",
@@ -32,6 +30,7 @@ const computer = BotComputer.BotComputerService.of({
   resume: () => Effect.succeed(running),
   reset: () => Effect.succeed(running),
   destroy: () => Effect.succeed({ ...running, status: "absent" as const }),
+  viewerTarget: () => Effect.succeed({ containerId: "container-id", viewerPort: 49152 }),
   computerStatus: ({ threadId }) => {
     observedThreadId = threadId;
     return Effect.succeed({ ...running, threadId });

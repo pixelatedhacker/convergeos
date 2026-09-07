@@ -507,6 +507,7 @@ function BotWorkspace({
 
         <div className="pt-7">
           <BotComputerPanel
+            key={`${thread.environmentId}:${thread.id}`}
             capability={computerCapability}
             environmentId={thread.environmentId}
             threadId={thread.id}

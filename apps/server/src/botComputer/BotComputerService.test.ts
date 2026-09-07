@@ -9,7 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { it } from "@effect/vitest";
-import { Effect, Layer, Option } from "effect";
+import { Deferred, Effect, Fiber, Layer, Option } from "effect";
 import { describe, expect } from "vite-plus/test";
 
 import {
@@ -78,8 +78,7 @@ describe("BotComputerService Docker state projection", () => {
       ),
     ).toMatchObject({
       status: "running",
-      viewerPort: 49152,
-      viewerUrl: "http://127.0.0.1:49152/vnc.html?autoconnect=1&resize=remote",
+      viewerAccess: "authenticated-remote",
       networkAccess: "outbound",
     });
   });
@@ -204,6 +203,47 @@ describe("BotComputerService Docker state projection", () => {
         operation: "status",
         reason: "not-running",
       });
+    }),
+  );
+
+  it.effect("shares only an in-flight viewer inspection", () =>
+    Effect.gen(function* () {
+      const inspectionStarted = yield* Deferred.make<void>();
+      const releaseInspection = yield* Deferred.make<void>();
+      let inspections = 0;
+      const observation: DockerCli.DockerContainerObservation = {
+        id: "container-id",
+        status: "running",
+        running: true,
+        error: "",
+        image: BOT_COMPUTER_IMAGE,
+        labels,
+        viewerBindings: [{ hostIp: "127.0.0.1", hostPort: "49152" }],
+      };
+      const service = yield* makeService(
+        { botProfile },
+        makeDockerFake({
+          inspectContainer: () =>
+            Effect.gen(function* () {
+              inspections += 1;
+              yield* Deferred.succeed(inspectionStarted, undefined);
+              yield* Deferred.await(releaseInspection);
+              return observation;
+            }),
+        }),
+      );
+
+      const first = yield* service.viewerTarget({ threadId }).pipe(Effect.forkChild);
+      yield* Deferred.await(inspectionStarted);
+      const second = yield* service.viewerTarget({ threadId }).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+      expect(inspections).toBe(1);
+      yield* Deferred.succeed(releaseInspection, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+
+      yield* service.viewerTarget({ threadId });
+      expect(inspections).toBe(2);
     }),
   );
 });

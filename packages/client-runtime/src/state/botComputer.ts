@@ -9,6 +9,24 @@ import {
   createEnvironmentRpcQueryAtomFamily,
 } from "./runtime.ts";
 
+export function resolveBotComputerViewerUrl(
+  httpBaseUrl: string,
+  viewerPath: string,
+): string | undefined {
+  if (!viewerPath.startsWith("/api/bot-computer/view/")) return undefined;
+  try {
+    const base = new URL(httpBaseUrl);
+    if (base.protocol !== "http:" && base.protocol !== "https:") return undefined;
+    const viewer = new URL(viewerPath, base);
+    if (viewer.origin !== base.origin || !viewer.pathname.startsWith("/api/bot-computer/view/")) {
+      return undefined;
+    }
+    return viewer.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export function createBotComputerEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
@@ -61,6 +79,10 @@ export function createBotComputerEnvironmentAtoms<R, E>(
 
   return {
     inspect,
+    viewerAccess: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:bot-computer:viewer-access",
+      tag: WS_METHODS.botComputerViewerAccess,
+    }),
     start: lifecycleCommand(WS_METHODS.botComputerStart, "environment-data:bot-computer:start"),
     suspend: lifecycleCommand(
       WS_METHODS.botComputerSuspend,

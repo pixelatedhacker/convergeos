@@ -548,6 +548,7 @@ function GeneralSettingsSection() {
       <SettingsRow icon="folder" label="Project Grouping" target="SettingsProjectGrouping" />
       <AutoSettleSettingsRows />
       <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
+      <SettingsRow icon="desktopcomputer" label="Bots" target="SettingsBots" />
       <SettingsRow icon="rectangle.3.group" label="Kanban" target="SettingsKanban" />
     </SettingsSection>
   );

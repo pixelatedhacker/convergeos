@@ -43,31 +43,26 @@ function isLoopbackHostname(hostname: string): boolean {
   );
 }
 
-export function canOpenHostLocalViewer(input: {
+export function legacyBotComputerViewerUrl(input: {
   readonly environmentHttpBaseUrl: string | null;
-  readonly viewerUrl: string | undefined;
-  readonly viewerPort: number | undefined;
-  readonly clientOrigin: string;
-}): boolean {
-  if (
-    input.environmentHttpBaseUrl === null ||
-    input.viewerUrl === undefined ||
-    input.viewerPort === undefined
-  ) {
-    return false;
-  }
+  readonly viewerUrl: string;
+  readonly viewerPort: number;
+}): string | null {
+  if (input.environmentHttpBaseUrl === null) return null;
   try {
     const environment = new URL(input.environmentHttpBaseUrl);
     const viewer = new URL(input.viewerUrl);
-    return (
-      isLoopbackHostname(environment.hostname.toLowerCase()) &&
+    const environmentIsLoopback = isLoopbackHostname(environment.hostname.toLowerCase());
+    const viewerIsLoopback = isLoopbackHostname(viewer.hostname.toLowerCase());
+    return environmentIsLoopback &&
+      viewerIsLoopback &&
       viewer.protocol === "http:" &&
-      isLoopbackHostname(viewer.hostname.toLowerCase()) &&
       Number(viewer.port) === input.viewerPort &&
       viewer.pathname === "/vnc.html" &&
-      viewer.origin !== input.clientOrigin
-    );
+      viewer.origin !== environment.origin
+      ? viewer.toString()
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
