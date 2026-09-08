@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Orchestrator"
+  short_description: "Orchestrate multi-agent work using ConvergeOS native MCP Agent Mesh"
+  default_prompt: "Use $agent-orchestrator to discover models, delegate tasks to workers in isolated worktrees, and run clean-room verification."
