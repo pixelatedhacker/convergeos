@@ -43,7 +43,7 @@ import {
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
-const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
+const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--workspace-macos-traffic-lights-inset)";
 
 // The settings nav (and the Clerk profile surfaces behind it) only renders on
 // settings routes; lazy-loading it keeps that subtree out of the startup chunk.
