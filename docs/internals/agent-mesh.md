@@ -121,7 +121,9 @@ as an array of `{ id, value }` entries drawn from `model.capabilities.optionDesc
 keys differ between drivers, such as `reasoningEffort`, `effort`, `thinking`, and `variant`. A null
 capability description does not establish support for an effort override.
 
-`agents_list` and `agents_read` expose each thread's configured `modelSelection`. This is useful
+`agents_list` and `agents_read` expose each thread's configured `modelSelection` and its checked-out
+`branch` (null for the shared workspace or a detached HEAD). A bot's branch is stable, so a lead can
+merge or diff its work by name without asking the bot to report it. The model selection is useful
 for resolving an existing bot's role, but does not claim the actual model used by a particular
 turn. Turn-level selection overrides can differ from the saved thread selection. Explicit spawn
 selection remains necessary when escalation must differ from the caller's saved configuration.
