@@ -53,6 +53,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
+  HouseIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
@@ -2181,6 +2182,19 @@ export default function Sidebar() {
     },
     [isMobile, router, setOpenMobile],
   );
+  const handleProjectHome = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, projectGroup: SidebarProjectSnapshot) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchProjectScopeMenu({ type: "project-settings-opened" });
+      if (isMobile) setOpenMobile(false);
+      void router.navigate({
+        to: "/projects/$projectKey/home",
+        params: { projectKey: projectGroup.projectKey },
+      });
+    },
+    [isMobile, router, setOpenMobile],
+  );
 
   // Settled threads stay in the live shell stream (settled ≠ archived), so
   // the partition works directly off live shells: no archived-snapshot
@@ -3810,6 +3824,17 @@ export default function Sidebar() {
                             <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
                             {project ? (
                               <span className="ml-auto flex items-center gap-0.5">
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  aria-label={`Project home for ${project.displayName}`}
+                                  title={`Project home for ${project.displayName}`}
+                                  className="size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => handleProjectHome(event, project)}
+                                >
+                                  <HouseIcon className="size-3.5" />
+                                </Button>
                                 <Button
                                   size="icon-xs"
                                   variant="ghost-muted"
