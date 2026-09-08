@@ -13,9 +13,16 @@ const WIDTH_CLASS: Record<WorkspacePageWidth, string> = {
 /** Shared content frame for workspace pages. */
 export function WorkspacePageContainer({
   width = "readable",
+  title,
   className,
+  children,
   ...props
-}: ComponentPropsWithoutRef<"div"> & { readonly width?: WorkspacePageWidth }) {
+}: ComponentPropsWithoutRef<"div"> & {
+  readonly width?: WorkspacePageWidth;
+  /** Page heading rendered at the top of the content frame. The topbar
+      breadcrumb keeps wayfinding; this carries the page's hierarchy. */
+  readonly title?: string;
+}) {
   return (
     <div
       className={cn(
@@ -24,6 +31,11 @@ export function WorkspacePageContainer({
         className,
       )}
       {...props}
-    />
+    >
+      {title === undefined ? null : (
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+      )}
+      {children}
+    </div>
   );
 }

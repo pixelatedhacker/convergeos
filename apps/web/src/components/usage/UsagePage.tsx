@@ -113,9 +113,7 @@ export function UsagePage() {
   const topbarContent = (
     <div className="flex w-full min-w-0 items-center gap-3">
       <WorkspaceBreadcrumb ariaLabel="Usage breadcrumb" className="min-w-0">
-        <WorkspaceBreadcrumbItem current>
-          <h1>Usage</h1>
-        </WorkspaceBreadcrumbItem>
+        <WorkspaceBreadcrumbItem current>Usage</WorkspaceBreadcrumbItem>
         <WorkspaceBreadcrumbSeparator className="hidden md:flex" />
         <WorkspaceBreadcrumbItem className="hidden min-w-0 shrink md:flex">
           <span className="truncate">{windowLabel}</span>
@@ -208,7 +206,7 @@ export function UsagePage() {
         <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
+          <WorkspacePageContainer width="wide" title="Usage">
             {settling ? (
               <>
                 {environments.length > 1 ? <UsageDeviceStrip environments={environments} /> : null}

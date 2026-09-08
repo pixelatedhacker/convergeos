@@ -291,9 +291,7 @@ export function SchedulesPage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Schedules breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1>Schedules</h1>
-            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbItem current>Schedules</WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
           <Button
             className="ms-auto"
@@ -306,7 +304,7 @@ export function SchedulesPage() {
         </WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
+          <WorkspacePageContainer width="wide" title="Schedules">
             {environments.length === 0 ? (
               <EmptyNotice
                 title="No connected environments"
