@@ -226,6 +226,7 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: BotsRouteScreen,
       linking: "bots",
       options: {
+        ...SHEET_SOLID_HEADER_OPTIONS,
         title: "Bots",
       },
     }),

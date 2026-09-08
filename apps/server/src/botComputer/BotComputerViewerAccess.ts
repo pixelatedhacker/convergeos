@@ -55,7 +55,7 @@ export const make = (options?: { readonly nowMs?: () => number }) => {
     const websocketPath = `${BOT_COMPUTER_VIEWER_ROUTE_PREFIX}/${token}/websockify`;
     const query = new URLSearchParams({
       autoconnect: "1",
-      resize: "remote",
+      resize: "scale",
       path: websocketPath.replace(/^\//, ""),
     });
     return {

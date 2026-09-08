@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import {
   HttpClient,
@@ -46,6 +47,23 @@ export function injectBotComputerViewerStorageShim(html: string): string | undef
   return `${html.slice(0, head + 6)}${STORAGE_SHIM}${html.slice(head + 6)}`;
 }
 
+export const executeViewerHttpRequest = (
+  validate: Effect.Effect<boolean>,
+  httpClient: HttpClient.HttpClient,
+  request: HttpClientRequest.HttpClientRequest,
+  initialDocument: boolean,
+) =>
+  validate.pipe(
+    Effect.flatMap((valid) =>
+      valid
+        ? httpClient.execute(request).pipe(Effect.map(Option.some))
+        : Effect.succeed(Option.none()),
+    ),
+    initialDocument
+      ? Effect.retry({ times: 49, schedule: Schedule.spaced("100 millis") })
+      : (effect) => effect,
+  );
+
 export function parseBotComputerViewerPath(pathname: string) {
   const suffix = pathname.slice(`${BOT_COMPUTER_VIEWER_ROUTE_PREFIX}/`.length);
   const separator = suffix.indexOf("/");
@@ -74,28 +92,42 @@ const route = Effect.gen(function* () {
   const target = yield* access.resolve(parsed.token);
   if (target === undefined) return HttpServerResponse.text("Not Found", { status: 404 });
   const sessions = yield* SessionStore.SessionStore;
-  const activeSessions = yield* sessions.listActive().pipe(Effect.option);
-  if (
-    Option.isNone(activeSessions) ||
-    !activeSessions.value.some((session) => session.sessionId === target.sessionId)
-  ) {
-    return HttpServerResponse.text("Not Found", { status: 404 });
-  }
-
   const botComputer = yield* BotComputer.BotComputerService;
-  const current = yield* botComputer
-    .viewerTarget({ threadId: target.threadId })
-    .pipe(Effect.option);
-  if (
-    Option.isNone(current) ||
-    current.value.containerId !== target.containerId ||
-    current.value.viewerPort !== target.viewerPort
-  ) {
-    return HttpServerResponse.text("Not Found", { status: 404 });
-  }
+  const targetIsCurrent = botComputer.viewerTarget({ threadId: target.threadId }).pipe(
+    Effect.option,
+    Effect.map(
+      (current) =>
+        Option.isSome(current) &&
+        current.value.containerId === target.containerId &&
+        current.value.viewerPort === target.viewerPort,
+    ),
+  );
+  const accessIsCurrent = Effect.gen(function* () {
+    const latestTarget = yield* access.resolve(parsed.token);
+    if (
+      latestTarget === undefined ||
+      latestTarget.sessionId !== target.sessionId ||
+      latestTarget.threadId !== target.threadId ||
+      latestTarget.containerId !== target.containerId ||
+      latestTarget.viewerPort !== target.viewerPort
+    ) {
+      return false;
+    }
+    const latestSessions = yield* sessions.listActive().pipe(Effect.option);
+    if (
+      Option.isNone(latestSessions) ||
+      !latestSessions.value.some((session) => session.sessionId === target.sessionId)
+    ) {
+      return false;
+    }
+    return yield* targetIsCurrent;
+  });
 
   const isWebSocket = request.headers.upgrade?.toLowerCase() === "websocket";
   if (isWebSocket) {
+    if (!(yield* accessIsCurrent)) {
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    }
     if (parsed.upstreamPath !== "websockify") {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
@@ -126,17 +158,24 @@ const route = Effect.gen(function* () {
   const upstreamUrl = new URL(`http://127.0.0.1:${target.viewerPort}/`);
   upstreamUrl.pathname = `/${parsed.upstreamPath}`;
   upstreamUrl.search = requestUrl.value.search;
-  const response = yield* httpClient
-    .execute(HttpClientRequest.get(upstreamUrl))
-    .pipe(Effect.option);
-  if (Option.isNone(response)) {
+  const responseResult = yield* executeViewerHttpRequest(
+    accessIsCurrent,
+    httpClient,
+    HttpClientRequest.get(upstreamUrl),
+    parsed.upstreamPath === "vnc.html",
+  ).pipe(Effect.option);
+  if (Option.isNone(responseResult)) {
     return HttpServerResponse.text("Bad Gateway", {
       status: 502,
       headers: VIEWER_RESPONSE_HEADERS,
     });
   }
+  if (Option.isNone(responseResult.value)) {
+    return HttpServerResponse.text("Not Found", { status: 404 });
+  }
+  const response = responseResult.value.value;
   if (parsed.upstreamPath === "vnc.html") {
-    const html = yield* response.value.text.pipe(Effect.option);
+    const html = yield* response.text.pipe(Effect.option);
     const injected = Option.isSome(html)
       ? injectBotComputerViewerStorageShim(html.value)
       : undefined;
@@ -147,15 +186,15 @@ const route = Effect.gen(function* () {
       });
     }
     return HttpServerResponse.text(injected, {
-      status: response.value.status,
+      status: response.status,
       contentType: "text/html; charset=utf-8",
       headers: VIEWER_RESPONSE_HEADERS,
     });
   }
-  const contentType = response.value.headers["content-type"];
-  const contentLength = response.value.headers["content-length"];
-  return HttpServerResponse.stream(response.value.stream, {
-    status: response.value.status,
+  const contentType = response.headers["content-type"];
+  const contentLength = response.headers["content-length"];
+  return HttpServerResponse.stream(response.stream, {
+    status: response.status,
     headers: {
       ...VIEWER_RESPONSE_HEADERS,
       ...(contentType === undefined ? {} : { "Content-Type": contentType }),

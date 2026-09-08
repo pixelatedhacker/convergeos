@@ -19,6 +19,9 @@ describe("BotComputerViewerAccess", () => {
         const first = yield* access.issue(target);
         const second = yield* access.issue(target);
         expect(first.viewerPath).not.toBe(second.viewerPath);
+        expect(new URL(first.viewerPath, "http://viewer.invalid").searchParams.get("resize")).toBe(
+          "scale",
+        );
         const firstToken = first.viewerPath.split("/")[4];
         expect(firstToken).toBeDefined();
         expect((yield* access.resolve(firstToken ?? ""))?.viewerPort).toBe(49152);

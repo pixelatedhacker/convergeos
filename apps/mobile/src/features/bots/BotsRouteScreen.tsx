@@ -81,7 +81,7 @@ export function BotsRouteScreen() {
     () =>
       threads
         .filter((thread) => thread.botProfile != null)
-        .toSorted((left, right) =>
+        .sort((left, right) =>
           (left.botProfile?.displayName ?? left.title).localeCompare(
             right.botProfile?.displayName ?? right.title,
           ),
