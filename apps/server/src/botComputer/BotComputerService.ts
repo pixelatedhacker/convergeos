@@ -23,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Semaphore from "effect/Semaphore";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -47,7 +48,6 @@ import {
   BOT_COMPUTER_SPEC_VERSION,
   makeBotComputerCreateArgs,
   makeBotComputerIdentity,
-  makeBotComputerViewerUrl,
   type BotComputerIdentity,
 } from "./BotComputerSpec.ts";
 import * as DockerCli from "./DockerCli.ts";
@@ -67,7 +67,7 @@ interface AuthorizedBotComputer {
 
 const baseState = (threadId: ThreadId) => ({
   threadId,
-  viewerAccess: "host-local" as const,
+  viewerAccess: "authenticated-remote" as const,
   isolation: "container" as const,
   warning: BOT_COMPUTER_ISOLATION_WARNING,
 });
@@ -154,8 +154,6 @@ export function stateFromDockerObservation(
       ...baseState(target.threadId),
       status: "running",
       containerId: observation.id,
-      viewerPort: port,
-      viewerUrl: makeBotComputerViewerUrl(port),
       networkAccess,
     };
   }
@@ -199,6 +197,12 @@ export class BotComputerService extends Context.Service<
     readonly destroy: (
       input: BotComputerInput,
     ) => Effect.Effect<BotComputerState, BotComputerAuthorizationError | BotComputerOperationError>;
+    readonly viewerTarget: (
+      input: BotComputerInput,
+    ) => Effect.Effect<
+      { readonly containerId: string; readonly viewerPort: number },
+      BotComputerServiceError
+    >;
     readonly computerStatus: (
       input: BotComputerInput,
     ) => Effect.Effect<BotComputerRunningState, BotComputerServiceError>;
@@ -226,6 +230,33 @@ export const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironmentIdentity;
   const platform = yield* HostProcessPlatform;
   const mutationLock = yield* Semaphore.make(1);
+  const viewerInspections = yield* SynchronizedRef.make(
+    new Map<string, ReturnType<typeof docker.inspectContainer>>(),
+  );
+
+  const inspectViewerTarget = (containerName: string) =>
+    SynchronizedRef.modifyEffect(viewerInspections, (inspections) => {
+      const pending = inspections.get(containerName);
+      if (pending !== undefined) return Effect.succeed([pending, inspections] as const);
+      return Effect.cached(docker.inspectContainer(containerName)).pipe(
+        Effect.map((cached) => {
+          let shared = cached;
+          shared = cached.pipe(
+            Effect.ensuring(
+              SynchronizedRef.update(viewerInspections, (current) => {
+                if (current.get(containerName) !== shared) return current;
+                const next = new Map(current);
+                next.delete(containerName);
+                return next;
+              }),
+            ),
+          );
+          const next = new Map(inspections);
+          next.set(containerName, shared);
+          return [shared, next] as const;
+        }),
+      );
+    }).pipe(Effect.flatten);
 
   const authorize = Effect.fn("BotComputerService.authorize")(function* (
     input: BotComputerInput,
@@ -472,7 +503,7 @@ export const make = Effect.gen(function* () {
   ) {
     const target = yield* authorize(input, "inspect");
     const state = yield* inspectAuthorized(target, "inspect");
-    if (state.status !== "running") {
+    if (state.status !== "running" || state.viewerAccess !== "authenticated-remote") {
       return yield* new BotComputerControlError({
         threadId: input.threadId,
         operation,
@@ -509,6 +540,53 @@ export const make = Effect.gen(function* () {
 
   const computerStatus: BotComputerService["Service"]["computerStatus"] = (input) =>
     requireRunning(input, "status").pipe(Effect.map(({ state }) => state));
+
+  const viewerTarget: BotComputerService["Service"]["viewerTarget"] = Effect.fn(
+    "BotComputerService.viewerTarget",
+  )(function* (input) {
+    const target = yield* authorize(input, "inspect");
+    if (platform !== "linux" && platform !== "darwin") {
+      return yield* new BotComputerControlError({
+        threadId: input.threadId,
+        operation: "status",
+        reason: "not-running",
+        detail: "Bot computers require a Linux-compatible Docker host.",
+      });
+    }
+    const observation = yield* inspectViewerTarget(target.identity.containerName).pipe(
+      Effect.mapError(
+        (error) =>
+          new BotComputerOperationError({
+            threadId: input.threadId,
+            operation: "inspect",
+            message: error.message,
+          }),
+      ),
+    );
+    const state = stateFromDockerObservation(target, observation, "inspect");
+    if (state.status !== "running" || state.viewerAccess !== "authenticated-remote") {
+      return yield* new BotComputerControlError({
+        threadId: input.threadId,
+        operation: "status",
+        reason: "not-running",
+        detail: `The Bot computer is ${state.status}; start or resume it before viewing it.`,
+      });
+    }
+    const binding = observation?.viewerBindings.find(
+      ({ hostIp, hostPort }) =>
+        (hostIp === "127.0.0.1" || hostIp === "::1") && /^\d+$/.test(hostPort),
+    );
+    const viewerPort = binding === undefined ? 0 : Number(binding.hostPort);
+    if (observation?.id !== state.containerId || viewerPort < 1 || viewerPort > 65_535) {
+      return yield* new BotComputerControlError({
+        threadId: input.threadId,
+        operation: "status",
+        reason: "not-running",
+        detail: "The running Bot computer has no valid viewer endpoint.",
+      });
+    }
+    return { containerId: state.containerId, viewerPort };
+  });
 
   const snapshot: BotComputerService["Service"]["snapshot"] = (input) =>
     mutationLock.withPermits(1)(
@@ -566,6 +644,7 @@ export const make = Effect.gen(function* () {
     resume,
     reset,
     destroy,
+    viewerTarget,
     computerStatus,
     snapshot,
     click,

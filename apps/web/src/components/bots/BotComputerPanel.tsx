@@ -1,9 +1,11 @@
 import type {
   BotComputerCapability,
   BotComputerState,
+  BotComputerViewerAccess,
   EnvironmentId,
   ThreadId,
 } from "@t3tools/contracts";
+import { resolveBotComputerViewerUrl } from "@t3tools/client-runtime/state/bot-computer";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   ExternalLinkIcon,
@@ -17,8 +19,9 @@ import {
   Trash2Icon,
   WifiIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { isElectron } from "../../env";
 import { useEnvironmentHttpBaseUrl } from "../../state/environments";
 import { botComputerEnvironment } from "../../state/botComputer";
 import { useEnvironmentQuery } from "../../state/query";
@@ -39,7 +42,7 @@ import {
   botComputerDisplayState,
   botComputerPrimaryAction,
   botComputerStatusLabel,
-  canOpenHostLocalViewer,
+  legacyBotComputerViewerUrl,
   type BotComputerPrimaryAction,
 } from "./BotComputerPanel.logic";
 
@@ -59,7 +62,10 @@ export function BotComputerPanel({
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
-  const target = { environmentId, input: { threadId } } as const;
+  const target = useMemo(
+    () => ({ environmentId, input: { threadId } }) as const,
+    [environmentId, threadId],
+  );
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
   const query = useEnvironmentQuery(capability ? botComputerEnvironment.inspect(target) : null);
   const start = useAtomCommand(botComputerEnvironment.start, { reportFailure: false });
@@ -70,16 +76,56 @@ export function BotComputerPanel({
   const [pending, setPending] = useState<BotComputerMutation | null>(null);
   const [confirming, setConfirming] = useState<DestructiveMutation | null>(null);
   const [mutationState, setMutationState] = useState<BotComputerState | null>(null);
+  const [viewerAccess, setViewerAccess] = useState<BotComputerViewerAccess | null>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
+  const viewerRequestGeneration = useRef(0);
   const state = botComputerDisplayState(query.data, mutationState);
-  const canOpenViewer = canOpenHostLocalViewer({
-    environmentHttpBaseUrl,
-    viewerUrl: state?.status === "running" ? state.viewerUrl : undefined,
-    viewerPort: state?.status === "running" ? state.viewerPort : undefined,
-    clientOrigin: window.location.origin,
+  const requestViewerAccess = useAtomCommand(botComputerEnvironment.viewerAccess, {
+    reportFailure: false,
   });
+  const refreshViewerAccess = useCallback(async () => {
+    const generation = ++viewerRequestGeneration.current;
+    setViewerAccess(null);
+    setViewerError(null);
+    const result = await requestViewerAccess(target);
+    if (generation !== viewerRequestGeneration.current) return;
+    if (result._tag === "Failure") {
+      setViewerError(errorMessage(squashAtomCommandFailure(result)));
+      return;
+    }
+    setViewerAccess(result.value);
+  }, [requestViewerAccess, target]);
+  useEffect(() => {
+    if (state?.status !== "running" || state.viewerAccess !== "authenticated-remote") {
+      viewerRequestGeneration.current += 1;
+      return;
+    }
+    // Viewer access is an external capability that becomes meaningful only in the running state.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refreshViewerAccess();
+    return () => {
+      viewerRequestGeneration.current += 1;
+    };
+  }, [refreshViewerAccess, state?.status, state?.viewerAccess]);
+  const authenticatedViewerUrl =
+    environmentHttpBaseUrl === null || viewerAccess === null
+      ? null
+      : resolveBotComputerViewerUrl(environmentHttpBaseUrl, viewerAccess.viewerPath);
+  const viewerUrl =
+    state?.status === "running" && state.viewerAccess === "host-local"
+      ? legacyBotComputerViewerUrl({
+          environmentHttpBaseUrl,
+          viewerPort: state.viewerPort,
+          viewerUrl: state.viewerUrl,
+        })
+      : authenticatedViewerUrl;
+  const canEmbedViewer =
+    state?.status === "running" && state.viewerAccess === "authenticated-remote" && !isElectron;
 
   const run = async (operation: BotComputerMutation) => {
     if (pending !== null) return;
+    viewerRequestGeneration.current += 1;
+    setViewerAccess(null);
     setMutationState(null);
     setPending(operation);
     try {
@@ -101,6 +147,14 @@ export function BotComputerPanel({
         return;
       }
       setMutationState(result.value.status === "failed" ? result.value : null);
+      if (
+        result.value.status === "running" &&
+        result.value.viewerAccess === "authenticated-remote"
+      ) {
+        await refreshViewerAccess();
+      } else {
+        setViewerAccess(null);
+      }
     } finally {
       setPending(null);
     }
@@ -109,6 +163,62 @@ export function BotComputerPanel({
   const runPrimary = (action: BotComputerPrimaryAction) => {
     if (action === "start" || action === "retry") void run("start");
     if (action === "resume") void run("resume");
+  };
+
+  const openViewer = async () => {
+    if (state?.status !== "running") return;
+    if (state.viewerAccess === "host-local") {
+      if (viewerUrl !== null) window.open(viewerUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const popup = isElectron ? null : window.open("about:blank", "_blank");
+    if (popup !== null) popup.opener = null;
+    const result = await requestViewerAccess(target);
+    if (result._tag === "Failure") {
+      popup?.close();
+      toastManager.add({
+        type: "error",
+        title: "Could not open computer",
+        description: errorMessage(squashAtomCommandFailure(result)),
+      });
+      return;
+    }
+    const freshUrl =
+      environmentHttpBaseUrl === null
+        ? undefined
+        : resolveBotComputerViewerUrl(environmentHttpBaseUrl, result.value.viewerPath);
+    if (freshUrl === undefined) {
+      popup?.close();
+      toastManager.add({
+        type: "error",
+        title: "Could not open computer",
+        description: "The environment returned an invalid viewer address.",
+      });
+      return;
+    }
+    if (isElectron) {
+      try {
+        const opened = await window.desktopBridge?.openExternal(freshUrl);
+        if (opened !== true) throw new Error("Unable to open link.");
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not open computer",
+          description: errorMessage(error),
+        });
+      }
+      return;
+    }
+    if (popup === null) {
+      toastManager.add({
+        type: "error",
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site, then try opening the computer again.",
+      });
+      return;
+    }
+    popup.location.replace(freshUrl);
   };
 
   const primaryAction = botComputerPrimaryAction(state);
@@ -142,22 +252,29 @@ export function BotComputerPanel({
 
         <div className="ms-auto flex items-center gap-1.5">
           <Button
-            aria-label="Refresh computer status"
+            aria-label={
+              state?.status === "running" ? "Reconnect desktop" : "Refresh computer status"
+            }
             disabled={capability === undefined || pending !== null || query.isPending}
             size="icon-sm"
+            title={state?.status === "running" ? "Reconnect desktop" : "Refresh computer status"}
             variant="ghost"
             onClick={() => {
               setMutationState(null);
               query.refresh();
+              if (state?.status === "running" && state.viewerAccess === "authenticated-remote") {
+                void refreshViewerAccess();
+              }
             }}
           >
             <RefreshCwIcon className={query.isPending ? "animate-spin" : undefined} />
           </Button>
-          {state?.status === "running" && canOpenViewer && (
+          {state?.status === "running" && viewerUrl !== null && (
             <Button
+              disabled={pending !== null}
               size="sm"
               variant="ghost"
-              onClick={() => window.open(state.viewerUrl, "_blank", "noopener,noreferrer")}
+              onClick={() => void openViewer()}
             >
               <ExternalLinkIcon /> Open
             </Button>
@@ -204,21 +321,33 @@ export function BotComputerPanel({
             title="Checking the host"
             detail="Reading this Bot's container state."
           />
-        ) : state?.status === "running" && canOpenViewer ? (
+        ) : state?.status === "running" && viewerUrl !== null && canEmbedViewer ? (
           <iframe
             allow="clipboard-read; clipboard-write"
             className="absolute inset-0 size-full border-0 bg-black"
-            // noVNC needs a non-opaque origin for its ES modules. The viewer gate rejects same-origin URLs.
-            // oxlint-disable-next-line react/iframe-missing-sandbox
-            sandbox="allow-forms allow-modals allow-pointer-lock allow-same-origin allow-scripts"
-            src={state.viewerUrl}
+            sandbox="allow-forms allow-modals allow-pointer-lock allow-scripts"
+            src={viewerUrl}
             title="Bot computer desktop"
+          />
+        ) : state?.status === "running" &&
+          state.viewerAccess === "host-local" &&
+          viewerUrl === null ? (
+          <ComputerEmptyState
+            icon={<ServerOffIcon />}
+            title="Remote viewing needs an update"
+            detail="Update this environment to view its Bot computers from remote clients."
+          />
+        ) : state?.status === "running" && viewerUrl === null ? (
+          <ComputerEmptyState
+            icon={<MonitorIcon />}
+            title="Preparing the desktop"
+            detail={viewerError ?? "Requesting secure viewer access from the environment."}
           />
         ) : state?.status === "running" ? (
           <ComputerEmptyState
-            icon={<MonitorIcon />}
-            title="Desktop is running on its host"
-            detail="The first Bot Computer viewer is host-local. Open this environment on the host to take control."
+            icon={<ExternalLinkIcon />}
+            title="Desktop is ready"
+            detail="Open the computer in your browser to take control."
           />
         ) : state?.status === "unavailable" ? (
           <ComputerEmptyState

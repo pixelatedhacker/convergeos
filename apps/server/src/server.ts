@@ -11,6 +11,8 @@ import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as BotComputer from "./botComputer/BotComputerService.ts";
+import * as BotComputerViewerAccess from "./botComputer/BotComputerViewerAccess.ts";
+import { botComputerViewerProxyRouteLayer } from "./botComputer/BotComputerViewerProxy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as ServerConfig from "./config.ts";
 import {
@@ -450,6 +452,8 @@ const BotComputerLayerLive = BotComputer.layer.pipe(
   Layer.provide(ServerEnvironmentLayerLive),
 );
 
+const BotComputerViewerAccessLayerLive = BotComputerViewerAccess.layer;
+
 const AuthLayerLive = EnvironmentAuth.layer.pipe(
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provide(ServerEnvironmentLayerLive),
@@ -595,6 +599,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     otlpTracesProxyRouteLayer,
     assetRouteLayer,
     attachmentUploadRouteLayer,
+    botComputerViewerProxyRouteLayer,
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
   ),
@@ -813,6 +818,7 @@ export const makeServerLayer = Layer.unwrap(
     );
 
     return serverApplicationLayer.pipe(
+      Layer.provideMerge(BotComputerViewerAccessLayerLive),
       Layer.provideMerge(runtimeServicesLive),
       Layer.provide(activationLayer),
       Layer.provideMerge(serverRelayBrokerTracingLayer),

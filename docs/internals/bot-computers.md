@@ -1,6 +1,6 @@
 # Bot computers
 
-Bot Computer is a host-local Docker lifecycle attached to an existing active Bot thread. The
+Bot Computer is a Docker lifecycle attached to an existing active Bot thread. The
 canonical key is the Bot `threadId` plus the server environment ID. It does not create another
 agent identity, transcript, scheduler, event aggregate, or projection.
 
@@ -13,8 +13,17 @@ label. The server rejects inactive or missing threads, threads without an active
 Bots whose worktree is absent or resolves to the project's shared checkout.
 
 The server advertises the capability on Linux and macOS. Docker itself may still be unavailable;
-inspection then reports that explicitly. Viewer URLs are host-local only and always use a
-loopback-published ephemeral port.
+inspection then reports that explicitly. Docker continues to publish noVNC only on a loopback
+ephemeral port. Clients request a short-lived viewer path over an authenticated, operate-scoped
+RPC, and the server proxies both noVNC assets and its WebSocket through that path. The path is
+bound to the authenticated session, thread, container, port, and expiry. Lifecycle changes revoke
+existing paths, and every proxy request rechecks the active session and current Docker target.
+
+Viewer responses use an opaque-origin CSP sandbox with scripts enabled, CORS for sandboxed module
+loads, no referrer, and no cache. The server injects a page-local in-memory storage shim before the
+full noVNC UI loads because opaque origins cannot access browser storage. This preserves the
+touch keyboard and clipboard controls without giving container-served code access to ConvergeOS
+cookies or storage.
 
 ## Lifecycle
 
@@ -59,6 +68,6 @@ runtime directories. The bundled Debian image contains Xvfb, Openbox, Chromium, 
 x11vnc, and noVNC/websockify on port 6080. x11vnc is loopback-only inside the container, and Docker
 publishes noVNC on host loopback.
 
-This is container isolation, not containment for hostile code. A later remote-viewer design must
-add an authenticated server proxy or tunnel; it must not rewrite `127.0.0.1` as if it named the
-client device.
+This is container isolation, not containment for hostile code. The authenticated viewer proxy
+never accepts an upstream host or port from the client; it resolves only server-authorized Docker
+targets and keeps loopback endpoints out of the client contract.
