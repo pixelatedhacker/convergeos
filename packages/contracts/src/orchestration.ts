@@ -489,7 +489,7 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
 export const BotDisplayName = TrimmedNonEmptyString.check(Schema.isMaxLength(80));
-export const BotDescription = TrimmedString.check(Schema.isMaxLength(500));
+export const BotDescription = TrimmedString.check(Schema.isMaxLength(2000));
 
 /** A named agent profile whose containing thread is its canonical inbox. */
 export const BotProfile = Schema.Struct({

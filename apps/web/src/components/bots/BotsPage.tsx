@@ -497,7 +497,7 @@ function BotWorkspace({
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {thread.botProfile?.description ||
-                "A persistent agent ready to own work in this project."}
+                "No standing instructions yet. Edit the bot to add the role it follows on every task."}
             </p>
           </div>
           <Button aria-label="Edit bot" size="icon-sm" variant="ghost" onClick={onEdit}>
@@ -749,7 +749,7 @@ function EditBotDialog({
         <DialogHeader>
           <DialogTitle>Edit bot</DialogTitle>
           <DialogDescription>
-            Give this fleet member a clear name and responsibility.
+            Name this bot and write the instructions it follows on every task.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
@@ -760,10 +760,10 @@ function EditBotDialog({
             onChange={(event) => setDisplayName(event.target.value)}
           />
           <Textarea
-            aria-label="Bot description"
-            maxLength={500}
-            placeholder="What should this bot handle?"
-            rows={4}
+            aria-label="Bot instructions"
+            maxLength={2000}
+            placeholder="Standing instructions sent ahead of every task, such as the role, the test command, and the commit rule."
+            rows={6}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />

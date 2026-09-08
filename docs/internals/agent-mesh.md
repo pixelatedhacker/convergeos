@@ -90,6 +90,13 @@ inbox. This deliberately avoids a second identity registry. A profile has a disp
 description, revision, and timestamps. Configuration uses compare-and-swap revisions so two
 clients cannot silently overwrite one another.
 
+The description is the bot's standing instructions. `ProviderCommandReactor` composes them ahead
+of the task text when it builds the provider send-turn request (`composeBotTurnInput` in
+`apps/server/src/orchestration/botInstructions.ts`), so every entry point that starts a turn on
+the thread — the Bots page, Kanban dispatch, and `agents_send` — carries them without restating
+the role. The persisted user message, title generation, and prompt-command detection keep the
+bare task. Disabling the bot clears the profile and therefore the injection.
+
 Only an active thread with a distinct worktree can become a bot. Two active bots cannot claim the
 same normalized worktree. An active bot inbox cannot be archived or deleted until its profile is
 disabled; disabling preserves the thread, history, and worktree.
