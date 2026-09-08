@@ -50,19 +50,19 @@ const ATTENTION_BADGE: Record<
   failed: { label: "Failed", variant: "error" },
 };
 
-function DashboardCard(props: {
+function DashboardSection(props: {
   readonly icon: ReactNode;
   readonly title: string;
   readonly count?: number;
   readonly children: ReactNode;
 }) {
   return (
-    <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
+    <section className="flex min-w-0 flex-col gap-2">
       <header className="flex items-center gap-2">
         <span className="text-muted-foreground [&_svg]:size-4">{props.icon}</span>
         <h2 className="text-sm font-medium text-foreground">{props.title}</h2>
         {props.count !== undefined ? (
-          <span className="ms-auto text-xs tabular-nums text-muted-foreground">{props.count}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{props.count}</span>
         ) : null}
       </header>
       {props.children}
@@ -148,26 +148,22 @@ export function DashboardPage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Dashboard breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1>Dashboard</h1>
-            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbItem current>Dashboard</WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
         </WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="expanded">
-            <div className="grid gap-4 md:grid-cols-2">
-              <DashboardCard
+          <WorkspacePageContainer width="expanded" title="Dashboard">
+            <div className="flex flex-col gap-10">
+              <DashboardSection
                 count={attention.length}
                 icon={<BellRingIcon />}
                 title="Needs attention"
               >
                 {attention.length === 0 ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                    Nothing is waiting on you.
-                  </p>
+                  <p className="py-1.5 text-sm text-muted-foreground">Nothing is waiting on you.</p>
                 ) : (
-                  <ul className="flex flex-col">
+                  <ul className="-mx-2 flex flex-col">
                     {attention.map((row) => {
                       const badge = ATTENTION_BADGE[row.attentionReason ?? "input"];
                       return (
@@ -182,145 +178,153 @@ export function DashboardPage() {
                     })}
                   </ul>
                 )}
-              </DashboardCard>
+              </DashboardSection>
 
-              <DashboardCard count={running.length} icon={<LoaderIcon />} title="Running now">
-                {running.length === 0 ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No agents are working right now.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col">
-                    {running.map((row) => (
-                      <CardRow
-                        key={`${row.environmentId}:${row.threadId}`}
-                        meta={`${projectName(row)} · ${formatWorkingDurationLabel(
-                          now.getTime() - parseTimestampMs(row.sortAt),
-                        )}`}
-                        title={row.title}
-                        trailing={
-                          <Badge variant={row.status === "monitoring" ? "info" : "success"}>
-                            {row.status === "monitoring" ? "Monitoring" : "Working"}
-                          </Badge>
-                        }
-                        onClick={() => openThread(row)}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </DashboardCard>
-
-              <DashboardCard count={upcoming.length} icon={<CalendarClockIcon />} title="Schedules">
-                {schedulesPending && upcoming.length === 0 ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading schedules…</p>
-                ) : upcoming.length === 0 && recentRuns.length === 0 ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No schedules yet. Create one from the Schedules page.
-                  </p>
-                ) : (
-                  <>
-                    {upcoming.length > 0 ? (
-                      <ul className="flex flex-col">
-                        {upcoming.map((row) => (
-                          <CardRow
-                            key={`${row.environmentId}:${row.scheduleId}`}
-                            meta={formatScheduleInstant(row.nextRunAt, row.timeZone)}
-                            title={row.title}
-                          />
-                        ))}
-                      </ul>
-                    ) : null}
-                    {recentRuns.length > 0 ? (
-                      <ul className="flex flex-col border-t border-border pt-2">
-                        {recentRuns.map((row) => (
-                          <CardRow
-                            key={`${row.environmentId}:${row.scheduleId}:${row.threadId}:${row.firedAt}`}
-                            meta={`Ran ${relativeLabel(row.firedAt)}`}
-                            title={row.scheduleTitle ?? "Deleted schedule"}
-                            trailing={
-                              <ArrowUpRightIcon className="size-3.5 text-muted-foreground" />
-                            }
-                            onClick={() => openThread(row)}
-                          />
-                        ))}
-                      </ul>
-                    ) : null}
-                  </>
-                )}
-                <button
-                  className="mt-auto px-2 text-start text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => void navigate({ to: "/schedules" })}
-                  type="button"
-                >
-                  Manage schedules
-                </button>
-              </DashboardCard>
-
-              <DashboardCard
-                count={quotaRows.length}
-                icon={<GaugeIcon />}
-                title="Subscription quota"
-              >
-                {quota.isPending ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">Reading quota…</p>
-                ) : quotaRows.length === 0 &&
-                  quota.environments.every((environment) => environment.error === null) ? (
-                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No quota collectors reported.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col">
-                    {quotaRows.map((row) => (
-                      <CardRow
-                        key={`${row.environmentId}:${row.subjectId}`}
-                        meta={
-                          row.worstWindowLabel === null
-                            ? `${row.environmentLabel} · ${row.status}`
-                            : `${row.environmentLabel} · ${row.worstWindowLabel}${
-                                row.worstWindowResetsAt
-                                  ? ` · resets ${relativeLabel(row.worstWindowResetsAt)}`
-                                  : ""
-                              }`
-                        }
-                        title={`${row.provider}${row.plan ? ` (${row.plan})` : ""}`}
-                        trailing={
-                          row.worstWindowRemainingPercent === null ? null : (
-                            <Badge
-                              variant={
-                                row.worstWindowRemainingPercent <= 10
-                                  ? "error"
-                                  : row.worstWindowRemainingPercent <= 25
-                                    ? "warning"
-                                    : "default"
-                              }
-                            >
-                              {row.worstWindowRemainingPercent}% left
+              <div className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                <DashboardSection count={running.length} icon={<LoaderIcon />} title="Running now">
+                  {running.length === 0 ? (
+                    <p className="py-1.5 text-sm text-muted-foreground">
+                      No agents are working right now.
+                    </p>
+                  ) : (
+                    <ul className="-mx-2 flex flex-col">
+                      {running.map((row) => (
+                        <CardRow
+                          key={`${row.environmentId}:${row.threadId}`}
+                          meta={`${projectName(row)} · ${formatWorkingDurationLabel(
+                            now.getTime() - parseTimestampMs(row.sortAt),
+                          )}`}
+                          title={row.title}
+                          trailing={
+                            <Badge variant={row.status === "monitoring" ? "info" : "success"}>
+                              {row.status === "monitoring" ? "Monitoring" : "Working"}
                             </Badge>
-                          )
-                        }
-                        onClick={() => void navigate({ to: "/usage" })}
-                      />
-                    ))}
-                    {quota.environments
-                      .filter((environment) => environment.error !== null)
-                      .map((environment) => (
-                        <li
-                          className="px-2 py-1.5 text-xs text-muted-foreground"
-                          key={environment.environmentId}
-                        >
-                          {environment.label}: quota unavailable
-                        </li>
+                          }
+                          onClick={() => openThread(row)}
+                        />
                       ))}
-                  </ul>
-                )}
-                <button
-                  className="mt-auto px-2 text-start text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => void navigate({ to: "/usage" })}
-                  type="button"
-                >
-                  Open usage
-                </button>
-              </DashboardCard>
+                    </ul>
+                  )}
+                </DashboardSection>
+
+                <div className="flex min-w-0 flex-col gap-10">
+                  <DashboardSection
+                    count={upcoming.length}
+                    icon={<CalendarClockIcon />}
+                    title="Schedules"
+                  >
+                    {schedulesPending && upcoming.length === 0 ? (
+                      <p className="py-1.5 text-sm text-muted-foreground">Loading schedules…</p>
+                    ) : upcoming.length === 0 && recentRuns.length === 0 ? (
+                      <p className="py-1.5 text-sm text-muted-foreground">
+                        No schedules yet. Create one from the Schedules page.
+                      </p>
+                    ) : (
+                      <>
+                        {upcoming.length > 0 ? (
+                          <ul className="-mx-2 flex flex-col">
+                            {upcoming.map((row) => (
+                              <CardRow
+                                key={`${row.environmentId}:${row.scheduleId}`}
+                                meta={formatScheduleInstant(row.nextRunAt, row.timeZone)}
+                                title={row.title}
+                              />
+                            ))}
+                          </ul>
+                        ) : null}
+                        {recentRuns.length > 0 ? (
+                          <ul className="-mx-2 flex flex-col border-t border-border/60 pt-2">
+                            {recentRuns.map((row) => (
+                              <CardRow
+                                key={`${row.environmentId}:${row.scheduleId}:${row.threadId}:${row.firedAt}`}
+                                meta={`Ran ${relativeLabel(row.firedAt)}`}
+                                title={row.scheduleTitle ?? "Deleted schedule"}
+                                trailing={
+                                  <ArrowUpRightIcon className="size-3.5 text-muted-foreground" />
+                                }
+                                onClick={() => openThread(row)}
+                              />
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    )}
+                    <button
+                      className="mt-2 self-start text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => void navigate({ to: "/schedules" })}
+                      type="button"
+                    >
+                      Manage schedules
+                    </button>
+                  </DashboardSection>
+
+                  <DashboardSection
+                    count={quotaRows.length}
+                    icon={<GaugeIcon />}
+                    title="Subscription quota"
+                  >
+                    {quota.isPending ? (
+                      <p className="py-1.5 text-sm text-muted-foreground">Reading quota…</p>
+                    ) : quotaRows.length === 0 &&
+                      quota.environments.every((environment) => environment.error === null) ? (
+                      <p className="py-1.5 text-sm text-muted-foreground">
+                        No quota collectors reported.
+                      </p>
+                    ) : (
+                      <ul className="-mx-2 flex flex-col">
+                        {quotaRows.map((row) => (
+                          <CardRow
+                            key={`${row.environmentId}:${row.subjectId}`}
+                            meta={
+                              row.worstWindowLabel === null
+                                ? `${row.environmentLabel} · ${row.status}`
+                                : `${row.environmentLabel} · ${row.worstWindowLabel}${
+                                    row.worstWindowResetsAt
+                                      ? ` · resets ${relativeLabel(row.worstWindowResetsAt)}`
+                                      : ""
+                                  }`
+                            }
+                            title={`${row.provider}${row.plan ? ` (${row.plan})` : ""}`}
+                            trailing={
+                              row.worstWindowRemainingPercent === null ? null : (
+                                <Badge
+                                  variant={
+                                    row.worstWindowRemainingPercent <= 10
+                                      ? "error"
+                                      : row.worstWindowRemainingPercent <= 25
+                                        ? "warning"
+                                        : "default"
+                                  }
+                                >
+                                  {row.worstWindowRemainingPercent}% left
+                                </Badge>
+                              )
+                            }
+                            onClick={() => void navigate({ to: "/usage" })}
+                          />
+                        ))}
+                        {quota.environments
+                          .filter((environment) => environment.error !== null)
+                          .map((environment) => (
+                            <li
+                              className="py-1.5 text-xs text-muted-foreground"
+                              key={environment.environmentId}
+                            >
+                              {environment.label}: quota unavailable
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                    <button
+                      className="mt-2 self-start text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => void navigate({ to: "/usage" })}
+                      type="button"
+                    >
+                      Open usage
+                    </button>
+                  </DashboardSection>
+                </div>
+              </div>
             </div>
           </WorkspacePageContainer>
         </ScrollArea>
