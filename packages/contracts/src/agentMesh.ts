@@ -49,6 +49,7 @@ export const AgentMeshAgent = Schema.Struct({
   hasPendingUserInput: Schema.Boolean,
   backgroundLiveness: Schema.NullOr(Schema.Literals(["working", "monitoring"])),
   workspaceIsolation: Schema.Literals(["shared", "isolated"]),
+  branch: Schema.NullOr(Schema.String),
   updatedAt: IsoDateTime,
   current: Schema.Boolean,
   botProfile: Schema.optional(BotProfile),

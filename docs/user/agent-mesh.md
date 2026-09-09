@@ -52,6 +52,12 @@ conversation, edit or disable the profile, or promote an eligible isolated threa
 thread is ready, **New bot** starts one in a project you choose. Mobile shows bot identity in thread
 lists and Kanban assignments; fleet management currently lives in the web and desktop workspace.
 
+A bot's description is its standing instructions. Whatever you write there is sent ahead of every
+task the bot receives, whether you dispatch it from the Bots workspace, a Kanban card starts it, or
+another agent sends it work. Use it for the role, the test command, and rules such as committing
+before finishing, so callers only have to describe the task. The conversation shows the task as it
+was sent; the instructions travel with it to the provider.
+
 Other agents can list only bots when choosing a destination. Messages still land in the bot's
 original thread, so its provider settings, history, approvals, checkpoints, and worktree remain
 visible in the normal conversation.
@@ -69,7 +75,8 @@ readiness before assigning work. An agent can keep routine work on a cheaper mod
 bounded review from a model you selected for stronger judgment, including through another provider.
 An explicit selection determines the spawned worker; omitting it inherits the caller's saved model.
 
-Existing bot listings include their configured model and reasoning options. These are configuration,
+Existing bot listings include their configured model, reasoning options, and current branch. The
+branch lets a lead pick up a bot's finished work by name. The model and options are configuration,
 not proof that a particular turn ran with that model. The lead should collect the completed result
 and check its evidence. Unavailable credentials, incompatible runtime modes, and missing tools still
 need resolution before that path can work.

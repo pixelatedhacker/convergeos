@@ -152,6 +152,8 @@ const runReconcile = (input: {
     } as unknown as ProjectionSnapshotQuery["Service"]),
     Effect.provideService(OrchestrationEngineService, {
       readEvents: () => Stream.empty,
+      readThreadEvents: () => Stream.empty,
+      getThreadReplayStats: () => Effect.die("thread replay stats are not used in this test"),
       dispatch: (command) => {
         if (command.type === "delegation.request") {
           input.requestCommandIds?.push(command.commandId);

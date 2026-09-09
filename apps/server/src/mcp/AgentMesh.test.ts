@@ -248,6 +248,7 @@ it.effect("lists only same-project agents with bounded status metadata", () =>
     expect(result.agents[0]?.current).toBe(true);
     expect(result.agents[1]?.hasPendingApprovals).toBe(true);
     expect(result.agents[1]?.workspaceIsolation).toBe("shared");
+    expect(result.agents[1]?.branch).toBeNull();
     expect(result.agents[1]?.mcpAttachment).toBe("leafOnly");
     expect(result.hasMore).toBe(false);
   }),
@@ -258,6 +259,7 @@ it.effect("filters the mesh to bots and returns their profile metadata", () =>
     const harness = makeHarness([
       shell(callerId),
       shell(targetId, {
+        branch: "bots/reviewer",
         worktreePath: "/worktrees/reviewer",
         botProfile: {
           displayName: "Reviewer",
@@ -276,6 +278,7 @@ it.effect("filters the mesh to bots and returns their profile metadata", () =>
     expect(result.agents[0]).toMatchObject({
       threadId: targetId,
       workspaceIsolation: "isolated",
+      branch: "bots/reviewer",
       botProfile: { displayName: "Reviewer", revision: 1 },
     });
   }),

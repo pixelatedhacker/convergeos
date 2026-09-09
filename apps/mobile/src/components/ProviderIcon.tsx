@@ -13,7 +13,8 @@ export function ProviderIcon(props: ProviderIconProps) {
   const size = props.size ?? 16;
   const mono = isDarkMode ? "#e5e5e5" : "#171717";
 
-  if (props.provider === "antigravity" || props.provider === "antigravityCli") {
+  const providerKey = props.provider?.trim().toLowerCase();
+  if (providerKey === "antigravity" || providerKey === "antigravitycli") {
     return (
       <Image
         source={require("../../assets/antigravity.png")}
