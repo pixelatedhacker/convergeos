@@ -13,6 +13,7 @@
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Import browser sessions](./user/browser-import.md)
 - [Glance at the dashboard](./user/dashboard.md)
+- [Use Project Home](./user/project-home.md)
 - [Usage and limits](./user/usage.md)
 - [Use agent mesh](./user/agent-mesh.md)
 - [Plan work with Kanban](./user/kanban.md)

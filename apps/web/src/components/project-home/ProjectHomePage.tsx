@@ -473,11 +473,15 @@ function BotCard(props: { readonly bot: BotRosterEntry; readonly onClick: () => 
             {badge.label}
           </Badge>
         </span>
+        {props.bot.description ? (
+          <span className="block truncate text-xs text-muted-foreground">
+            {props.bot.description}
+          </span>
+        ) : null}
         <span className="block truncate text-xs text-muted-foreground">
-          {props.bot.description ??
-            (props.bot.openTasks > 0
-              ? `${props.bot.openTasks} open ${props.bot.openTasks === 1 ? "task" : "tasks"} on the board`
-              : "No open tasks")}
+          {props.bot.openTasks > 0
+            ? `${props.bot.openTasks} open ${props.bot.openTasks === 1 ? "task" : "tasks"} on the board`
+            : "No open tasks"}
         </span>
       </span>
     </button>
