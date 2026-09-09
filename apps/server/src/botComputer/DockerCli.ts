@@ -43,7 +43,7 @@ export type DockerAvailability =
   | { readonly available: true }
   | { readonly available: false; readonly detail: string };
 
-export class DockerCliError extends Schema.TaggedErrorClass<DockerCliError>()("DockerCliError", {
+export class DockerCliError extends Schema.TaggedError<DockerCliError>()("DockerCliError", {
   operation: Schema.String,
   detail: Schema.String,
   cause: Schema.optional(Schema.Defect()),

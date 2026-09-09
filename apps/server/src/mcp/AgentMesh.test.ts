@@ -654,6 +654,8 @@ it.effect("registers model discovery as an MCP tool and requires agents.read", (
         const server = yield* McpServer.McpServer;
         const client = McpSchema.McpServerClient.of({
           clientId: 1,
+          clientCapabilities: {},
+          clientInfo: { name: "mesh-test", version: "1" },
           protocolVersion: "2025-06-18",
           initializePayload: {
             protocolVersion: "2025-06-18",

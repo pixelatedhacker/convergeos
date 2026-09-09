@@ -32,7 +32,7 @@ import type { MeshReceiptSigner } from "./MeshReceiptSigner.ts";
  * source events; a crash after publication but before acknowledgement resends
  * the same event id — neither skips history nor forks the stream.
  */
-export class MeshReceiptExportStoreError extends Schema.TaggedErrorClass<MeshReceiptExportStoreError>()(
+export class MeshReceiptExportStoreError extends Schema.TaggedError<MeshReceiptExportStoreError>()(
   "MeshReceiptExportStoreError",
   {
     operation: Schema.Literals([

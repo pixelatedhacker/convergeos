@@ -23,10 +23,9 @@ const decodeRelayUrl = Schema.decodeUnknownOption(Schema.URLFromString);
 
 const stringToBytes = (value: string) => new TextEncoder().encode(value);
 
-class MeshExportCliError extends Schema.TaggedErrorClass<MeshExportCliError>()(
-  "MeshExportCliError",
-  { detail: Schema.String },
-) {
+class MeshExportCliError extends Schema.TaggedError<MeshExportCliError>()("MeshExportCliError", {
+  detail: Schema.String,
+}) {
   override get message(): string {
     return this.detail;
   }

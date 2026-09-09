@@ -96,7 +96,7 @@ export const SubscriptionQuotaScopedReport = Schema.Struct({
 });
 export type SubscriptionQuotaScopedReport = typeof SubscriptionQuotaScopedReport.Type;
 
-export class SubscriptionQuotaMcpUnavailableError extends Schema.TaggedErrorClass<SubscriptionQuotaMcpUnavailableError>()(
+export class SubscriptionQuotaMcpUnavailableError extends Schema.TaggedError<SubscriptionQuotaMcpUnavailableError>()(
   "SubscriptionQuotaMcpUnavailableError",
   {
     capability: Schema.Literal("usage.read"),

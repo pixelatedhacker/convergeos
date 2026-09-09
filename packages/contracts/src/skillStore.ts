@@ -63,6 +63,6 @@ export const SkillStoreMutation = Schema.Struct({
   action: SkillStoreAction,
 });
 export type SkillStoreMutation = typeof SkillStoreMutation.Type;
-export class SkillStoreError extends Schema.TaggedErrorClass<SkillStoreError>()("SkillStoreError", {
+export class SkillStoreError extends Schema.TaggedError<SkillStoreError>()("SkillStoreError", {
   message: Schema.String,
 }) {}

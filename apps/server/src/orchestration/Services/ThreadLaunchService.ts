@@ -76,7 +76,7 @@ export const setupResumeDispositionFor = (
   return "run";
 };
 
-class ThreadLaunchSetupOutcomeUncertainError extends Schema.TaggedErrorClass<ThreadLaunchSetupOutcomeUncertainError>()(
+class ThreadLaunchSetupOutcomeUncertainError extends Schema.TaggedError<ThreadLaunchSetupOutcomeUncertainError>()(
   "ThreadLaunchSetupOutcomeUncertainError",
   { message: Schema.String },
 ) {}
