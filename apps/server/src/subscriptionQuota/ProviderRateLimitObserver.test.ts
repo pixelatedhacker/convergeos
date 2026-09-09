@@ -1,10 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import {
-  EventId,
-  ProviderInstanceId,
-  ThreadId,
-  type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+import { EventId, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import * as ProviderRateLimitObserver from "./ProviderRateLimitObserver.ts";
@@ -17,17 +12,17 @@ function rateLimitEvent(input: {
   readonly provider: "claudeAgent" | "codex";
   readonly providerInstanceId: ProviderInstanceId;
   readonly createdAt: string;
-  readonly rateLimits: unknown;
-}): ProviderRuntimeEvent {
+  readonly windows: ProviderRateLimitObserver.RateLimitRuntimeEvent["payload"]["limits"]["windows"];
+}): ProviderRateLimitObserver.RateLimitRuntimeEvent {
   return {
     eventId: EventId.make(input.eventId),
-    provider: input.provider,
+    provider: ProviderDriverKind.make(input.provider),
     providerInstanceId: input.providerInstanceId,
     threadId: ThreadId.make("thread-rate-limits"),
     createdAt: input.createdAt,
     type: "account.rate-limits.updated",
-    payload: { rateLimits: input.rateLimits },
-  } as ProviderRuntimeEvent;
+    payload: { limits: { windows: input.windows } },
+  };
 }
 
 it.effect("merges Claude windows across events and binds them to the emitting instance", () =>
@@ -39,15 +34,15 @@ it.effect("merges Claude windows across events and binds them to the emitting in
         provider: "claudeAgent",
         providerInstanceId: claude,
         createdAt: "2026-09-06T18:00:00.000Z",
-        rateLimits: {
-          type: "rate_limit_event",
-          rate_limit_info: {
-            status: "allowed",
-            rateLimitType: "five_hour",
-            utilization: 0.09,
-            resetsAt: 1788975540,
+        windows: [
+          {
+            id: "five_hour",
+            kind: "session",
+            label: "5-hour",
+            usedPercent: 9,
+            resetsAt: "2026-09-09T17:39:00.000Z",
           },
-        },
+        ],
       }),
     );
     yield* observer.observe(
@@ -56,15 +51,15 @@ it.effect("merges Claude windows across events and binds them to the emitting in
         provider: "claudeAgent",
         providerInstanceId: claude,
         createdAt: "2026-09-06T18:00:01.000Z",
-        rateLimits: {
-          type: "rate_limit_event",
-          rate_limit_info: {
-            status: "allowed_warning",
-            rateLimitType: "seven_day",
-            utilization: 0.15,
-            resetsAt: 1789243200,
+        windows: [
+          {
+            id: "seven_day",
+            kind: "weekly",
+            label: "weekly (all models)",
+            usedPercent: 15,
+            resetsAt: "2026-09-12T20:00:00.000Z",
           },
-        },
+        ],
       }),
     );
 
@@ -91,11 +86,11 @@ it.effect("merges Claude windows across events and binds them to the emitting in
         synthetic: false,
       },
     ]);
-    expect(subject.warning?.kind).toBe("approaching-limit");
+    expect(subject.warning).toBeNull();
   }),
 );
 
-it.effect("marks a rejected Claude window as reached even without utilization", () =>
+it.effect("records a provider-normalized 100% window", () =>
   Effect.gen(function* () {
     const observer = yield* ProviderRateLimitObserver.make;
     yield* observer.observe(
@@ -104,7 +99,14 @@ it.effect("marks a rejected Claude window as reached even without utilization", 
         provider: "claudeAgent",
         providerInstanceId: claude,
         createdAt: "2026-09-06T18:05:00.000Z",
-        rateLimits: { rate_limit_info: { status: "rejected", rateLimitType: "seven_day_opus" } },
+        windows: [
+          {
+            id: "seven_day_opus",
+            kind: "weekly",
+            label: "weekly (Opus)",
+            usedPercent: 100,
+          },
+        ],
       }),
     );
     const [subject] = yield* observer.subjects;
@@ -114,10 +116,10 @@ it.effect("marks a rejected Claude window as reached even without utilization", 
         label: "weekly (Opus)",
         usedPercent: 100,
         resetsAt: null,
-        synthetic: true,
+        synthetic: false,
       },
     ]);
-    expect(subject?.warning?.kind).toBe("rate-limited");
+    expect(subject?.warning).toBeNull();
   }),
 );
 
@@ -130,14 +132,24 @@ it.effect("normalizes Codex primary and secondary windows and keeps sparse field
         provider: "codex",
         providerInstanceId: codex,
         createdAt: "2026-09-06T18:10:00.000Z",
-        rateLimits: {
-          rateLimits: {
-            planType: "plus",
-            primary: { usedPercent: 25, resetsAt: 1788987600, windowDurationMins: 300 },
-            secondary: { usedPercent: 40, resetsAt: 1789243200, windowDurationMins: 10080 },
-            credits: { balance: "12.5", hasCredits: true, unlimited: false },
+        windows: [
+          {
+            id: "primary",
+            kind: "session",
+            label: "5-hour",
+            usedPercent: 25,
+            resetsAt: "2026-09-09T21:00:00.000Z",
+            windowDurationMins: 300,
           },
-        },
+          {
+            id: "secondary",
+            kind: "weekly",
+            label: "weekly",
+            usedPercent: 40,
+            resetsAt: "2026-09-12T20:00:00.000Z",
+            windowDurationMins: 10080,
+          },
+        ],
       }),
     );
     yield* observer.observe(
@@ -146,12 +158,12 @@ it.effect("normalizes Codex primary and secondary windows and keeps sparse field
         provider: "codex",
         providerInstanceId: codex,
         createdAt: "2026-09-06T18:11:00.000Z",
-        rateLimits: { rateLimits: { primary: { usedPercent: 26 } } },
+        windows: [{ id: "primary", kind: "session", label: "5-hour", usedPercent: 26 }],
       }),
     );
     const [subject] = yield* observer.subjects;
-    expect(subject?.plan).toBe("plus");
-    expect(subject?.credits).toEqual({ remaining: 12.5, currency: null });
+    expect(subject?.plan).toBeNull();
+    expect(subject?.credits).toBeNull();
     expect(subject?.windows).toEqual([
       {
         id: "primary",
@@ -171,26 +183,24 @@ it.effect("normalizes Codex primary and secondary windows and keeps sparse field
   }),
 );
 
-it.effect("ignores unrelated events, unknown instances, and malformed payloads", () =>
+it.effect("ignores events without an instance or normalized windows", () =>
   Effect.gen(function* () {
     const observer = yield* ProviderRateLimitObserver.make;
-    yield* observer.observe({
-      ...rateLimitEvent({
-        eventId: "evt-6",
-        provider: "claudeAgent",
-        providerInstanceId: claude,
-        createdAt: "2026-09-06T18:12:00.000Z",
-        rateLimits: {},
-      }),
-      providerInstanceId: undefined,
-    } as ProviderRuntimeEvent);
+    const { providerInstanceId: _instanceId, ...withoutInstance } = rateLimitEvent({
+      eventId: "evt-6",
+      provider: "claudeAgent",
+      providerInstanceId: claude,
+      createdAt: "2026-09-06T18:12:00.000Z",
+      windows: [{ id: "five_hour", kind: "session", label: "5-hour", usedPercent: 10 }],
+    });
+    yield* observer.observe(withoutInstance);
     yield* observer.observe(
       rateLimitEvent({
         eventId: "evt-7",
         provider: "codex",
         providerInstanceId: codex,
         createdAt: "2026-09-06T18:12:00.000Z",
-        rateLimits: { rateLimits: { primary: { usedPercent: "high" } } },
+        windows: [],
       }),
     );
     expect(yield* observer.subjects).toEqual([]);

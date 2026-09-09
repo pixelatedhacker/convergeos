@@ -2,8 +2,8 @@ import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
   EventId,
+  ProviderDriverKind,
   ProviderInstanceId,
-  type ProviderRuntimeEvent,
   type SubscriptionQuotaSubject,
   ThreadId,
 } from "@t3tools/contracts";
@@ -181,20 +181,26 @@ it.effect(
       const observer = yield* ProviderRateLimitObserver.make;
       yield* observer.observe({
         eventId: EventId.make("evt-rate-limits"),
-        provider: "codex",
+        provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codex,
         threadId: ThreadId.make("thread-quota"),
         createdAt: "2026-09-03T21:00:30.000Z",
         type: "account.rate-limits.updated",
         payload: {
-          rateLimits: {
-            rateLimits: {
-              planType: "plus",
-              primary: { usedPercent: 9, resetsAt: 1756940400, windowDurationMins: 300 },
-            },
+          limits: {
+            windows: [
+              {
+                id: "primary",
+                kind: "session",
+                label: "5-hour",
+                usedPercent: 9,
+                resetsAt: "2025-09-03T21:40:00.000Z",
+                windowDurationMins: 300,
+              },
+            ],
           },
         },
-      } as ProviderRuntimeEvent);
+      });
       const service = yield* SubscriptionQuotaService.make.pipe(
         Effect.provideService(ProviderRateLimitObserver.ProviderRateLimitObserver, observer),
         Effect.provideService(

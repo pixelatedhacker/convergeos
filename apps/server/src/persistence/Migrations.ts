@@ -66,8 +66,10 @@ import Migration0051 from "./Migrations/051_ProjectionKanbanDelegationLink.ts";
 import Migration0052 from "./Migrations/052_ProjectionThreadSessionMcpAttachment.ts";
 import Migration0053 from "./Migrations/053_ProjectionSchedules.ts";
 import Migration0054 from "./Migrations/054_MeshReceiptExport.ts";
-import Migration0056 from "./Migrations/056_TaskBudgets.ts";
 import Migration0055 from "./Migrations/055_MeshExportPublication.ts";
+import Migration0056 from "./Migrations/056_TaskBudgets.ts";
+import Migration0057 from "./Migrations/048_ProjectionThreadBranchPullRequest.ts";
+import Migration0058 from "./Migrations/049_ProjectionThreadsActiveOrderKey.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -136,6 +138,8 @@ export const migrationEntries = [
   [54, "MeshReceiptExport", Migration0054],
   [55, "MeshExportPublication", Migration0055],
   [56, "TaskBudgets", Migration0056],
+  [57, "ProjectionThreadBranchPullRequest", Migration0057],
+  [58, "ProjectionThreadsActiveOrderKey", Migration0058],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

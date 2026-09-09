@@ -49,6 +49,15 @@ describe("RPC authorization scopes", () => {
     );
   });
 
+  it("requires write access to import agent session history", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.agentSessionsScan)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.agentSessionsImport)).toBe(
+      AuthOrchestrationOperateScope,
+    );
+  });
+
   it("requires operate permission for interactive Bot computer viewing", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.botComputerViewerAccess)).toBe(
       AuthOrchestrationOperateScope,
