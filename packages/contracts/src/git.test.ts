@@ -3,6 +3,8 @@ import * as Schema from "effect/Schema";
 
 import {
   VcsCreateWorktreeInput,
+  VcsInspectWorktreeResult,
+  VcsListWorktreesResult,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
   GitRunStackedActionResult,
@@ -11,6 +13,8 @@ import {
 } from "./git.ts";
 
 const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput);
+const decodeListWorktreesResult = Schema.decodeUnknownSync(VcsListWorktreesResult);
+const decodeInspectWorktreeResult = Schema.decodeUnknownSync(VcsInspectWorktreeResult);
 const decodePreparePullRequestThreadInput = Schema.decodeUnknownSync(
   GitPreparePullRequestThreadInput,
 );
@@ -43,6 +47,59 @@ describe("VcsCreateWorktreeInput", () => {
     });
 
     expect(parsed.baseRefName).toBe("origin/main");
+  });
+});
+
+describe("VcsListWorktreesResult", () => {
+  it("decodes a live inventory with residue counts", () => {
+    const parsed = decodeListWorktreesResult({
+      isRepo: true,
+      worktrees: [
+        {
+          path: "/repo",
+          isPrimary: true,
+          headSha: "abc123",
+          refName: "main",
+          detached: false,
+          missing: false,
+          prunable: false,
+          locked: false,
+          dirtyFileCount: 0,
+          uniqueCommitCount: 0,
+          diskBytes: 128,
+        },
+      ],
+    });
+
+    expect(parsed.worktrees).toHaveLength(1);
+    expect(parsed.worktrees[0]?.isPrimary).toBe(true);
+  });
+});
+
+describe("VcsInspectWorktreeResult", () => {
+  it("decodes dirty files and unique commits for one worktree", () => {
+    const parsed = decodeInspectWorktreeResult({
+      worktree: {
+        path: "/repo/.t3/worktrees/feature",
+        isPrimary: false,
+        headSha: "def456",
+        refName: "feature/a",
+        detached: false,
+        missing: false,
+        prunable: false,
+        locked: false,
+        dirtyFileCount: 1,
+        uniqueCommitCount: 1,
+        diskBytes: 64,
+      },
+      dirtyFiles: [{ path: "notes.md", status: "??" }],
+      uniqueCommits: [{ sha: "def456", subject: "wip" }],
+      uniqueCommitsTruncated: false,
+      dirtyFilesTruncated: false,
+    });
+
+    expect(parsed.dirtyFiles[0]?.path).toBe("notes.md");
+    expect(parsed.uniqueCommits[0]?.subject).toBe("wip");
   });
 });
 

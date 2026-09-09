@@ -1567,6 +1567,102 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.notInclude(registered, "stale");
       }),
     );
+
+    it.effect("lists linked worktrees with unique commits and dirty files", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const worktreePath = pathService.join(
+          yield* makeTmpDir("git-worktrees-"),
+          "feature-inventory",
+        );
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* driver.createWorktree({
+          cwd,
+          path: worktreePath,
+          refName: initialBranch,
+          newRefName: "feature/inventory",
+        });
+        yield* writeTextFile(worktreePath, "only-here.md", "unique\n");
+        yield* git(worktreePath, ["add", "."]);
+        yield* git(worktreePath, ["commit", "-m", "only on feature"]);
+        yield* writeTextFile(worktreePath, "scratch.txt", "aaaa\n");
+
+        const listed = yield* driver.listWorktrees({ cwd });
+        assert.equal(listed.isRepo, true);
+        assert.equal(listed.worktrees.length, 2);
+
+        const primary = listed.worktrees[0];
+        const linked = listed.worktrees[1];
+        if (primary === undefined || linked === undefined) {
+          return assert.fail("expected primary and linked worktrees");
+        }
+        assert.equal(primary.isPrimary, true);
+        assert.equal(primary.refName, initialBranch);
+        assert.equal(linked.isPrimary, false);
+        assert.equal(linked.refName, "feature/inventory");
+        assert.equal(linked.missing, false);
+        assert.equal(linked.uniqueCommitCount, 1);
+        assert.equal(linked.dirtyFileCount, 1);
+        assert.ok(linked.diskBytes >= 4);
+
+        const inspected = yield* driver.inspectWorktree({ cwd, path: worktreePath });
+        assert.equal(inspected.worktree.uniqueCommitCount, 1);
+        assert.equal(inspected.uniqueCommits[0]?.subject, "only on feature");
+        assert.equal(
+          inspected.dirtyFiles.some((file) => file.path === "scratch.txt"),
+          true,
+        );
+
+        yield* git(cwd, ["merge", "--no-edit", "feature/inventory"]);
+        const afterMerge = yield* driver.listWorktrees({ cwd });
+        const mergedLinked = afterMerge.worktrees.find(
+          (worktree) => worktree.refName === "feature/inventory",
+        );
+        assert.equal(mergedLinked?.uniqueCommitCount, 0);
+
+        const unknown = yield* driver
+          .inspectWorktree({
+            cwd,
+            path: pathService.join(worktreePath, "..", "not-registered"),
+          })
+          .pipe(Effect.flip);
+        assert.equal(unknown.detail, "path is not a registered worktree");
+      }),
+    );
+
+    it.effect("marks a deleted worktree directory as missing", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const stalePath = pathService.join(
+          yield* makeTmpDir("git-worktrees-"),
+          "deleted-inventory",
+        );
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* driver.createWorktree({
+          cwd,
+          path: stalePath,
+          refName: initialBranch,
+          newRefName: "feature/deleted-inventory",
+        });
+        yield* fileSystem.remove(stalePath, { recursive: true });
+
+        const listed = yield* driver.listWorktrees({ cwd });
+        const missing = listed.worktrees.find(
+          (worktree) => worktree.refName === "feature/deleted-inventory",
+        );
+        assert.equal(missing?.missing, true);
+        assert.equal(missing?.dirtyFileCount, 0);
+        assert.equal(missing?.uniqueCommitCount, 0);
+        assert.equal(missing?.diskBytes, 0);
+      }),
+    );
   });
 
   describe("remote operations", () => {

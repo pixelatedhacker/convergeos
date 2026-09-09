@@ -11,8 +11,12 @@ import {
   type VcsCreateRefResult,
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
+  type VcsInspectWorktreeInput,
+  type VcsInspectWorktreeResult,
   type VcsListRefsInput,
   type VcsListRefsResult,
+  type VcsListWorktreesInput,
+  type VcsListWorktreesResult,
   type GitManagerServiceError,
   type GitPreparePullRequestThreadInput,
   type GitPreparePullRequestThreadResult,
@@ -62,6 +66,12 @@ export class GitWorkflowService extends Context.Service<
     readonly listRefs: (
       input: VcsListRefsInput,
     ) => Effect.Effect<VcsListRefsResult, GitCommandError>;
+    readonly listWorktrees: (
+      input: VcsListWorktreesInput,
+    ) => Effect.Effect<VcsListWorktreesResult, GitCommandError>;
+    readonly inspectWorktree: (
+      input: VcsInspectWorktreeInput,
+    ) => Effect.Effect<VcsInspectWorktreeResult, GitCommandError>;
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
@@ -139,6 +149,13 @@ function nonRepositoryListRefs(): VcsListRefsResult {
     hasPrimaryRemote: false,
     nextCursor: null,
     totalCount: 0,
+  };
+}
+
+function nonRepositoryListWorktrees(): VcsListWorktreesResult {
+  return {
+    isRepo: false,
+    worktrees: [],
   };
 }
 
@@ -306,6 +323,18 @@ export const make = Effect.gen(function* () {
         Effect.flatMap((isGitRepository) =>
           isGitRepository ? git.listRefs(input) : Effect.succeed(nonRepositoryListRefs()),
         ),
+      ),
+    listWorktrees: (input) =>
+      detectGitRepositoryForCommand("GitWorkflowService.listWorktrees", input.cwd).pipe(
+        Effect.flatMap((isGitRepository) =>
+          isGitRepository
+            ? git.listWorktrees(input)
+            : Effect.succeed(nonRepositoryListWorktrees()),
+        ),
+      ),
+    inspectWorktree: (input) =>
+      ensureGitCommand("GitWorkflowService.inspectWorktree", input.cwd).pipe(
+        Effect.andThen(git.inspectWorktree(input)),
       ),
     createWorktree: (input) =>
       ensureGitCommand("GitWorkflowService.createWorktree", input.cwd).pipe(

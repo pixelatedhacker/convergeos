@@ -27,7 +27,7 @@ The root filesystem path for a project. In [the orchestration model][1], it is t
 
 #### Worktree
 
-A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
+A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3]. The environment can also list every checkout Git has registered for a project repository, including trees no thread claims. See [worktrees.md][28].
 
 #### Bot computer
 
@@ -210,3 +210,4 @@ ships ConvergeOS already matching it.
 [25]: ../../apps/server/src/environmentTheme.ts
 [26]: ../user/environment-theme.md
 [27]: ./bot-computers.md
+[28]: ./worktrees.md

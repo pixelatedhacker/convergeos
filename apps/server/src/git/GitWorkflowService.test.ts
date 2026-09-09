@@ -114,6 +114,24 @@ describe("GitWorkflowService", () => {
     }).pipe(Effect.provide(testLayer));
   });
 
+  it.effect("returns an empty worktree inventory when no VCS repository is detected", () =>
+    Effect.gen(function* () {
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const worktrees = yield* workflow.listWorktrees({ cwd: "/not-a-repo" });
+
+      assert.deepStrictEqual(worktrees, {
+        isRepo: false,
+        worktrees: [],
+      });
+    }).pipe(
+      Effect.provide(
+        makeLayer({
+          detect: () => Effect.succeed(null),
+        }),
+      ),
+    ),
+  );
+
   it.effect("returns an empty ref list when no VCS repository is detected", () =>
     Effect.gen(function* () {
       const workflow = yield* GitWorkflowService.GitWorkflowService;

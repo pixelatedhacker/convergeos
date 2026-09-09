@@ -42,6 +42,7 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Server updates](./internals/server-updates.md)
 - [Resource telemetry](./internals/resource-telemetry.md)
 - [Kanban](./internals/kanban.md)
+- [Worktree inventory](./internals/worktrees.md)
 - [Schedules](./internals/schedules.md)
 - [Product analytics](./internals/product-analytics.md)
 - [Environment auth](./internals/environment-auth.md)
