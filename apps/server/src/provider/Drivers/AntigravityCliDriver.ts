@@ -85,7 +85,7 @@ export const AntigravityCliDriver: ProviderDriver<AntigravityCliSettings, Antigr
         const snapshot = yield* makeManagedServerProvider<
           ProviderSnapshotSettings<AntigravityCliSettings>
         >({
-          maintenanceCapabilities: MAINTENANCE,
+          resolveMaintenance: () => Effect.succeed(MAINTENANCE),
           getSettings: snapshotSettings.getSettings,
           streamSettings: snapshotSettings.streamSettings,
           haveSettingsChanged: haveProviderSnapshotSettingsChanged,

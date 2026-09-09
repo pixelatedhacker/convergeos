@@ -28,6 +28,7 @@ import {
 } from "../ProviderDriver.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
+  makeCachedProviderMaintenanceResolution,
   makePackageManagedProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
@@ -43,7 +44,6 @@ const decodeOhMyPiSettings = Schema.decodeSync(OhMyPiSettings);
 const UPDATE = makePackageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@oh-my-pi/pi-coding-agent",
-  homebrewFormula: null,
   nativeUpdate: null,
 });
 
@@ -69,7 +69,9 @@ export const OhMyPiDriver: ProviderDriver<OhMyPiSettings, OhMyPiDriverEnv> = {
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fileSystem = yield* FileSystem.FileSystem;
       const httpClient = yield* HttpClient.HttpClient;
+      const path = yield* Path.Path;
       const serverSettings = yield* ServerSettingsService;
       const { cwd } = yield* ServerConfig;
       const eventLoggers = yield* ProviderEventLoggers;
@@ -86,10 +88,16 @@ export const OhMyPiDriver: ProviderDriver<OhMyPiSettings, OhMyPiDriverEnv> = {
         continuationGroupKey: continuationIdentity.continuationKey,
       });
       const effectiveConfig = { ...config, enabled } satisfies OhMyPiSettings;
-      const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
-        binaryPath: effectiveConfig.binaryPath,
-        env: processEnvironment,
-      });
+      const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
+        resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
+          binaryPath: effectiveConfig.binaryPath,
+          env: processEnvironment,
+        }).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
+        ),
+      );
 
       const adapter = yield* makeOhMyPiAdapter(effectiveConfig, {
         instanceId,
@@ -105,7 +113,7 @@ export const OhMyPiDriver: ProviderDriver<OhMyPiSettings, OhMyPiDriverEnv> = {
       const checkProvider = checkProviderForCwd(cwd);
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<OhMyPiSettings>>({
-        maintenanceCapabilities,
+        resolveMaintenance,
         getSettings: snapshotSettings.getSettings,
         streamSettings: snapshotSettings.streamSettings,
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
@@ -113,13 +121,17 @@ export const OhMyPiDriver: ProviderDriver<OhMyPiSettings, OhMyPiDriverEnv> = {
           buildInitialOhMyPiProviderSnapshot(settings.provider).pipe(Effect.map(stampIdentity)),
         checkProvider,
         enrichSnapshot: ({ settings, snapshot: currentSnapshot, publishSnapshot }) =>
-          enrichOhMyPiSnapshot({
-            snapshot: currentSnapshot,
-            maintenanceCapabilities,
-            enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
-            publishSnapshot,
-            httpClient,
-          }),
+          resolveMaintenance().pipe(
+            Effect.flatMap((maintenanceCapabilities) =>
+              enrichOhMyPiSnapshot({
+                snapshot: currentSnapshot,
+                maintenanceCapabilities,
+                enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
+                publishSnapshot,
+                httpClient,
+              }),
+            ),
+          ),
       }).pipe(
         Effect.mapError(
           (cause) =>

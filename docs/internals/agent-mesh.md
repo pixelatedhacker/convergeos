@@ -90,6 +90,13 @@ inbox. This deliberately avoids a second identity registry. A profile has a disp
 description, revision, and timestamps. Configuration uses compare-and-swap revisions so two
 clients cannot silently overwrite one another.
 
+The description is the bot's standing instructions. `ProviderCommandReactor` composes them ahead
+of the task text when it builds the provider send-turn request (`composeBotTurnInput` in
+`apps/server/src/orchestration/botInstructions.ts`), so every entry point that starts a turn on
+the thread — the Bots page, Kanban dispatch, and `agents_send` — carries them without restating
+the role. The persisted user message, title generation, and prompt-command detection keep the
+bare task. Disabling the bot clears the profile and therefore the injection.
+
 Only an active thread with a distinct worktree can become a bot. Two active bots cannot claim the
 same normalized worktree. An active bot inbox cannot be archived or deleted until its profile is
 disabled; disabling preserves the thread, history, and worktree.
@@ -121,7 +128,9 @@ as an array of `{ id, value }` entries drawn from `model.capabilities.optionDesc
 keys differ between drivers, such as `reasoningEffort`, `effort`, `thinking`, and `variant`. A null
 capability description does not establish support for an effort override.
 
-`agents_list` and `agents_read` expose each thread's configured `modelSelection`. This is useful
+`agents_list` and `agents_read` expose each thread's configured `modelSelection` and its checked-out
+`branch` (null for the shared workspace or a detached HEAD). A bot's branch is stable, so a lead can
+merge or diff its work by name without asking the bot to report it. The model selection is useful
 for resolving an existing bot's role, but does not claim the actual model used by a particular
 turn. Turn-level selection overrides can differ from the saved thread selection. Explicit spawn
 selection remains necessary when escalation must differ from the caller's saved configuration.
@@ -137,3 +146,9 @@ caller's project. It joins the persisted delegation's worker and turn to indexed
 It does not hydrate messages, scan transcripts, or infer the model from the requested selection.
 There is no new ledger or database migration. See [usage attribution](usage-attribution.md) for
 provider semantics and the rules for consuming these reports.
+
+## Operating guide
+
+The lead-agent procedure for using these tools, including the worker commit contract, branch
+integration before auditing, and worktree cleanup order, lives in
+`.agents/skills/agent-orchestrator/SKILL.md`.
