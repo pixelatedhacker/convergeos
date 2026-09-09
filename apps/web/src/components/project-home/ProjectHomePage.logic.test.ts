@@ -12,10 +12,13 @@ import {
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 
 import {
+  activityByDay,
+  boardColumns,
+  botRoster,
   partitionProjectActivity,
   projectMemberKeys,
   recentProjectThreads,
-  summarizeProjectBoard,
+  statusLine,
   upcomingProjectSchedules,
 } from "./ProjectHomePage.logic";
 
@@ -156,27 +159,121 @@ describe("recentProjectThreads", () => {
   });
 });
 
-describe("summarizeProjectBoard", () => {
-  it("counts every column and spotlights in-progress then ready cards in board order", () => {
+describe("boardColumns", () => {
+  it("groups cards into columns in board order", () => {
     const cards = [
       makeCard({ title: "done-1", status: "done", orderKey: "a1" }),
       makeCard({ title: "ready-late", status: "ready", orderKey: "b2" }),
       makeCard({ title: "wip", status: "inProgress", orderKey: "c1" }),
       makeCard({ title: "ready-early", status: "ready", orderKey: "b1" }),
       makeCard({ title: "backlog-1", status: "backlog", orderKey: "d1" }),
-      makeCard({ title: "review-1", status: "review", orderKey: "e1" }),
     ];
-    const glance = summarizeProjectBoard(cards);
-    expect(glance.total).toBe(6);
-    expect(glance.counts).toEqual({ backlog: 1, ready: 2, inProgress: 1, review: 1, done: 1 });
-    expect(glance.spotlight.map((card) => card.title)).toEqual(["wip", "ready-early", "ready-late"]);
+    const board = boardColumns(cards);
+    expect(board.total).toBe(5);
+    expect(board.counts).toEqual({ backlog: 1, ready: 2, inProgress: 1, review: 0, done: 1 });
+    const ready = board.columns.find((column) => column.status === "ready");
+    expect(ready?.cards.map((card) => card.title)).toEqual(["ready-early", "ready-late"]);
+    expect(ready?.overflow).toBe(0);
+  });
+
+  it("caps long columns and reports the overflow", () => {
+    const cards = Array.from({ length: 9 }, (_, index) =>
+      makeCard({ title: `card-${index}`, status: "backlog", orderKey: `a${index}` }),
+    );
+    const backlog = boardColumns(cards).columns.find((column) => column.status === "backlog");
+    expect(backlog?.cards).toHaveLength(6);
+    expect(backlog?.overflow).toBe(3);
   });
 
   it("handles an empty board", () => {
-    const glance = summarizeProjectBoard([]);
-    expect(glance.total).toBe(0);
-    expect(glance.spotlight).toEqual([]);
-    expect(glance.counts.backlog).toBe(0);
+    const board = boardColumns([]);
+    expect(board.total).toBe(0);
+    expect(board.columns).toHaveLength(5);
+    expect(board.counts.backlog).toBe(0);
+  });
+});
+
+describe("statusLine", () => {
+  it("joins the in-flight signals with separators", () => {
+    expect(statusLine({ attention: 2, running: 1, ready: 2, inProgress: 1 })).toBe(
+      "2 waiting on you · 1 agent working · 3 tasks in play",
+    );
+  });
+
+  it("returns null when nothing is in flight", () => {
+    expect(statusLine({ attention: 0, running: 0, ready: 0, inProgress: 0 })).toBeNull();
+  });
+
+  it("omits quiet signals instead of padding with zeros", () => {
+    expect(statusLine({ attention: 0, running: 0, ready: 1, inProgress: 0 })).toBe(
+      "1 task in play",
+    );
+  });
+});
+
+describe("activityByDay", () => {
+  it("buckets threads by local day, oldest first, keeping zero days", () => {
+    const today = makeThread({ updatedAt: "2026-09-06T09:00:00.000Z" });
+    const alsoToday = makeThread({ updatedAt: "2026-09-06T21:30:00.000Z" });
+    const older = makeThread({ updatedAt: "2026-09-01T12:00:00.000Z" });
+    const foreign = makeThread({
+      projectId: ProjectId.make("project-elsewhere"),
+      updatedAt: "2026-09-06T10:00:00.000Z",
+    });
+    const series = activityByDay([today, alsoToday, older, foreign], KEYS, NOW, 14);
+    expect(series).toHaveLength(14);
+    const byDay = new Map(series.map((entry) => [entry.day, entry.count]));
+    // Anchor on the actual timestamps so the expectation holds in any test TZ.
+    const dayOf = (iso: string) => {
+      const date = new Date(iso);
+      return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
+    };
+    expect(byDay.get(dayOf(today.updatedAt))).toBe(2);
+    expect(byDay.get(dayOf(older.updatedAt))).toBe(1);
+    expect(series[series.length - 1]?.day).toBe(dayOf(NOW.toISOString()));
+  });
+});
+
+describe("botRoster", () => {
+  function makeBot(
+    name: string,
+    overrides: Partial<EnvironmentThreadShell> = {},
+  ): EnvironmentThreadShell {
+    return makeThread({
+      botProfile: {
+        displayName: name,
+        description: null,
+        revision: 1,
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+      },
+      ...overrides,
+    } as Partial<EnvironmentThreadShell>);
+  }
+
+  it("lists project bots with live state and open task counts, decision-needy first", () => {
+    const worker = makeBot("Scout", {
+      session: makeSession(ThreadId.make("thread-bot-working"), {
+        status: "running",
+        activeTurnId: TurnId.make("turn-bot"),
+      }),
+    });
+    const stuck = makeBot("Archivist", { hasPendingApprovals: true });
+    const idle = makeBot("Muse", {});
+    const notABot = makeThread({ hasPendingApprovals: true });
+    const archivedBot = makeBot("Ghost", { archivedAt: "2026-09-05T00:00:00.000Z" });
+    const cards = [
+      makeCard({ status: "ready", assigneeThreadId: worker.id }),
+      makeCard({ status: "inProgress", assigneeThreadId: worker.id }),
+      makeCard({ status: "done", assigneeThreadId: worker.id }),
+      makeCard({ status: "backlog", assigneeThreadId: null }),
+    ];
+    const roster = botRoster([worker, stuck, idle, notABot, archivedBot], cards, KEYS);
+    expect(roster.map((bot) => bot.displayName)).toEqual(["Archivist", "Scout", "Muse"]);
+    expect(roster[0]?.state).toBe("waiting");
+    expect(roster[1]?.state).toBe("working");
+    expect(roster[1]?.openTasks).toBe(2);
+    expect(roster[2]?.state).toBe("idle");
   });
 });
 
