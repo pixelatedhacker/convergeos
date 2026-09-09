@@ -137,3 +137,9 @@ caller's project. It joins the persisted delegation's worker and turn to indexed
 It does not hydrate messages, scan transcripts, or infer the model from the requested selection.
 There is no new ledger or database migration. See [usage attribution](usage-attribution.md) for
 provider semantics and the rules for consuming these reports.
+
+## Operating guide
+
+The lead-agent procedure for using these tools, including the worker commit contract, branch
+integration before auditing, and worktree cleanup order, lives in
+`.agents/skills/agent-orchestrator/SKILL.md`.
