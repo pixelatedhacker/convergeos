@@ -45,6 +45,7 @@ import {
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
+  HouseIcon,
   FolderPlusIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -1750,6 +1751,30 @@ function OpenCommandPaletteDialog(props: {
     projectGroups[0] ??
     null;
   if (contextualProjectGroup) {
+    actionItems.push({
+      kind: "action",
+      value: "action:project-home",
+      searchTerms: [
+        "project",
+        "home",
+        "status",
+        "team",
+        "bots",
+        "board",
+        "kanban",
+        "decisions",
+        "activity",
+      ],
+      title: "Project home",
+      description: contextualProjectGroup.displayName,
+      icon: <HouseIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await navigate({
+          to: "/projects/$projectKey/home",
+          params: { projectKey: contextualProjectGroup.projectKey },
+        });
+      },
+    });
     actionItems.push({
       kind: "action",
       value: "action:project-settings",

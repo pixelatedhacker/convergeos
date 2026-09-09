@@ -34,6 +34,7 @@ import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$proje
 import { Route as KanbanProjectKeyRouteImport } from './routes/kanban.$projectKey'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
+import { Route as ProjectsProjectKeyHomeRouteImport } from './routes/projects.$projectKey_.home'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 
@@ -161,6 +162,11 @@ const ChatPullRequestsRoute = ChatPullRequestsRouteImport.update({
   path: '/pull-requests',
   getParentRoute: () => ChatRoute,
 } as any)
+const ProjectsProjectKeyHomeRoute = ProjectsProjectKeyHomeRouteImport.update({
+  id: '/projects/$projectKey_/home',
+  path: '/projects/$projectKey/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/projects/$projectKey/home': typeof ProjectsProjectKeyHomeRoute
 }
 export interface FileRoutesByTo {
   '/bots': typeof BotsRoute
@@ -228,6 +235,7 @@ export interface FileRoutesByTo {
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/projects/$projectKey/home': typeof ProjectsProjectKeyHomeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/projects/$projectKey_/home': typeof ProjectsProjectKeyHomeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/settings/source-control'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/projects/$projectKey/home'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/bots'
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/projects/$projectKey/home'
   id:
     | '__root__'
     | '/_chat'
@@ -345,6 +356,7 @@ export interface FileRouteTypes {
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
+    | '/projects/$projectKey_/home'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -360,6 +372,7 @@ export interface RootRouteChildren {
   ConnectCallbackRoute: typeof ConnectCallbackRoute
   KanbanProjectKeyRoute: typeof KanbanProjectKeyRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
+  ProjectsProjectKeyHomeRoute: typeof ProjectsProjectKeyHomeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -539,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatPullRequestsRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/projects/$projectKey_/home': {
+      id: '/projects/$projectKey_/home'
+      path: '/projects/$projectKey/home'
+      fullPath: '/projects/$projectKey/home'
+      preLoaderRoute: typeof ProjectsProjectKeyHomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
       path: '/draft/$draftId'
@@ -617,6 +637,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectCallbackRoute: ConnectCallbackRoute,
   KanbanProjectKeyRoute: KanbanProjectKeyRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
+  ProjectsProjectKeyHomeRoute: ProjectsProjectKeyHomeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
