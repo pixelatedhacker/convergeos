@@ -25,6 +25,9 @@ import {
   type ReviewDiffPreviewInput,
   type ReviewDiffPreviewSource,
   type VcsRef,
+  type VcsWorktreeDirtyFile,
+  type VcsWorktreeSummary,
+  type VcsWorktreeUniqueCommit,
 } from "@t3tools/contracts";
 import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@t3tools/shared/git";
 import { compactTraceAttributes } from "@t3tools/shared/observability";
@@ -43,6 +46,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 // take well beyond the default 30s (e.g. a 375k-file repo takes ~40s on an idle
 // machine). Give it generous headroom while still bounding a genuinely hung git.
 const WORKTREE_ADD_TIMEOUT_MS = 300_000;
+const WORKTREE_UNIQUE_COMMITS_INSPECT_LIMIT = 50;
+const WORKTREE_DIRTY_FILES_INSPECT_LIMIT = 200;
 const WORKTREE_REMOVE_TIMEOUT_MS = Duration.toMillis(Duration.minutes(5));
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
@@ -245,6 +250,126 @@ function paginateBranches(input: {
     nextCursor,
     totalCount,
   };
+}
+
+interface ParsedWorktreeRecord {
+  readonly path: string;
+  readonly headSha: string | null;
+  readonly refName: string | null;
+  readonly detached: boolean;
+  readonly prunable: boolean;
+  readonly locked: boolean;
+}
+
+function parseWorktreeListPorcelain(stdout: string): ReadonlyArray<ParsedWorktreeRecord> {
+  const records: ParsedWorktreeRecord[] = [];
+  let currentPath: string | null = null;
+  let headSha: string | null = null;
+  let refName: string | null = null;
+  let detached = false;
+  let prunable = false;
+  let locked = false;
+
+  const flush = () => {
+    if (currentPath !== null) {
+      records.push({
+        path: currentPath,
+        headSha,
+        refName,
+        detached,
+        prunable,
+        locked,
+      });
+    }
+    currentPath = null;
+    headSha = null;
+    refName = null;
+    detached = false;
+    prunable = false;
+    locked = false;
+  };
+
+  for (const field of stdout.split("\0")) {
+    if (field === "") {
+      flush();
+    } else if (field.startsWith("worktree ")) {
+      currentPath = field.slice("worktree ".length);
+    } else if (field.startsWith("HEAD ")) {
+      const sha = field.slice("HEAD ".length).trim();
+      headSha = sha.length > 0 ? sha : null;
+    } else if (field.startsWith("branch refs/heads/")) {
+      const branch = field.slice("branch refs/heads/".length);
+      refName = branch.length > 0 ? branch : null;
+    } else if (field === "detached") {
+      detached = true;
+    } else if (field === "prunable" || field.startsWith("prunable ")) {
+      prunable = true;
+    } else if (field === "locked" || field.startsWith("locked ")) {
+      locked = true;
+    }
+  }
+  flush();
+  return records;
+}
+
+function parsePorcelainV1DirtyFiles(stdout: string): ReadonlyArray<VcsWorktreeDirtyFile> {
+  const files: VcsWorktreeDirtyFile[] = [];
+  for (const line of stdout.split(/\r?\n/g)) {
+    if (line.length < 4) {
+      continue;
+    }
+    const status = line.slice(0, 2);
+    if (status.trim().length === 0) {
+      continue;
+    }
+    let filePath = line.slice(3);
+    const arrow = filePath.indexOf(" -> ");
+    if (arrow >= 0) {
+      filePath = filePath.slice(arrow + " -> ".length);
+    }
+    if (filePath.length === 0) {
+      continue;
+    }
+    files.push({ status, path: filePath });
+  }
+  return files;
+}
+
+function parseUniqueCommitLines(stdout: string): ReadonlyArray<VcsWorktreeUniqueCommit> {
+  const commits: VcsWorktreeUniqueCommit[] = [];
+  for (const line of stdout.split(/\r?\n/g)) {
+    if (line.length === 0) {
+      continue;
+    }
+    const tab = line.indexOf("\t");
+    if (tab <= 0) {
+      continue;
+    }
+    const sha = line.slice(0, tab).trim();
+    const subject = line.slice(tab + 1).trim();
+    if (sha.length === 0) {
+      continue;
+    }
+    commits.push({ sha, subject: subject.length > 0 ? subject : "(empty)" });
+  }
+  return commits;
+}
+
+function uniqueRevWalkSuffix(input: {
+  readonly headSha: string;
+  readonly otherHeadShas: ReadonlyArray<string>;
+  readonly otherRefNames: ReadonlyArray<string>;
+}): string[] {
+  const args = [input.headSha];
+  for (const sha of input.otherHeadShas) {
+    if (sha !== input.headSha) {
+      args.push(`^${sha}`);
+    }
+  }
+  for (const refName of input.otherRefNames) {
+    args.push(`^${refName}`);
+  }
+  return args;
 }
 
 function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, string> {
@@ -3132,6 +3257,327 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     });
   });
 
+  const canonicalWorktreePath = Effect.fn("canonicalWorktreePath")(function* (
+    worktreePath: string,
+  ) {
+    return yield* fileSystem
+      .realPath(worktreePath)
+      .pipe(Effect.orElseSucceed(() => path.normalize(path.resolve(worktreePath))));
+  });
+
+  const directorySizeSkippingGit = Effect.fn("directorySizeSkippingGit")(function* (root: string) {
+    let total = 0;
+    const queue = [root];
+    while (queue.length > 0) {
+      const current = queue.pop();
+      if (current === undefined) {
+        break;
+      }
+      const names = yield* fileSystem.readDirectory(current).pipe(Effect.orElseSucceed(() => []));
+      for (const name of names) {
+        if (name === ".git") {
+          continue;
+        }
+        const child = path.join(current, name);
+        const info = yield* fileSystem.stat(child).pipe(Effect.option);
+        if (Option.isNone(info)) {
+          continue;
+        }
+        if (info.value.type === "Directory") {
+          queue.push(child);
+        } else if (info.value.type === "File") {
+          total += Number(info.value.size);
+        }
+      }
+    }
+    return total;
+  });
+
+  const parseNonNegativeCount = (stdout: string): number => {
+    const count = Number.parseInt(stdout.trim(), 10);
+    return Number.isFinite(count) && count >= 0 ? count : 0;
+  };
+
+  const listOtherRefNames = Effect.fn("listOtherRefNames")(function* (input: {
+    readonly cwd: string;
+    readonly excludeRefName: string | null;
+  }) {
+    const result = yield* executeGit(
+      "GitVcsDriver.listWorktrees.otherRefs",
+      input.cwd,
+      ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/tags", "refs/remotes"],
+      { allowNonZeroExit: true, timeoutMs: 15_000 },
+    );
+    if (result.exitCode !== 0) {
+      return [] as ReadonlyArray<string>;
+    }
+    const excluded = input.excludeRefName !== null ? `refs/heads/${input.excludeRefName}` : null;
+    return result.stdout
+      .split(/\r?\n/g)
+      .map((line) => line.trim())
+      .filter((refName) => refName.length > 0 && refName !== excluded);
+  });
+
+  const uniqueCommitCount = Effect.fn("uniqueCommitCount")(function* (input: {
+    readonly cwd: string;
+    readonly headSha: string;
+    readonly refName: string | null;
+    readonly otherHeadShas: ReadonlyArray<string>;
+  }) {
+    const otherRefNames = yield* listOtherRefNames({
+      cwd: input.cwd,
+      excludeRefName: input.refName,
+    });
+    const result = yield* executeGit(
+      "GitVcsDriver.listWorktrees.uniqueCount",
+      input.cwd,
+      [
+        "rev-list",
+        "--count",
+        ...uniqueRevWalkSuffix({
+          headSha: input.headSha,
+          otherHeadShas: input.otherHeadShas,
+          otherRefNames,
+        }),
+      ],
+      { allowNonZeroExit: true, timeoutMs: 15_000 },
+    );
+    if (result.exitCode !== 0) {
+      return 0;
+    }
+    return parseNonNegativeCount(result.stdout);
+  });
+
+  const uniqueCommitList = Effect.fn("uniqueCommitList")(function* (input: {
+    readonly cwd: string;
+    readonly headSha: string;
+    readonly refName: string | null;
+    readonly otherHeadShas: ReadonlyArray<string>;
+  }) {
+    const otherRefNames = yield* listOtherRefNames({
+      cwd: input.cwd,
+      excludeRefName: input.refName,
+    });
+    const result = yield* executeGit(
+      "GitVcsDriver.inspectWorktree.uniqueCommits",
+      input.cwd,
+      [
+        "log",
+        `--format=%H%x09%s`,
+        "-n",
+        String(WORKTREE_UNIQUE_COMMITS_INSPECT_LIMIT + 1),
+        ...uniqueRevWalkSuffix({
+          headSha: input.headSha,
+          otherHeadShas: input.otherHeadShas,
+          otherRefNames,
+        }),
+      ],
+      { allowNonZeroExit: true, timeoutMs: 15_000 },
+    );
+    if (result.exitCode !== 0) {
+      return { commits: [] as ReadonlyArray<VcsWorktreeUniqueCommit>, truncated: false };
+    }
+    const parsed = parseUniqueCommitLines(result.stdout);
+    const truncated = parsed.length > WORKTREE_UNIQUE_COMMITS_INSPECT_LIMIT;
+    return {
+      commits: truncated ? parsed.slice(0, WORKTREE_UNIQUE_COMMITS_INSPECT_LIMIT) : parsed,
+      truncated,
+    };
+  });
+
+  const dirtyFileList = Effect.fn("dirtyFileList")(function* (worktreePath: string) {
+    const result = yield* executeGitWithStableDiagnostics(
+      "GitVcsDriver.inspectWorktree.dirtyFiles",
+      worktreePath,
+      ["status", "--porcelain=v1", "--untracked-files=normal"],
+      { allowNonZeroExit: true, timeoutMs: 15_000 },
+    );
+    if (result.exitCode !== 0) {
+      return { files: [] as ReadonlyArray<VcsWorktreeDirtyFile>, truncated: false, count: 0 };
+    }
+    const parsed = parsePorcelainV1DirtyFiles(result.stdout);
+    const truncated = parsed.length > WORKTREE_DIRTY_FILES_INSPECT_LIMIT;
+    return {
+      files: truncated ? parsed.slice(0, WORKTREE_DIRTY_FILES_INSPECT_LIMIT) : parsed,
+      truncated,
+      count: parsed.length,
+    };
+  });
+
+  const summarizeWorktree = Effect.fn("summarizeWorktree")(function* (input: {
+    readonly record: ParsedWorktreeRecord;
+    readonly isPrimary: boolean;
+    readonly otherHeadShas: ReadonlyArray<string>;
+  }) {
+    const canonicalPath = yield* canonicalWorktreePath(input.record.path);
+    const exists = yield* fileSystem.exists(canonicalPath).pipe(Effect.orElseSucceed(() => false));
+    const missing = !exists || input.record.prunable;
+    const emptySummary = {
+      path: canonicalPath,
+      isPrimary: input.isPrimary,
+      headSha: input.record.headSha,
+      refName: input.record.refName,
+      detached: input.record.detached,
+      missing,
+      prunable: input.record.prunable,
+      locked: input.record.locked,
+      dirtyFileCount: 0,
+      uniqueCommitCount: 0,
+      diskBytes: 0,
+    } satisfies VcsWorktreeSummary;
+    if (missing || input.record.headSha === null) {
+      return emptySummary;
+    }
+
+    const [dirty, uniqueCount, diskBytes] = yield* Effect.all(
+      [
+        dirtyFileList(canonicalPath).pipe(Effect.map((result) => result.count)),
+        uniqueCommitCount({
+          cwd: canonicalPath,
+          headSha: input.record.headSha,
+          refName: input.record.refName,
+          otherHeadShas: input.otherHeadShas,
+        }),
+        directorySizeSkippingGit(canonicalPath).pipe(Effect.orElseSucceed(() => 0)),
+      ],
+      { concurrency: 3 },
+    );
+
+    return {
+      ...emptySummary,
+      missing: false,
+      dirtyFileCount: dirty,
+      uniqueCommitCount: uniqueCount,
+      diskBytes,
+    } satisfies VcsWorktreeSummary;
+  });
+
+  const readRegisteredWorktrees = Effect.fn("readRegisteredWorktrees")(function* (cwd: string) {
+    const result = yield* executeGitWithStableDiagnostics(
+      "GitVcsDriver.listWorktrees",
+      cwd,
+      ["worktree", "list", "--porcelain", "-z"],
+      {
+        allowNonZeroExit: true,
+        timeoutMs: 30_000,
+        maxOutputBytes: 16 * 1024 * 1024,
+      },
+    );
+    if (result.exitCode !== 0) {
+      if (isNonRepositoryGitStderr(result.stderr)) {
+        return { isRepo: false as const, records: [] as ReadonlyArray<ParsedWorktreeRecord> };
+      }
+      return yield* new GitCommandError({
+        ...gitCommandContext({
+          operation: "GitVcsDriver.listWorktrees",
+          cwd,
+          args: ["worktree", "list", "--porcelain", "-z"],
+        }),
+        detail: "git worktree list failed",
+        ...(result.exitCode === null ? {} : { exitCode: result.exitCode }),
+        stdoutLength: result.stdout.length,
+        stderrLength: result.stderr.length,
+      });
+    }
+    return { isRepo: true as const, records: parseWorktreeListPorcelain(result.stdout) };
+  });
+
+  const listWorktrees: GitVcsDriver.GitVcsDriver["Service"]["listWorktrees"] = Effect.fn(
+    "listWorktrees",
+  )(function* (input) {
+    const listed = yield* readRegisteredWorktrees(input.cwd);
+    if (!listed.isRepo) {
+      return { isRepo: false, worktrees: [] };
+    }
+    const otherHeadShas = listed.records
+      .map((record) => record.headSha)
+      .filter((sha): sha is string => sha !== null);
+    const worktrees = yield* Effect.forEach(
+      listed.records,
+      (record, index) =>
+        summarizeWorktree({
+          record,
+          isPrimary: index === 0,
+          otherHeadShas,
+        }),
+      { concurrency: 8 },
+    );
+    return { isRepo: true, worktrees };
+  });
+
+  const inspectWorktree: GitVcsDriver.GitVcsDriver["Service"]["inspectWorktree"] = Effect.fn(
+    "inspectWorktree",
+  )(function* (input) {
+    const listed = yield* readRegisteredWorktrees(input.cwd);
+    if (!listed.isRepo) {
+      return yield* new GitCommandError({
+        ...gitCommandContext({
+          operation: "GitVcsDriver.inspectWorktree",
+          cwd: input.cwd,
+          args: ["worktree", "list", "--porcelain", "-z"],
+        }),
+        detail: "Cannot inspect a worktree outside a Git repository.",
+      });
+    }
+    const requested = yield* canonicalWorktreePath(input.path);
+    let match: ParsedWorktreeRecord | null = null;
+    let matchIndex = -1;
+    for (const [index, record] of listed.records.entries()) {
+      const canonical = yield* canonicalWorktreePath(record.path);
+      if (canonical === requested) {
+        match = record;
+        matchIndex = index;
+        break;
+      }
+    }
+    if (match === null) {
+      return yield* new GitCommandError({
+        ...gitCommandContext({
+          operation: "GitVcsDriver.inspectWorktree",
+          cwd: input.cwd,
+          args: ["worktree", "list", "--porcelain", "-z"],
+        }),
+        detail: "path is not a registered worktree",
+      });
+    }
+    const otherHeadShas = listed.records
+      .map((record) => record.headSha)
+      .filter((sha): sha is string => sha !== null);
+    const worktree = yield* summarizeWorktree({
+      record: match,
+      isPrimary: matchIndex === 0,
+      otherHeadShas,
+    });
+    if (worktree.missing || match.headSha === null) {
+      return {
+        worktree,
+        dirtyFiles: [],
+        uniqueCommits: [],
+        uniqueCommitsTruncated: false,
+        dirtyFilesTruncated: false,
+      };
+    }
+    const [dirty, unique] = yield* Effect.all(
+      [
+        dirtyFileList(worktree.path),
+        uniqueCommitList({
+          cwd: worktree.path,
+          headSha: match.headSha,
+          refName: match.refName,
+          otherHeadShas,
+        }),
+      ],
+      { concurrency: 2 },
+    );
+    return {
+      worktree,
+      dirtyFiles: dirty.files,
+      uniqueCommits: unique.commits,
+      uniqueCommitsTruncated: unique.truncated,
+      dirtyFilesTruncated: dirty.truncated,
+    };
+  });
+
   const renameBranch: GitVcsDriver.GitVcsDriver["Service"]["renameBranch"] = Effect.fn(
     "renameBranch",
   )(function* (input) {
@@ -3320,6 +3766,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     readConfigValue,
     listRefs,
     createWorktree: (input) => withListRefsInvalidation(input.cwd, createWorktree(input)),
+    listWorktrees,
+    inspectWorktree,
     fetchPullRequestBranch: (input) =>
       withListRefsInvalidation(input.cwd, fetchPullRequestBranch(input)),
     fetchPullRequestHeadCommit,

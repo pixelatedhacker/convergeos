@@ -5,17 +5,17 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 
 ## Workspace and conversation
 
-| Term           | Meaning                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| Environment    | One running server and the machine, credentials, workspace access, and state it owns.             |
-| Client         | A web, desktop, or mobile UI connected to an environment. The desktop app can also host a server. |
-| Project        | An environment-local workspace record rooted at a directory.                                      |
-| Workspace root | The project's base filesystem directory on the environment.                                       |
-| Worktree       | A separate Git checkout a thread can use instead of the project's main checkout.                  |
-| Thread         | The durable conversation and work history for a project. It survives provider process exits.      |
-| Turn           | One user-to-agent work cycle. Provider work can finish before checkpoint and diff work settles.   |
-| Activity       | A non-message timeline item, such as a tool action, approval, or failure.                         |
-| T3 home        | The base data directory. Runtime state normally lives under its `userdata` directory.             |
+| Term           | Meaning                                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Environment    | One running server and the machine, credentials, workspace access, and state it owns.                                                                                                 |
+| Client         | A web, desktop, or mobile UI connected to an environment. The desktop app can also host a server.                                                                                     |
+| Project        | An environment-local workspace record rooted at a directory.                                                                                                                          |
+| Workspace root | The project's base filesystem directory on the environment.                                                                                                                           |
+| Worktree       | A separate Git checkout a thread can use instead of the project's main checkout. The environment can also inventory checkouts that no thread claims. See [worktrees](./worktrees.md). |
+| Thread         | The durable conversation and work history for a project. It survives provider process exits.                                                                                          |
+| Turn           | One user-to-agent work cycle. Provider work can finish before checkpoint and diff work settles.                                                                                       |
+| Activity       | A non-message timeline item, such as a tool action, approval, or failure.                                                                                                             |
+| T3 home        | The base data directory. Runtime state normally lives under its `userdata` directory.                                                                                                 |
 
 ## Orchestration
 
@@ -35,10 +35,10 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 
 | Term                | Meaning                                                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Provider            | The agent runtime ConvergeOS controls, such as Codex or Claude Code.                                            |
+| Provider            | The agent runtime ConvergeOS controls, such as Codex or Claude Code.                                         |
 | Driver              | The integration for a provider kind.                                                                         |
 | Provider instance   | One configured provider, with its own settings and lifecycle. Multiple instances can use the same driver.    |
-| Adapter             | The boundary translating a provider's native protocol into ConvergeOS operations and events.                    |
+| Adapter             | The boundary translating a provider's native protocol into ConvergeOS operations and events.                 |
 | Session             | The provider runtime attached to a thread. A session can be stopped and resumed without deleting the thread. |
 | Runtime mode        | The thread's permission policy. See [permission modes](../user/permission-modes.md).                         |
 | Interaction mode    | How the agent approaches the task, such as planning. Separate from permission policy.                        |

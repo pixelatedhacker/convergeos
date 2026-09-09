@@ -165,6 +165,17 @@ export const VcsRemoveWorktreeInput = Schema.Struct({
 });
 export type VcsRemoveWorktreeInput = typeof VcsRemoveWorktreeInput.Type;
 
+export const VcsListWorktreesInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type VcsListWorktreesInput = typeof VcsListWorktreesInput.Type;
+
+export const VcsInspectWorktreeInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  path: TrimmedNonEmptyStringSchema,
+});
+export type VcsInspectWorktreeInput = typeof VcsInspectWorktreeInput.Type;
+
 export const VcsCreateRefInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   refName: TrimmedNonEmptyStringSchema,
@@ -275,6 +286,49 @@ export const VcsCreateWorktreeResult = Schema.Struct({
   worktree: VcsWorktree,
 });
 export type VcsCreateWorktreeResult = typeof VcsCreateWorktreeResult.Type;
+
+export const VcsWorktreeSummary = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  isPrimary: Schema.Boolean,
+  headSha: Schema.NullOr(TrimmedNonEmptyStringSchema),
+  refName: Schema.NullOr(TrimmedNonEmptyStringSchema),
+  detached: Schema.Boolean,
+  missing: Schema.Boolean,
+  prunable: Schema.Boolean,
+  locked: Schema.Boolean,
+  dirtyFileCount: NonNegativeInt,
+  uniqueCommitCount: NonNegativeInt,
+  diskBytes: NonNegativeInt,
+});
+export type VcsWorktreeSummary = typeof VcsWorktreeSummary.Type;
+
+export const VcsListWorktreesResult = Schema.Struct({
+  isRepo: Schema.Boolean,
+  worktrees: Schema.Array(VcsWorktreeSummary),
+});
+export type VcsListWorktreesResult = typeof VcsListWorktreesResult.Type;
+
+export const VcsWorktreeDirtyFile = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  /** Two-character `git status --porcelain=v1` XY code, including spaces. */
+  status: Schema.String.check(Schema.isMinLength(1)).check(Schema.isMaxLength(2)),
+});
+export type VcsWorktreeDirtyFile = typeof VcsWorktreeDirtyFile.Type;
+
+export const VcsWorktreeUniqueCommit = Schema.Struct({
+  sha: TrimmedNonEmptyStringSchema,
+  subject: TrimmedNonEmptyStringSchema,
+});
+export type VcsWorktreeUniqueCommit = typeof VcsWorktreeUniqueCommit.Type;
+
+export const VcsInspectWorktreeResult = Schema.Struct({
+  worktree: VcsWorktreeSummary,
+  dirtyFiles: Schema.Array(VcsWorktreeDirtyFile),
+  uniqueCommits: Schema.Array(VcsWorktreeUniqueCommit),
+  uniqueCommitsTruncated: Schema.Boolean,
+  dirtyFilesTruncated: Schema.Boolean,
+});
+export type VcsInspectWorktreeResult = typeof VcsInspectWorktreeResult.Type;
 
 export const GitResolvePullRequestResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,

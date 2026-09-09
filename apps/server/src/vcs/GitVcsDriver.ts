@@ -18,6 +18,10 @@ import {
   type VcsCreateRefResult,
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
+  type VcsInspectWorktreeInput,
+  type VcsInspectWorktreeResult,
+  type VcsListWorktreesInput,
+  type VcsListWorktreesResult,
   type ReviewDiffPreviewInput,
   type ReviewDiffPreviewResult,
   type ReviewDiffFileContentsInput,
@@ -281,6 +285,14 @@ export class GitVcsDriver extends Context.Service<
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
+    /** Live inventory from `git worktree list`, with per-tree residue counts. */
+    readonly listWorktrees: (
+      input: VcsListWorktreesInput,
+    ) => Effect.Effect<VcsListWorktreesResult, GitCommandError>;
+    /** Dirty files, unique commits, and disk for one registered worktree. */
+    readonly inspectWorktree: (
+      input: VcsInspectWorktreeInput,
+    ) => Effect.Effect<VcsInspectWorktreeResult, GitCommandError>;
     readonly fetchPullRequestBranch: (
       input: GitFetchPullRequestBranchInput,
     ) => Effect.Effect<void, GitCommandError>;
