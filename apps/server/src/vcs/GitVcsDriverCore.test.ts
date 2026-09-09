@@ -1640,6 +1640,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* git(worktreePath, ["add", "."]);
         yield* git(worktreePath, ["commit", "-m", "only on feature"]);
         yield* writeTextFile(worktreePath, "scratch.txt", "aaaa\n");
+        yield* writeTextFile(worktreePath, "nested/one.txt", "one\n");
+        yield* writeTextFile(worktreePath, "nested/two.txt", "two\n");
 
         const listed = yield* driver.listWorktrees({ cwd });
         assert.equal(listed.isRepo, true);
@@ -1656,7 +1658,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(linked.refName, "feature/inventory");
         assert.equal(linked.missing, false);
         assert.equal(linked.uniqueCommitCount, 1);
-        assert.equal(linked.dirtyFileCount, 1);
+        assert.equal(linked.dirtyFileCount, 3);
         assert.ok(linked.diskBytes >= 4);
 
         const inspected = yield* driver.inspectWorktree({ cwd, path: worktreePath });
@@ -1664,6 +1666,14 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(inspected.uniqueCommits[0]?.subject, "only on feature");
         assert.equal(
           inspected.dirtyFiles.some((file) => file.path === "scratch.txt"),
+          true,
+        );
+        assert.equal(
+          inspected.dirtyFiles.some((file) => file.path === "nested/one.txt"),
+          true,
+        );
+        assert.equal(
+          inspected.dirtyFiles.some((file) => file.path === "nested/two.txt"),
           true,
         );
 
@@ -1681,6 +1691,43 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           })
           .pipe(Effect.flip);
         assert.equal(unknown.detail, "path is not a registered worktree");
+      }),
+    );
+
+    it.effect("does not count a detached head shared by another worktree as unique", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const worktreesRoot = yield* makeTmpDir("git-worktrees-");
+        const firstPath = pathService.join(worktreesRoot, "first-detached");
+        const secondPath = pathService.join(worktreesRoot, "second-detached");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* driver.createWorktree({
+          cwd,
+          path: firstPath,
+          refName: initialBranch,
+          newRefName: "feature/shared-detached-head",
+        });
+        yield* writeTextFile(firstPath, "shared.txt", "shared\n");
+        yield* git(firstPath, ["add", "."]);
+        yield* git(firstPath, ["commit", "-m", "shared detached commit"]);
+        const sharedHead = (yield* git(firstPath, ["rev-parse", "HEAD"])).trim();
+        yield* git(firstPath, ["switch", "--detach"]);
+        yield* git(cwd, ["branch", "-D", "feature/shared-detached-head"]);
+        yield* git(cwd, ["worktree", "add", "--detach", secondPath, sharedHead]);
+
+        const listed = yield* driver.listWorktrees({ cwd });
+        const shared = listed.worktrees.filter((worktree) => worktree.headSha === sharedHead);
+        assert.equal(shared.length, 2);
+        assert.deepEqual(
+          shared.map((worktree) => worktree.uniqueCommitCount),
+          [0, 0],
+        );
+
+        const inspected = yield* driver.inspectWorktree({ cwd, path: firstPath });
+        assert.equal(inspected.uniqueCommits.length, 0);
       }),
     );
 

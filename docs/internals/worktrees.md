@@ -39,18 +39,6 @@ operations.
 Inspect of an unregistered path is an error, not a listing of an arbitrary
 directory.
 
-## Later work
-
-MCP (`worktrees_read` / `worktrees_write`, `agentWorktreeAccess` none/read/write),
-orchestration commands for adopt / prune / force-remove, and web, desktop, and
-mobile surfaces are separate units. They will use this inventory rather than
-the client-side `vcs.removeWorktree` that currently runs after thread delete.
-
-Prune rules that belong on the decider, not this driver: never remove the
-primary checkout, the caller's own tree, or a tree an active bot still claims;
-safe prune requires unclaimed, clean, and unique commit count 0; force-remove
-compares the last observed dirty and unique counts.
-
 Pages remain the durable published-result aggregate. Mesh artifacts remain
 receipt blobs. Checkpoints remain hidden git refs. Residue on a checkout is
 not a fourth blob store.

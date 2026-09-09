@@ -362,9 +362,7 @@ function uniqueRevWalkSuffix(input: {
 }): string[] {
   const args = [input.headSha];
   for (const sha of input.otherHeadShas) {
-    if (sha !== input.headSha) {
-      args.push(`^${sha}`);
-    }
+    args.push(`^${sha}`);
   }
   for (const refName of input.otherRefNames) {
     args.push(`^${refName}`);
@@ -3389,7 +3387,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     const result = yield* executeGitWithStableDiagnostics(
       "GitVcsDriver.inspectWorktree.dirtyFiles",
       worktreePath,
-      ["status", "--porcelain=v1", "--untracked-files=normal"],
+      ["status", "--porcelain=v1", "--untracked-files=all"],
       { allowNonZeroExit: true, timeoutMs: 15_000 },
     );
     if (result.exitCode !== 0) {
@@ -3489,16 +3487,16 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     if (!listed.isRepo) {
       return { isRepo: false, worktrees: [] };
     }
-    const otherHeadShas = listed.records
-      .map((record) => record.headSha)
-      .filter((sha): sha is string => sha !== null);
     const worktrees = yield* Effect.forEach(
       listed.records,
       (record, index) =>
         summarizeWorktree({
           record,
           isPrimary: index === 0,
-          otherHeadShas,
+          otherHeadShas: listed.records
+            .filter((_, otherIndex) => otherIndex !== index)
+            .map((otherRecord) => otherRecord.headSha)
+            .filter((sha): sha is string => sha !== null),
         }),
       { concurrency: 8 },
     );
@@ -3541,6 +3539,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       });
     }
     const otherHeadShas = listed.records
+      .filter((_, index) => index !== matchIndex)
       .map((record) => record.headSha)
       .filter((sha): sha is string => sha !== null);
     const worktree = yield* summarizeWorktree({
