@@ -1,11 +1,18 @@
 import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentId, PreviewTabId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  KanbanMcpWriteInput,
+  PreviewTabId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai";
+import { McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effect/unstable/ai";
 import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
 
 import * as McpHttpServer from "./McpHttpServer.ts";
@@ -205,6 +212,13 @@ it.effect("registers annotated tools and preserves authenticated request context
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
 
+      for (const { tool } of server.tools) {
+        expect(tool.inputSchema.type, `${tool.name} input schema`).toBe("object");
+        if (tool.outputSchema !== undefined) {
+          expect(tool.outputSchema.type, `${tool.name} output schema`).toBe("object");
+        }
+      }
+
       const statusTool = server.tools.find(({ tool }) => tool.name === "preview_status");
       expect(statusTool?.tool.annotations?.readOnlyHint).toBe(true);
       expect(statusTool?.tool.annotations?.idempotentHint).toBe(true);
@@ -286,3 +300,23 @@ it.effect("registers annotated tools and preserves authenticated request context
     }),
   ).pipe(Effect.provide(TestLayer)),
 );
+
+it.effect("advertises the Kanban object union without losing its mutation constraints", () => {
+  const write = Tool.make("write", { parameters: KanbanMcpWriteInput, success: Schema.Void });
+  const toolkit = Toolkit.make(write);
+  const registration = McpHttpServer.registerMcpToolkit(toolkit).pipe(
+    Layer.provide(toolkit.toLayer({ write: () => Effect.void })),
+    Layer.provideMerge(McpServer.McpServer.layer),
+  );
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const advertised = server.tools.find(({ tool }) => tool.name === "write")?.tool.inputSchema;
+    expect(advertised?.type).toBe("object");
+    expect(advertised?.anyOf).toEqual(Tool.getJsonSchema(write).anyOf);
+    expect(advertised?.anyOf?.length).toBeGreaterThan(1);
+    const invalid = yield* server
+      .callTool({ name: "write", arguments: { action: "delete" } })
+      .pipe(Effect.provideService(McpSchema.McpServerClient, client), Effect.flip);
+    expect(invalid._tag).toBe("InvalidParams");
+  }).pipe(Effect.provide(registration));
+});

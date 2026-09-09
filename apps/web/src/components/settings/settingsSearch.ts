@@ -2,10 +2,12 @@ import { isElectron } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 
 export type SettingsPath =
+  | "/settings/projects"
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
+  | "/settings/skills"
   | "/settings/integrations"
   | "/settings/source-control"
   | "/settings/connections"
@@ -49,8 +51,10 @@ export interface SettingsSearchAvailability {
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
+  "/settings/projects": "Projects",
   "/settings/keybindings": "Keybindings",
   "/settings/providers": "Providers",
+  "/settings/skills": "Skills & plugins",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
@@ -63,6 +67,22 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "skills-plugins",
+    title: "Skills & plugins",
+    to: "/settings/skills",
+    searchTerms: [
+      "skill store plugin marketplace install import remove enable disable harness packages",
+    ],
+  },
+  {
+    id: "project-defaults",
+    title: "Project defaults and overrides",
+    to: "/settings/projects",
+    searchTerms: [
+      "model workspace browser machines projects inheritance automatic pull checkout grouping actions scripts",
+    ],
+  },
   {
     id: "color-scheme",
     title: "Color scheme",
@@ -105,7 +125,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
     searchTerms: ["dev nightly artwork pill label hide none"],
     // The setting is stage-dependent, so its parent section is the stable destination.
-    targetId: "appearance",
+    targetId: "appearance-interface",
   },
   {
     id: "interface-font",
@@ -203,6 +223,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["command menu dollar $ slash /"],
   },
   {
+    id: "composer-collapse",
+    title: "Collapse composer",
+    to: "/settings/general",
+    searchTerms: [
+      "composer rest resting unfocus blur focus click away scroll wheel conversation timeline shrink minimize",
+    ],
+  },
+  {
     id: "provider-update-checks",
     title: "Provider update checks",
     to: "/settings/general",
@@ -210,9 +238,11 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "continue-threads-after-server-update",
-    title: "Continue threads after server updates",
+    title: "Continue threads after restarts",
     to: "/settings/general",
-    searchTerms: ["resume running active work restart desktop update automatically"],
+    searchTerms: [
+      "resume running active interrupted work restart reboot machine crash desktop update automatically",
+    ],
   },
   {
     id: "background-activity",
@@ -225,14 +255,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "new-threads",
     title: "New threads",
-    to: "/settings/general",
+    to: "/settings/projects",
     searchTerms: ["default workspace mode draft local worktree"],
   },
   {
     id: "start-from-origin",
     title: "Start from origin",
     to: "/settings/general",
-    targetId: "new-threads",
     searchTerms: ["new worktrees latest matching remote branch local"],
   },
   {
@@ -317,6 +346,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "usage-providers",
+    title: "Usage providers",
+    to: "/settings/providers",
+    searchTerms: [
+      "usage sources CLIProxyAPI CLI proxy hub quota subscription limits management key add remove",
+    ],
+    providerSettingsOnly: true,
+  },
+  {
     id: "provider-health-check-interval",
     title: "Health check interval",
     to: "/settings/providers",
@@ -326,7 +364,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "agent-browser-access",
     title: "Agent browser access",
-    to: "/settings/integrations",
+    to: "/settings/projects",
     searchTerms: ["allow open drive preview tools sessions"],
   },
   {
@@ -339,7 +377,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "agent-kanban-access",
     title: "Agent Kanban access",
     to: "/settings/integrations",
-    searchTerms: ["agents bots board tasks cards mcp project workflow"],
+    searchTerms: ["agents bots board tasks cards mcp project workflow rbac read write permission"],
   },
   {
     id: "agent-usage-access",
@@ -357,7 +395,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "browser-default-profile",
     title: "Default browser profile",
     to: "/settings/integrations",
-    targetId: "browser",
+    targetId: "browser-profiles",
   },
   {
     id: "browser-default-viewport",
@@ -503,6 +541,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Remote environments",
     to: "/settings/connections",
     searchTerms: ["add pair backend host code ssh config agent tunnel saved t3 connect"],
+  },
+  {
+    id: "load-balancing",
+    title: "Load balancing",
+    to: "/settings/connections",
+    searchTerms: [
+      "automatic machine environment resources cpu memory capacity preference weight shared projects",
+    ],
   },
   {
     id: "archive",

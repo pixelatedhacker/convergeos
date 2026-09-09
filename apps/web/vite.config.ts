@@ -1,6 +1,5 @@
 import * as NodeZlib from "node:zlib";
 
-import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -13,6 +12,7 @@ import pkg from "./package.json" with { type: "json" };
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import { tailwindPlugins } from "./vite/tailwind";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -81,6 +81,7 @@ const unitTestProject = {
     // run, those async tests can exceed Vitest's default 5s budget.
     hookTimeout: 15_000,
     testTimeout: 15_000,
+    setupFiles: ["../../packages/shared/src/testing/longTempDir.ts"],
   },
 } satisfies TestProjectInlineConfiguration;
 
@@ -170,7 +171,7 @@ export default defineConfig(() => {
         parserOpts: { plugins: ["typescript", "jsx"] },
         presets: [reactCompilerPreset()],
       }),
-      tailwindcss(),
+      tailwindPlugins(bundledDev),
     ],
     optimizeDeps: {
       include: [
@@ -234,16 +235,23 @@ export default defineConfig(() => {
             // socket — Vite's HMR socket is matched separately and exactly
             // (path "/" plus a vite-hmr subprotocol), so the two upgrade
             // handlers don't collide.
-            proxy: Object.fromEntries(
-              DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
-                prefix,
-                {
-                  target: devProxyTarget,
-                  changeOrigin: true,
-                  ...(prefix === "/ws" ? { ws: true } : {}),
-                },
-              ]),
-            ),
+            proxy: {
+              "/api/bot-computer/view": {
+                target: devProxyTarget,
+                changeOrigin: true,
+                ws: true,
+              },
+              ...Object.fromEntries(
+                DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
+                  prefix,
+                  {
+                    target: devProxyTarget,
+                    changeOrigin: true,
+                    ...(prefix === "/ws" ? { ws: true } : {}),
+                  },
+                ]),
+              ),
+            },
           }
         : {}),
       // Electron's BrowserWindow needs the HMR socket pinned to an explicit
@@ -270,6 +278,7 @@ export default defineConfig(() => {
     build: {
       outDir: "dist",
       emptyOutDir: true,
+      manifest: true,
       sourcemap: buildSourcemap,
     },
     test: {

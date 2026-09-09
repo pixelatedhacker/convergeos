@@ -1,5 +1,7 @@
 import {
   AgentMeshError,
+  type AgentMeshModelsInput,
+  type AgentMeshModelsResult,
   type AgentMeshAgent,
   type AgentMeshDispatchReceipt,
   type AgentMeshDelegationDispatchReceipt,
@@ -14,7 +16,6 @@ import {
   type AgentMeshWaitInput,
   type AgentMeshWaitResult,
   CommandId,
-  MessageId,
   type OrchestrationCommand,
   type OrchestrationThreadShell,
   type ThreadId,
@@ -24,6 +25,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+
+import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -38,6 +41,10 @@ export interface AgentMeshScope {
 }
 
 export interface AgentMeshShape {
+  readonly models: (
+    scope: AgentMeshScope,
+    input: AgentMeshModelsInput,
+  ) => Effect.Effect<AgentMeshModelsResult, AgentMeshError>;
   readonly list: (
     scope: AgentMeshScope,
     input: AgentMeshListInput,
@@ -79,6 +86,7 @@ const projectAgent = (
 ): AgentMeshAgent => ({
   threadId: thread.id,
   title: thread.title,
+  modelSelection: thread.modelSelection,
   sessionStatus: thread.session?.status ?? null,
   latestTurnState: thread.latestTurn?.state ?? null,
   activeTurnId: thread.session?.activeTurnId ?? null,
@@ -92,12 +100,14 @@ const projectAgent = (
     normalizeProjectPathForComparison(caller.worktreePath ?? workspaceRoot)
       ? "shared"
       : "isolated",
+  branch: thread.branch,
   updatedAt: thread.updatedAt,
   current: thread.id === caller.id,
   ...(thread.botProfile == null ? {} : { botProfile: thread.botProfile }),
 });
 
 export const make = Effect.gen(function* () {
+  const providers = yield* ProviderRegistry.ProviderRegistry;
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const delegations = yield* DelegationService.DelegationService;
@@ -164,6 +174,49 @@ export const make = Effect.gen(function* () {
       ),
       Effect.mapError(() => meshError(operation, "dispatchFailed", targetThreadId)),
     );
+
+  const models: AgentMeshShape["models"] = Effect.fn("AgentMesh.models")(function* (scope, input) {
+    const caller = yield* requireCaller("models", scope);
+    const snapshots = yield* providers.getProviders;
+    const queryText = input.query?.toLowerCase();
+    const matches = snapshots
+      .filter(
+        (provider) => input.instanceId === undefined || provider.instanceId === input.instanceId,
+      )
+      .flatMap((provider) =>
+        provider.models
+          .filter(
+            (model) =>
+              queryText === undefined ||
+              [model.slug, model.name, ...(model.aliases ?? [])].some((value) =>
+                value.toLowerCase().includes(queryText),
+              ),
+          )
+          .map((model) => ({
+            instanceId: provider.instanceId,
+            driver: provider.driver,
+            enabled: provider.enabled,
+            installed: provider.installed,
+            status: provider.status,
+            authStatus: provider.auth.status,
+            checkedAt: provider.checkedAt,
+            supportedRuntimeModes: provider.supportedRuntimeModes ?? null,
+            model,
+          })),
+      )
+      .sort(
+        (left, right) =>
+          left.instanceId.localeCompare(right.instanceId) ||
+          left.model.slug.localeCompare(right.model.slug),
+      );
+    const offset = input.offset ?? 0;
+    const limit = input.limit ?? 25;
+    return {
+      projectId: caller.projectId,
+      models: matches.slice(offset, offset + limit),
+      nextOffset: offset + limit < matches.length ? offset + limit : null,
+    };
+  });
 
   const list: AgentMeshShape["list"] = Effect.fn("AgentMesh.list")(function* (scope, input) {
     const caller = yield* requireCaller("list", scope);
@@ -264,7 +317,7 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return AgentMesh.of({ list, read, spawn, send, wait, interrupt });
+  return AgentMesh.of({ models, list, read, spawn, send, wait, interrupt });
 });
 
 export const layer = Layer.effect(AgentMesh, make).pipe(
@@ -275,6 +328,7 @@ export const layer = Layer.effect(AgentMesh, make).pipe(
 export const layerTest = Layer.succeed(
   AgentMesh,
   AgentMesh.of({
+    models: () => Effect.die("AgentMesh.models is not stubbed in this test"),
     list: (_scope, _input) => Effect.die("AgentMesh.list is not stubbed in this test"),
     read: (_scope, _input) => Effect.die("AgentMesh.read is not stubbed in this test"),
     spawn: (_scope, _input) => Effect.die("AgentMesh.spawn is not stubbed in this test"),

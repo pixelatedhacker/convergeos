@@ -1,13 +1,17 @@
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  EventId,
+  ProviderDriverKind,
   ProviderInstanceId,
   type SubscriptionQuotaSubject,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as CodexBarCollector from "./CodexBarCollector.ts";
+import * as ProviderRateLimitObserver from "./ProviderRateLimitObserver.ts";
 import * as SubscriptionQuotaService from "./SubscriptionQuotaService.ts";
 
 const environmentId = EnvironmentId.make("environment-quota-test");
@@ -61,6 +65,7 @@ it.effect("single-flights concurrent reads and safely binds a sole driver instan
       }),
     });
     const service = yield* SubscriptionQuotaService.make.pipe(
+      Effect.provide(ProviderRateLimitObserver.layer),
       Effect.provideService(CodexBarCollector.CodexBarCollector, collector),
     );
     const context = {
@@ -110,6 +115,7 @@ it("leaves multiple same-provider subjects unbound even with one local instance"
 it.effect("removes account labels from scoped MCP reports", () =>
   Effect.gen(function* () {
     const service = yield* SubscriptionQuotaService.make.pipe(
+      Effect.provide(ProviderRateLimitObserver.layer),
       Effect.provideService(
         CodexBarCollector.CodexBarCollector,
         CodexBarCollector.CodexBarCollector.of({ collect: Effect.succeed(success) }),
@@ -131,6 +137,7 @@ it.effect("serves stale last-good quota when a later refresh fails", () =>
   Effect.gen(function* () {
     let calls = 0;
     const service = yield* SubscriptionQuotaService.make.pipe(
+      Effect.provide(ProviderRateLimitObserver.layer),
       Effect.provideService(
         CodexBarCollector.CodexBarCollector,
         CodexBarCollector.CodexBarCollector.of({
@@ -165,4 +172,65 @@ it.effect("serves stale last-good quota when a later refresh fails", () =>
     expect(report.subjects[0]?.status).toBe("stale");
     expect(report.subjects[0]?.warning?.kind).toBe("refresh-failed");
   }),
+);
+
+it.effect(
+  "prefers provider-reported windows over a CodexBar subject bound to the same instance",
+  () =>
+    Effect.gen(function* () {
+      const observer = yield* ProviderRateLimitObserver.make;
+      yield* observer.observe({
+        eventId: EventId.make("evt-rate-limits"),
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codex,
+        threadId: ThreadId.make("thread-quota"),
+        createdAt: "2026-09-03T21:00:30.000Z",
+        type: "account.rate-limits.updated",
+        payload: {
+          limits: {
+            windows: [
+              {
+                id: "primary",
+                kind: "session",
+                label: "5-hour",
+                usedPercent: 9,
+                resetsAt: "2025-09-03T21:40:00.000Z",
+                windowDurationMins: 300,
+              },
+            ],
+          },
+        },
+      });
+      const service = yield* SubscriptionQuotaService.make.pipe(
+        Effect.provideService(ProviderRateLimitObserver.ProviderRateLimitObserver, observer),
+        Effect.provideService(
+          CodexBarCollector.CodexBarCollector,
+          CodexBarCollector.CodexBarCollector.of({ collect: Effect.succeed(success) }),
+        ),
+      );
+      const instances = [{ instanceId: codex, driverKind: "codex", enabled: true }] as const;
+
+      const report = yield* service.read({ environmentId, instances });
+      expect(report.subjects.map((entry) => entry.subjectId)).toEqual([
+        "provider-events:codex-personal",
+      ]);
+      expect(report.subjects[0]?.binding).toEqual({
+        status: "exact",
+        providerInstanceIds: [codex],
+      });
+      expect(report.subjects[0]?.windows[0]?.usedPercent).toBe(9);
+      expect(report.collectors.map((entry) => [entry.collectorId, entry.status])).toEqual([
+        ["codexbar", "ok"],
+        ["provider-events", "ok"],
+      ]);
+
+      const scoped = yield* service.readScoped({
+        environmentId,
+        providerInstanceId: codex,
+        instances,
+      });
+      expect(scoped.subjects.map((entry) => entry.subjectId)).toEqual([
+        "provider-events:codex-personal",
+      ]);
+    }),
 );

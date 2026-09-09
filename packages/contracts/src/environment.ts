@@ -8,6 +8,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { BotComputerCapability } from "./botComputer.ts";
 
 export const ExecutionEnvironmentPlatformOs = Schema.Literals([
   "darwin",
@@ -21,13 +22,14 @@ export const ExecutionEnvironmentPlatformArch = Schema.Literals(["arm64", "x64",
 export type ExecutionEnvironmentPlatformArch = typeof ExecutionEnvironmentPlatformArch.Type;
 
 /**
- * The curated set of machine shapes an environment can wear as its icon.
+ * The curated set of machine shapes and OS identities an environment can wear as its icon.
  * Servers detect one from the hardware they run on (`platform.machine`), and
  * the `environmentIcon` server setting lets a user pick one instead.
  */
 export const ENVIRONMENT_MACHINE_KINDS = [
   "server",
   "cloud",
+  "linux",
   "desktop",
   "laptop",
   "mac-mini",
@@ -94,6 +96,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadSettlement: Schema.optionalKey(Schema.Boolean),
   /** Server evaluates merge and inactivity settlement without a client. */
   threadAutoSettlement: Schema.optionalKey(Schema.Boolean),
+  /** Server persists the opt-in for continuing interrupted threads after restarts. */
+  threadRestartContinuation: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.snooze / thread.unsnooze commands. Same
       version-skew contract as threadSettlement. */
   threadSnooze: Schema.optionalKey(Schema.Boolean),
@@ -102,11 +106,17 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       client reconnecting to one must drop published themes rather than keep
       showing a set nothing will ever update. */
   environmentThemes: Schema.optionalKey(Schema.Boolean),
+  /** Server streams quota from configured usage-limit sources. Same
+      version-skew contract as environmentThemes. */
+  usageLimitSources: Schema.optionalKey(Schema.Boolean),
+  /** Server persists custom model rates and applies them to usage summaries. */
+  usagePriceOverrides: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.pin / thread.unpin commands. Same
       version-skew contract as threadSettlement. */
   threadPinning: Schema.optionalKey(Schema.Boolean),
   /** Named bot profiles bound to canonical thread inboxes. */
   botProfiles: Schema.optionalKey(Schema.Boolean),
+  botComputer: Schema.optionalKey(BotComputerCapability),
   kanban: Schema.optionalKey(Schema.Boolean),
   /** Server understands schedule.create/update/delete and fires scheduled
       turns without a client. Same version-skew contract as threadSettlement. */
@@ -114,6 +124,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.pin.reorder (and orderKey on thread.pin).
       Same version-skew contract as threadSettlement. */
   threadPinReorder: Schema.optionalKey(Schema.Boolean),
+  /** Server persists manual Active order through thread.active.reorder. */
+  threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   /** Server understands regenerateTitle on thread.meta.update. Absent on
       older servers, so clients hide the action instead of sending it. */
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
@@ -135,6 +147,9 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       this is false — no update would ever repaint it. Absent on older
       servers, which may still publish, so only an explicit false skips. */
   agentActivityPublishing: Schema.optionalKey(Schema.Boolean),
+  /** Server supports signed receipt export controls. Live capture and
+      publication status are separate from this capability. */
+  agentMeshReceiptExport: Schema.optionalKey(Schema.Boolean),
   /** Server detects `platform.machine` and persists the `environmentIcon`
       setting. Older servers drop the key on write, so clients show the
       picker inert rather than offering a choice that would never stick. */

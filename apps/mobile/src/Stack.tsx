@@ -1,3 +1,4 @@
+import { SettingsSkillsRouteScreen } from "./features/settings/SettingsSkillsRouteScreen";
 import {
   createPathConfigForStaticNavigation,
   getPathFromState,
@@ -56,9 +57,10 @@ import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteSc
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
 import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
-import { SettingsProviderSetupRouteScreen } from "./features/settings/SettingsProviderSetupRouteScreen";
+import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { KanbanRouteScreen } from "./features/kanban/KanbanRouteScreen";
+import { BotsRouteScreen } from "./features/bots/BotsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { ShowcaseCaptureCoordinator } from "./features/showcase/ShowcaseCaptureCoordinator";
 import {
@@ -166,19 +168,17 @@ const SettingsContentStack = createNativeStackNavigator({
         title: "Add Environment",
       },
     }),
-    SettingsProviderSetup: createNativeStackScreen({
-      screen: SettingsProviderSetupRouteScreen,
-      linking: "providers/:environmentId/:instanceId",
-      options: {
-        title: "Antigravity",
-      },
-    }),
     SettingsArchive: createNativeStackScreen({
       screen: ArchivedThreadsRouteScreen,
       linking: "archive",
       options: {
         title: "Archived Threads",
       },
+    }),
+    SettingsSkills: createNativeStackScreen({
+      screen: SettingsSkillsRouteScreen,
+      linking: "skills",
+      options: { title: "Skills & plugins" },
     }),
     SettingsAppearance: createNativeStackScreen({
       screen: SettingsAppearanceRouteScreen,
@@ -201,6 +201,10 @@ const SettingsContentStack = createNativeStackNavigator({
         title: "Client Storage",
       },
     }),
+    SettingsUsageAccount: createNativeStackScreen({
+      screen: UsageLimitAccountScreen,
+      options: { title: "Account" },
+    }),
     SettingsUsage: createNativeStackScreen({
       screen: UsageRouteScreen,
       linking: "usage",
@@ -213,6 +217,14 @@ const SettingsContentStack = createNativeStackNavigator({
       linking: "kanban",
       options: {
         title: "Kanban",
+      },
+    }),
+    SettingsBots: createNativeStackScreen({
+      screen: BotsRouteScreen,
+      linking: "bots",
+      options: {
+        ...SHEET_SOLID_HEADER_OPTIONS,
+        title: "Bots",
       },
     }),
   },

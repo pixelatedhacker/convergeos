@@ -1,7 +1,7 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { BotComputerCapability, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpRightIcon,
@@ -57,6 +57,7 @@ import {
   updateBotDispatchDraft,
   updateBusyBotKeys,
 } from "./BotsPage.logic";
+import { BotComputerPanel } from "./BotComputerPanel";
 
 function threadKey(thread: Pick<EnvironmentThreadShell, "environmentId" | "id">): string {
   return `${thread.environmentId}:${thread.id}`;
@@ -304,6 +305,9 @@ export function BotsPage() {
             {selectedBot && (
               <BotWorkspace
                 busy={busyThreadKeys.has(threadKey(selectedBot))}
+                computerCapability={
+                  serverConfigs.get(selectedBot.environmentId)?.environment.capabilities.botComputer
+                }
                 message={dispatchDrafts.get(threadKey(selectedBot)) ?? ""}
                 projectName={
                   projectNameByRef.get(`${selectedBot.environmentId}:${selectedBot.projectId}`) ??
@@ -443,6 +447,7 @@ function BotFleetRow({
 
 function BotWorkspace({
   busy,
+  computerCapability,
   message,
   projectName,
   thread,
@@ -453,6 +458,7 @@ function BotWorkspace({
   onOpen,
 }: {
   readonly busy: boolean;
+  readonly computerCapability: BotComputerCapability | undefined;
   readonly message: string;
   readonly projectName: string;
   readonly thread: EnvironmentThreadShell;
@@ -491,12 +497,21 @@ function BotWorkspace({
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {thread.botProfile?.description ||
-                "A persistent agent ready to own work in this project."}
+                "No standing instructions yet. Edit the bot to add the role it follows on every task."}
             </p>
           </div>
           <Button aria-label="Edit bot" size="icon-sm" variant="ghost" onClick={onEdit}>
             <PencilIcon />
           </Button>
+        </div>
+
+        <div className="pt-7">
+          <BotComputerPanel
+            key={`${thread.environmentId}:${thread.id}`}
+            capability={computerCapability}
+            environmentId={thread.environmentId}
+            threadId={thread.id}
+          />
         </div>
 
         <section className="py-7">
@@ -734,7 +749,7 @@ function EditBotDialog({
         <DialogHeader>
           <DialogTitle>Edit bot</DialogTitle>
           <DialogDescription>
-            Give this fleet member a clear name and responsibility.
+            Name this bot and write the instructions it follows on every task.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
@@ -745,10 +760,10 @@ function EditBotDialog({
             onChange={(event) => setDisplayName(event.target.value)}
           />
           <Textarea
-            aria-label="Bot description"
-            maxLength={500}
-            placeholder="What should this bot handle?"
-            rows={4}
+            aria-label="Bot instructions"
+            maxLength={2000}
+            placeholder="Standing instructions sent ahead of every task, such as the role, the test command, and the commit rule."
+            rows={6}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />

@@ -90,6 +90,13 @@ inbox. This deliberately avoids a second identity registry. A profile has a disp
 description, revision, and timestamps. Configuration uses compare-and-swap revisions so two
 clients cannot silently overwrite one another.
 
+The description is the bot's standing instructions. `ProviderCommandReactor` composes them ahead
+of the task text when it builds the provider send-turn request (`composeBotTurnInput` in
+`apps/server/src/orchestration/botInstructions.ts`), so every entry point that starts a turn on
+the thread — the Bots page, Kanban dispatch, and `agents_send` — carries them without restating
+the role. The persisted user message, title generation, and prompt-command detection keep the
+bare task. Disabling the bot clears the profile and therefore the injection.
+
 Only an active thread with a distinct worktree can become a bot. Two active bots cannot claim the
 same normalized worktree. An active bot inbox cannot be archived or deleted until its profile is
 disabled; disabling preserves the thread, history, and worktree.
@@ -102,3 +109,46 @@ therefore keep every agent-mesh authorization and workspace invariant above.
 Kanban cards may name bot inboxes as assignees. A Ready assignment creates the same delegation
 aggregate and starts through the same thread path, preserving the authorization, exclusivity, and
 workspace invariants above.
+
+For signed, verifiable export of delegation history to a private Nostr relay, see
+`docs/internals/agent-mesh-receipts.md`.
+
+## Model discovery and escalation
+
+`agents_models` exposes a bounded projection of the existing `ProviderRegistry` cache to callers
+with `agents.read`. It returns instance IDs, model slugs and native option descriptors, readiness,
+supported runtime modes, and snapshot timestamps. Account identity, provider diagnostics, settings,
+and credentials are omitted. Filter by `instanceId` or case-insensitive `query`; use `nextOffset`
+to continue through the sorted results. Catalog refresh can change page contents, so recheck the
+selected entry before dispatch after a configuration change. A cached entry, including a custom
+model, is not a successful execution receipt.
+
+Use the selected `instanceId` and `model.slug` in an explicit spawn `modelSelection`. Encode options
+as an array of `{ id, value }` entries drawn from `model.capabilities.optionDescriptors`. Effort
+keys differ between drivers, such as `reasoningEffort`, `effort`, `thinking`, and `variant`. A null
+capability description does not establish support for an effort override.
+
+`agents_list` and `agents_read` expose each thread's configured `modelSelection` and its checked-out
+`branch` (null for the shared workspace or a detached HEAD). A bot's branch is stable, so a lead can
+merge or diff its work by name without asking the bot to report it. The model selection is useful
+for resolving an existing bot's role, but does not claim the actual model used by a particular
+turn. Turn-level selection overrides can differ from the saved thread selection. Explicit spawn
+selection remains necessary when escalation must differ from the caller's saved configuration.
+
+The MCP contract is shared across web, desktop, mobile, and connection modes; no client UI change
+is required. Each harness still needs its provider adapter to attach the tools. Read the attachment
+status and handle invocation errors rather than infer support from the provider name.
+
+## Delegation usage
+
+`usage_delegations` reads at most eight unique delegation IDs, gated by `usage.read` and the
+caller's project. It joins the persisted delegation's worker and turn to indexed activity IDs.
+It does not hydrate messages, scan transcripts, or infer the model from the requested selection.
+There is no new ledger or database migration. See [usage attribution](usage-attribution.md) for
+provider semantics and the rules for consuming these reports.
+
+## Operating guide
+
+The lead-agent procedure for using these tools, including the worker commit contract, branch
+integration before auditing, and worktree cleanup order, lives in
+`.agents/skills/agent-orchestrator/SKILL.md`.

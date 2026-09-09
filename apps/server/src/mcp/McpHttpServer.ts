@@ -1,19 +1,21 @@
+import { BotComputerSnapshot } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
-import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
+import { McpProtocol, McpSchema, McpServer, Tool, type Toolkit } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
-
 import packageJson from "../../package.json" with { type: "json" };
 import { CONVERGEOS_MCP_SERVER_NAME } from "./McpIdentity.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
+import { LivenessToolkit, LivenessToolkitHandlersLive } from "./toolkits/liveness/tools.ts";
 import { AgentsToolkitHandlersLive } from "./toolkits/agents/handlers.ts";
 import { AgentsToolkit } from "./toolkits/agents/tools.ts";
 import { KanbanToolkitHandlersLive } from "./toolkits/kanban/handlers.ts";
@@ -29,6 +31,16 @@ import {
 } from "./toolkits/preview/tools.ts";
 import { UsageToolkitHandlersLive } from "./toolkits/usage/handlers.ts";
 import { UsageToolkit } from "./toolkits/usage/tools.ts";
+import * as BotComputer from "../botComputer/BotComputerService.ts";
+import {
+  ComputerSnapshotToolkitHandlersLive,
+  ComputerStandardToolkitHandlersLive,
+} from "./toolkits/computer/handlers.ts";
+import {
+  ComputerSnapshotTool,
+  ComputerSnapshotToolkit,
+  ComputerStandardToolkit,
+} from "./toolkits/computer/tools.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -43,6 +55,7 @@ const unauthorized = HttpServerResponse.jsonUnsafe(
     },
   },
 );
+const decodeBotComputerSnapshot = Schema.decodeUnknownEffect(BotComputerSnapshot);
 
 type AuthenticatedHttpEffect = Effect.Effect<
   HttpServerResponse.HttpServerResponse,
@@ -209,7 +222,35 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
   });
 });
 
-const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
+// MCP requires an object root; Effect emits bare anyOf for object unions.
+const mcpInputSchema = (schema: McpSchema.Tool["inputSchema"]) => ({
+  ...schema,
+  type: "object" as const,
+});
+
+export const registerMcpToolkit = <Tools extends Record<string, Tool.Any>>(
+  toolkit: Toolkit.Toolkit<Tools>,
+) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      yield* McpServer.registerToolkit(toolkit).pipe(
+        Effect.provideService(McpServer.McpServer, {
+          ...server,
+          addTool: (options) =>
+            server.addTool({
+              ...options,
+              tool: new McpSchema.Tool({
+                ...options.tool,
+                inputSchema: mcpInputSchema(options.tool.inputSchema),
+              }),
+            }),
+        }),
+      );
+    }),
+  ).pipe(Layer.provide(McpServer.McpServer.layer));
+
+const PreviewStandardToolkitRegistrationLive = registerMcpToolkit(PreviewStandardToolkit).pipe(
   Layer.provide(PreviewStandardToolkitHandlersLive),
 );
 
@@ -217,20 +258,121 @@ const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnaps
   Layer.provide(PreviewSnapshotToolkitHandlersLive),
 );
 
+const computerSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
+  if (Cause.hasInterrupts(cause) || cause.reasons.some(Cause.isDieReason)) {
+    return Effect.failCause(cause).pipe(Effect.orDie);
+  }
+  const firstFailure = cause.reasons.find(Cause.isFailReason)?.error;
+  const errorTag =
+    typeof firstFailure === "object" &&
+    firstFailure !== null &&
+    "_tag" in firstFailure &&
+    typeof firstFailure._tag === "string"
+      ? firstFailure._tag
+      : "BotComputerSnapshotError";
+  const result = new McpSchema.CallToolResult({
+    isError: true,
+    structuredContent: { error: { _tag: errorTag, operation: "snapshot" } },
+    content: [{ type: "text", text: "Bot computer snapshot failed." }],
+  });
+  return Effect.logWarning("Bot computer snapshot failed", {
+    operation: "snapshot",
+    errorTag,
+    cause: Cause.pretty(cause),
+  }).pipe(Effect.as(result));
+};
+
+const registerComputerSnapshot = Effect.fn("McpHttpServer.registerComputerSnapshot")(function* () {
+  const server = yield* McpServer.McpServer;
+  const computer = yield* BotComputer.BotComputerService;
+  const built = yield* ComputerSnapshotToolkit;
+  const tool = ComputerSnapshotTool;
+  yield* server.addTool({
+    tool: new McpSchema.Tool({
+      name: tool.name,
+      description: Tool.getDescription(tool),
+      inputSchema: mcpInputSchema(Tool.getJsonSchema(tool)),
+      annotations: {
+        ...Context.getOption(tool.annotations, Tool.Title).pipe(
+          Option.map((title) => ({ title })),
+          Option.getOrUndefined,
+        ),
+        readOnlyHint: Context.get(tool.annotations, Tool.Readonly),
+        destructiveHint: Context.get(tool.annotations, Tool.Destructive),
+        idempotentHint: Context.get(tool.annotations, Tool.Idempotent),
+        openWorldHint: Context.get(tool.annotations, Tool.OpenWorld),
+      },
+    }),
+    annotations: tool.annotations,
+    handle: (payload) =>
+      Effect.withFiber((fiber) => {
+        const invocation = Context.getUnsafe(
+          fiber.context,
+          McpInvocationContext.McpInvocationContext,
+        );
+        return built.handle("computer_snapshot", payload).pipe(
+          Stream.unwrap,
+          Stream.run(Sink.last()),
+          Effect.flatMap(Effect.fromOption),
+          Effect.provideService(BotComputer.BotComputerService, computer),
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.flatMap(({ encodedResult }) => decodeBotComputerSnapshot(encodedResult)),
+          Effect.matchCauseEffect({
+            onFailure: computerSnapshotFailure,
+            onSuccess: (snapshot) => {
+              const metadata = {
+                mimeType: snapshot.mimeType,
+                width: snapshot.width,
+                height: snapshot.height,
+              };
+              return Effect.succeed(
+                new McpSchema.CallToolResult({
+                  isError: false,
+                  structuredContent: metadata,
+                  content: [
+                    { type: "text", text: JSON.stringify(metadata) },
+                    {
+                      type: "image",
+                      data: new Uint8Array(Buffer.from(snapshot.data, "base64")),
+                      mimeType: snapshot.mimeType,
+                    },
+                  ],
+                }),
+              );
+            },
+          }),
+        );
+      }),
+  });
+});
+
+const ComputerStandardToolkitRegistrationLive = registerMcpToolkit(ComputerStandardToolkit).pipe(
+  Layer.provide(ComputerStandardToolkitHandlersLive),
+);
+
+const ComputerSnapshotRegistrationLive = Layer.effectDiscard(registerComputerSnapshot()).pipe(
+  Layer.provide(ComputerSnapshotToolkitHandlersLive),
+);
+
+export const ComputerToolkitRegistrationLive = Layer.mergeAll(
+  ComputerStandardToolkitRegistrationLive,
+  ComputerSnapshotRegistrationLive,
+);
+
 export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewStandardToolkitRegistrationLive,
   PreviewSnapshotRegistrationLive,
 );
 
-export const AgentsToolkitRegistrationLive = McpServer.toolkit(AgentsToolkit).pipe(
+export const AgentsToolkitRegistrationLive = registerMcpToolkit(AgentsToolkit).pipe(
   Layer.provide(AgentsToolkitHandlersLive),
 );
 
-export const KanbanToolkitRegistrationLive = McpServer.toolkit(KanbanToolkit).pipe(
+export const KanbanToolkitRegistrationLive = registerMcpToolkit(KanbanToolkit).pipe(
   Layer.provide(KanbanToolkitHandlersLive),
 );
 
-export const UsageToolkitRegistrationLive = McpServer.toolkit(UsageToolkit).pipe(
+export const UsageToolkitRegistrationLive = registerMcpToolkit(UsageToolkit).pipe(
   Layer.provide(UsageToolkitHandlersLive),
 );
 
@@ -241,9 +383,15 @@ const McpTransportLive = McpServer.layerHttp({
   protocols: [McpProtocol.v2025_06_18],
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
+export const LivenessToolkitRegistrationLive = registerMcpToolkit(LivenessToolkit).pipe(
+  Layer.provide(LivenessToolkitHandlersLive),
+);
+
 export const layer = Layer.mergeAll(
+  LivenessToolkitRegistrationLive,
   PreviewToolkitRegistrationLive,
   AgentsToolkitRegistrationLive,
   KanbanToolkitRegistrationLive,
   UsageToolkitRegistrationLive,
+  ComputerToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));

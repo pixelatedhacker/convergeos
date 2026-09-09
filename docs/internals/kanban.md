@@ -48,9 +48,10 @@ delegation identity for the next attempt.
 
 ## MCP boundary
 
-`enableAgentKanbanAccess` defaults to false. New provider sessions receive `kanban.read` and
-`kanban.write` only when it is enabled. The MCP handler derives the project from the credential's
-calling thread, ignores caller-supplied project selection, and sends every mutation through
+`agentKanbanAccess` defaults to `none`. New provider sessions receive `kanban.read` at the `read`
+level and both `kanban.read` and `kanban.write` at the `write` level. Write authority always
+includes read authority. The MCP handler derives the project from the credential's calling thread,
+ignores caller-supplied project selection, and sends every mutation through
 `OrchestrationEngineService`. Stable request IDs become stable command IDs for retry deduplication.
 
 The MCP board snapshot includes the same linked delegation summaries as web and mobile, so an agent

@@ -5,6 +5,15 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { AgentsToolkit } from "./tools.ts";
 
 const handlers = {
+  agents_models: (input) =>
+    Effect.gen(function* () {
+      const invocation = yield* McpInvocationContext.requireAgentCapability(
+        "agents.read",
+        "models",
+      );
+      const mesh = yield* AgentMesh.AgentMesh;
+      return yield* mesh.models({ threadId: invocation.threadId }, input);
+    }),
   agents_list: (input) =>
     Effect.gen(function* () {
       const invocation = yield* McpInvocationContext.requireAgentCapability("agents.read", "list");

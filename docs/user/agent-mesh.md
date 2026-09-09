@@ -52,6 +52,12 @@ conversation, edit or disable the profile, or promote an eligible isolated threa
 thread is ready, **New bot** starts one in a project you choose. Mobile shows bot identity in thread
 lists and Kanban assignments; fleet management currently lives in the web and desktop workspace.
 
+A bot's description is its standing instructions. Whatever you write there is sent ahead of every
+task the bot receives, whether you dispatch it from the Bots workspace, a Kanban card starts it, or
+another agent sends it work. Use it for the role, the test command, and rules such as committing
+before finishing, so callers only have to describe the task. The conversation shows the task as it
+was sent; the instructions travel with it to the provider.
+
 Other agents can list only bots when choosing a destination. Messages still land in the bot's
 original thread, so its provider settings, history, approvals, checkpoints, and worktree remain
 visible in the normal conversation.
@@ -61,3 +67,40 @@ identity but keeps the thread and its history.
 
 Project Kanban cards can name an active bot as their assignee. Moving an assigned card to Ready
 queues it for that bot; ConvergeOS starts it when the bot is available.
+
+## Choosing a model for delegated work
+
+Agents with mesh read access can discover configured models, their reasoning options, and cached
+readiness before assigning work. An agent can keep routine work on a cheaper model and request a
+bounded review from a model you selected for stronger judgment, including through another provider.
+An explicit selection determines the spawned worker; omitting it inherits the caller's saved model.
+
+Existing bot listings include their configured model, reasoning options, and current branch. The
+branch lets a lead pick up a bot's finished work by name. The model and options are configuration,
+not proof that a particular turn ran with that model. The lead should collect the completed result
+and check its evidence. Unavailable credentials, incompatible runtime modes, and missing tools still
+need resolution before that path can work.
+
+## Bot computers
+
+Compatible Linux and macOS environments can give an active Bot a persistent Linux desktop. The
+computer belongs to the Bot's existing thread and isolated worktree; it is not another agent or
+conversation. Starting, resuming, suspending, resetting, and destroying the computer are safe to
+retry. Suspending retains its Chromium profile. Destroying removes both the container and profile,
+while resetting removes both and starts a clean computer immediately.
+
+On web or desktop, open **Bots**, select a Bot, then use the **Computer** pane at the top of its
+workspace. On mobile, open **Settings → Bots** and select one from the list. The viewer works over
+local, remote, relay, and tunnel connections. Desktop opens remote viewers in your browser; web and
+mobile show the desktop in the app. The Bot's provider can inspect and control the same desktop
+through ConvergeOS MCP screenshot, pointer, keyboard, and scroll tools.
+
+The first version requires you to explicitly allow outbound network access when starting,
+resuming, or resetting. It never injects host credentials or mounts your home directory, but files
+and secrets already present inside the Bot worktree remain available because that worktree is the
+computer's workspace. Viewer links are short-lived and limited to one Bot computer. Suspending,
+resetting, or destroying the computer invalidates its current viewer link; resuming or resetting
+automatically obtains a fresh one.
+
+Bot computers use constrained Docker containers. This is useful isolation, not containment for
+hostile code. Do not use one to run code you would not trust inside a local container.

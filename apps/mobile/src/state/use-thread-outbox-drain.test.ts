@@ -55,6 +55,8 @@ const harness = vi.hoisted(() => ({
   })(),
 }));
 
+vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
+
 vi.mock("expo-file-system", () => ({
   Directory: harness.draftFile.Directory,
   File: harness.draftFile.File,
@@ -114,7 +116,7 @@ vi.mock("./thread-outbox", async () => {
   harness.manager = createThreadOutboxManager({
     registry: appAtomRegistry,
     storage: {
-      load: async () => [],
+      load: async () => ({ messages: [], errors: [] }),
       write: async () => undefined,
       remove: (message) => harness.removeOutboxMessage(message),
     },
@@ -123,7 +125,6 @@ vi.mock("./thread-outbox", async () => {
   return {
     threadOutboxManager: manager,
     flushThreadOutbox: async () => undefined,
-    ensureThreadOutboxLoaded: () => undefined,
     confirmThreadOutboxMessageQueued: (message: never) => manager.confirmQueued(message),
     updateThreadOutboxMessage: (message: never, expectedRevision?: number) =>
       manager.update(message, expectedRevision),
@@ -221,7 +222,6 @@ describe("thread outbox attachment preparation", () => {
     );
     const preparationStarted = Promise.withResolvers<void>();
     const preparationBarrier = Promise.withResolvers<PreparedTurnAttachments>();
-    const releaseUploads = vi.fn(async () => undefined);
     harness.prepareTurnAttachments.mockImplementationOnce(async () => {
       preparationStarted.resolve();
       return preparationBarrier.promise;
@@ -239,12 +239,10 @@ describe("thread outbox attachment preparation", () => {
       attachments: [],
       draftAttachments: message.attachments,
       pendingAttachmentIds: ["pending-reused-upload"],
-      releaseUploads,
     });
 
     await expect(preparation).resolves.toEqual({ status: "abandoned" });
     expect(remainingMessages()).toEqual([edited]);
-    expect(releaseUploads).not.toHaveBeenCalled();
   });
 
   it("keeps an unchanged queued payload ready after attachment reuse", async () => {
@@ -256,13 +254,11 @@ describe("thread outbox attachment preparation", () => {
       }),
       "pending-reused-upload",
     );
-    const releaseUploads = vi.fn(async () => undefined);
     harness.prepareTurnAttachments.mockResolvedValueOnce({
       status: "ready",
       attachments: [],
       draftAttachments: message.attachments,
       pendingAttachmentIds: ["pending-reused-upload"],
-      releaseUploads,
     });
     await harness.manager.enqueue(message);
     const revision = harness.manager.revisionOf(message.messageId);
@@ -273,7 +269,6 @@ describe("thread outbox attachment preparation", () => {
       persistedMessage: message,
       deliveryRevision: revision,
     });
-    expect(releaseUploads).not.toHaveBeenCalled();
   });
 
   it("uses the known next revision after persisting uploaded references", async () => {
@@ -298,7 +293,6 @@ describe("thread outbox attachment preparation", () => {
         attachments: [],
         draftAttachments: uploadedAttachments,
         pendingAttachmentIds: ["pending-new-upload"],
-        releaseUploads: async () => undefined,
       };
     });
     await harness.manager.enqueue(message);
@@ -636,7 +630,7 @@ describe("thread outbox recovery rollback", () => {
       if (!reason) throw new Error("Expected native CLI image rejection");
       await expect(restoreRejectedQueuedMessage(message, reason)).resolves.toBe("restored");
       const draftKey = creation
-        ? `new-task:${message.environmentId}:${projectId}`
+        ? `new-task:restored-${message.messageId}`
         : `${message.environmentId}:${message.threadId}`;
       expect(composerDrafts.getComposerDraftSnapshot(draftKey)).toMatchObject({
         text: message.text,
@@ -650,7 +644,7 @@ describe("thread outbox recovery rollback", () => {
     },
   );
 
-  it("restores a rejected new task into its durable project draft", async () => {
+  it("restores a rejected new task as its own draft for the project", async () => {
     const message: QueuedThreadMessage = {
       ...queuedMessage({ messageId: "message-creation-restore", text: "new task text" }),
       modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
@@ -667,14 +661,19 @@ describe("thread outbox recovery rollback", () => {
       "restored",
     );
 
+    // The draft is keyed by the message so a retry lands on the same one, and
+    // stamped with the project so it shows up as a Draft row for that project.
     expect(
-      composerDrafts.getComposerDraftSnapshot(
-        `new-task:${message.environmentId}:${message.creation!.projectId}`,
-      ),
+      composerDrafts.getComposerDraftSnapshot(`new-task:restored-${message.messageId}`),
     ).toMatchObject({
       text: message.text,
       attachments: message.attachments,
       modelSelection: message.modelSelection,
+      project: {
+        environmentId: message.environmentId,
+        projectId: message.creation!.projectId,
+        createdAt: message.createdAt,
+      },
     });
     expect(remainingMessages()).toEqual([]);
     expect(harness.setPendingConnectionError).toHaveBeenCalledWith("rejected by server");

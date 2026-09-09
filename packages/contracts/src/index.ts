@@ -1,7 +1,9 @@
 export * from "./baseSchemas.ts";
 export * from "./agentMesh.ts";
+export * from "./meshReceipt.ts";
 export * from "./assistantCitations.ts";
 export * from "./background.ts";
+export * from "./botComputer.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
@@ -15,6 +17,8 @@ export * from "./provider.ts";
 export * from "./providerInstance.ts";
 export * from "./providerSetup.ts";
 export * from "./providerRuntime.ts";
+export * from "./providerUsageLimits.ts";
+export * from "./usageLimitSourceId.ts";
 export * from "./model.ts";
 export * from "./keybindings.ts";
 export * from "./kanban.ts";
@@ -29,8 +33,10 @@ export * from "./t3ProjectFile.ts";
 export * from "./editor.ts";
 export * from "./project.ts";
 export * from "./filesystem.ts";
+export * from "./agentSessions.ts";
 export * from "./assets.ts";
 export * from "./review.ts";
+export * from "./browserImport.ts";
 export * from "./browserProfile.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
@@ -38,3 +44,11 @@ export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./subscriptionQuota.ts";
 export * from "./rpc.ts";
+
+export * from "./invocationUsage.ts";
+export * from "./delegationUsage.ts";
+
+export * from "./taskBudget.ts";
+export * from "./agentLiveness.ts";
+
+export * from "./skillStore.ts";

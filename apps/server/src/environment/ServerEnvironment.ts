@@ -1,4 +1,5 @@
 import {
+  BOT_COMPUTER_ISOLATION_WARNING,
   EnvironmentId,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
@@ -219,13 +220,28 @@ export const make = Effect.gen(function* () {
       pullRequests: true,
       threadSettlement: true,
       threadAutoSettlement: true,
+      threadRestartContinuation: true,
       threadSnooze: true,
       environmentThemes: true,
+      usageLimitSources: true,
+      usagePriceOverrides: true,
       threadPinning: true,
       botProfiles: true,
+      agentMeshReceiptExport: true,
+      ...(hostPlatform === "linux" || hostPlatform === "darwin"
+        ? {
+            botComputer: {
+              viewerAccess: "authenticated-remote",
+              isolation: "container",
+              networkAccessModes: ["outbound"],
+              warning: BOT_COMPUTER_ISOLATION_WARNING,
+            },
+          }
+        : {}),
       kanban: true,
       scheduledTurns: true,
       threadPinReorder: true,
+      threadActiveReorder: true,
       threadTitleRegeneration: true,
       threadPullRequestLinking: true,
       environmentIcon: true,
@@ -248,7 +264,10 @@ export const make = Effect.gen(function* () {
     getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
       Effect.map((agentActivityPublishing) => ({
         ...descriptor,
-        capabilities: { ...descriptor.capabilities, agentActivityPublishing },
+        capabilities: {
+          ...descriptor.capabilities,
+          agentActivityPublishing,
+        },
       })),
     ),
   });

@@ -1,9 +1,11 @@
 export type SettingsSheetTarget =
+  | "SettingsSkills"
   | "SettingsEnvironments"
   | "SettingsArchive"
   | "SettingsAppearance"
   | "SettingsProjectGrouping"
   | "SettingsClientStorage"
+  | "SettingsBots"
   | "SettingsKanban"
   | "SettingsUsage";
 
