@@ -907,6 +907,60 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  it("prepends the bot profile instructions to the provider input on bot threads", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-bot-thread-worktree"),
+        threadId: ThreadId.make("thread-1"),
+        branch: "reviewer",
+        worktreePath: "/tmp/provider-project-worktree",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.bot.configure",
+        commandId: CommandId.make("cmd-bot-configure"),
+        threadId: ThreadId.make("thread-1"),
+        expectedRevision: null,
+        displayName: "Reviewer",
+        description: "Review the diff against main. Commit before you finish.",
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-bot-turn-start"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-bot-1"),
+          role: "user",
+          text: "Audit PR #12",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input:
+        "<bot_instructions>\nReview the diff against main. Commit before you finish.\n</bot_instructions>\n\nAudit PR #12",
+    });
+    // The prompt-command probe and the persisted message keep the bare task.
+    expect(harness.tryHandlePromptCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Audit PR #12" }),
+    );
+  });
+
   it("reacts to thread.turn.start by ensuring session and sending provider turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
