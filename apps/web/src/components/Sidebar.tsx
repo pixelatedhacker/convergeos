@@ -3739,7 +3739,18 @@ export default function Sidebar() {
                   value={selectedProjectScopeItem}
                   onValueChange={(item) => {
                     if (!item) return;
-                    setProjectScopeKey(item.value === "all" ? null : item.value);
+                    if (item.value === "all") {
+                      setProjectScopeKey(null);
+                      return;
+                    }
+                    setProjectScopeKey(item.value);
+                    // Switching projects lands on the project home: status,
+                    // team, and decisions first, thread list one click away.
+                    if (isMobile) setOpenMobile(false);
+                    void router.navigate({
+                      to: "/projects/$projectKey/home",
+                      params: { projectKey: item.value },
+                    });
                   }}
                 >
                   <ComboboxTrigger
