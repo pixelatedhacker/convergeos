@@ -45,7 +45,7 @@ export const DelegationUsageResult = Schema.Struct({
 });
 export type DelegationUsageResult = typeof DelegationUsageResult.Type;
 
-export class DelegationUsageError extends Schema.TaggedErrorClass<DelegationUsageError>()(
+export class DelegationUsageError extends Schema.TaggedError<DelegationUsageError>()(
   "DelegationUsageError",
   { reason: Schema.Literals(["unavailable", "readFailed"]) },
 ) {

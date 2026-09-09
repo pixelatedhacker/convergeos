@@ -159,6 +159,7 @@ function nonRepositoryListWorktrees(): VcsListWorktreesResult {
   };
 }
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
@@ -327,9 +328,7 @@ export const make = Effect.gen(function* () {
     listWorktrees: (input) =>
       detectGitRepositoryForCommand("GitWorkflowService.listWorktrees", input.cwd).pipe(
         Effect.flatMap((isGitRepository) =>
-          isGitRepository
-            ? git.listWorktrees(input)
-            : Effect.succeed(nonRepositoryListWorktrees()),
+          isGitRepository ? git.listWorktrees(input) : Effect.succeed(nonRepositoryListWorktrees()),
         ),
       ),
     inspectWorktree: (input) =>

@@ -81,7 +81,9 @@ describe("DesktopEarlyElectronStartup", () => {
     });
 
     assert.deepEqual(options, {
+      isDevelopment: true,
       linuxWmClass: "convergeos-dev",
+      linuxDesktopEntryName: "convergeos-dev.desktop",
       passwordStore: "gnome-libsecret",
     });
   });

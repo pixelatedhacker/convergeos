@@ -60,6 +60,8 @@ const TestLayer = McpHttpServer.ComputerToolkitRegistrationLive.pipe(
 
 const client = McpSchema.McpServerClient.of({
   clientId: 1,
+  clientCapabilities: {},
+  clientInfo: { name: "computer-test", version: "1" },
   protocolVersion: "2025-06-18",
   initializePayload: {
     protocolVersion: "2025-06-18",

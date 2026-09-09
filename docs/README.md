@@ -11,6 +11,7 @@
 - [Project settings](./user/project-settings.md)
 - [Appearance and themes](./user/appearance.md)
 - [Keyboard shortcuts](./user/keybindings.md)
+- [SnapShots](./user/snap-shot.md)
 - [Import browser sessions](./user/browser-import.md)
 - [Glance at the dashboard](./user/dashboard.md)
 - [Use Project Home](./user/project-home.md)

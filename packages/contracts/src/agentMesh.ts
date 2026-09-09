@@ -184,7 +184,7 @@ export const AgentMeshWaitResult = Schema.Struct({
 });
 export type AgentMeshWaitResult = typeof AgentMeshWaitResult.Type;
 
-export class AgentMeshError extends Schema.TaggedErrorClass<AgentMeshError>()("AgentMeshError", {
+export class AgentMeshError extends Schema.TaggedError<AgentMeshError>()("AgentMeshError", {
   operation: AgentMeshOperation,
   reason: Schema.Literals([
     "capabilityDenied",

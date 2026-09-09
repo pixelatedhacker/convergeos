@@ -112,7 +112,7 @@ export const KanbanMcpErrorReason = Schema.Literals([
 ]);
 export type KanbanMcpErrorReason = typeof KanbanMcpErrorReason.Type;
 
-export class KanbanMcpError extends Schema.TaggedErrorClass<KanbanMcpError>()("KanbanMcpError", {
+export class KanbanMcpError extends Schema.TaggedError<KanbanMcpError>()("KanbanMcpError", {
   operation: KanbanMcpOperation,
   reason: KanbanMcpErrorReason,
   detail: Schema.String,

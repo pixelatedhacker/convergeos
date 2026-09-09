@@ -21,6 +21,8 @@ const invocation: McpInvocationContext.McpInvocationScope = {
 };
 const client = McpSchema.McpServerClient.of({
   clientId: 1,
+  clientCapabilities: {},
+  clientInfo: { name: "agents-mcp-test", version: "1.0.0" },
   protocolVersion: "2025-06-18",
   initializePayload: {
     protocolVersion: "2025-06-18",

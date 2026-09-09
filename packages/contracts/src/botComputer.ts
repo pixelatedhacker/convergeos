@@ -132,7 +132,7 @@ export const BotComputerSnapshot = Schema.Struct({
 });
 export type BotComputerSnapshot = typeof BotComputerSnapshot.Type;
 
-export class BotComputerAuthorizationError extends Schema.TaggedErrorClass<BotComputerAuthorizationError>()(
+export class BotComputerAuthorizationError extends Schema.TaggedError<BotComputerAuthorizationError>()(
   "BotComputerAuthorizationError",
   {
     threadId: ThreadId,
@@ -161,7 +161,7 @@ export class BotComputerAuthorizationError extends Schema.TaggedErrorClass<BotCo
   }
 }
 
-export class BotComputerOperationError extends Schema.TaggedErrorClass<BotComputerOperationError>()(
+export class BotComputerOperationError extends Schema.TaggedError<BotComputerOperationError>()(
   "BotComputerOperationError",
   {
     threadId: ThreadId,
@@ -170,7 +170,7 @@ export class BotComputerOperationError extends Schema.TaggedErrorClass<BotComput
   },
 ) {}
 
-export class BotComputerControlError extends Schema.TaggedErrorClass<BotComputerControlError>()(
+export class BotComputerControlError extends Schema.TaggedError<BotComputerControlError>()(
   "BotComputerControlError",
   {
     threadId: ThreadId,

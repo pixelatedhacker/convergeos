@@ -109,7 +109,10 @@ const ATTENTION_BADGE = {
 
 const BOT_STATE_BADGE: Record<
   BotRosterEntry["state"],
-  { readonly label: string; readonly variant: "success" | "info" | "warning" | "error" | "secondary" }
+  {
+    readonly label: string;
+    readonly variant: "success" | "info" | "warning" | "error" | "secondary";
+  }
 > = {
   waiting: { label: "Needs you", variant: "warning" },
   working: { label: "Working", variant: "success" },
@@ -267,14 +270,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
           ) : (
             <WorkspacePageContainer width="expanded">
               <div className="flex flex-wrap items-center gap-3">
-                <ProjectFavicon
-                  environmentId={representative.environmentId}
-                  cwd={representative.workspaceRoot}
-                  projectName={group.displayName}
-                  faviconPath={representative.faviconPath}
-                  projectIcon={representative.projectIcon}
-                  className="size-10 shrink-0 rounded-lg"
-                />
+                <ProjectFavicon project={representative} className="size-10 shrink-0 rounded-lg" />
                 <div className="min-w-0 flex-1">
                   <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
                     {group.displayName}
@@ -370,9 +366,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                             .filter((part) => part != null && part !== "")
                             .join(" · ")}
                           title={thread.title}
-                          trailing={
-                            <ArrowUpRightIcon className="size-3.5 text-muted-foreground" />
-                          }
+                          trailing={<ArrowUpRightIcon className="size-3.5 text-muted-foreground" />}
                           onClick={() =>
                             openThread({ environmentId: thread.environmentId, threadId: thread.id })
                           }
@@ -488,11 +482,7 @@ function BotCard(props: { readonly bot: BotRosterEntry; readonly onClick: () => 
   );
 }
 
-function ActivityStrip({
-  activity,
-}: {
-  readonly activity: ReturnType<typeof activityByDay>;
-}) {
+function ActivityStrip({ activity }: { readonly activity: ReturnType<typeof activityByDay> }) {
   const max = Math.max(1, ...activity.map((day) => day.count));
   const total = activity.reduce((sum, day) => sum + day.count, 0);
   return (
@@ -568,7 +558,9 @@ function BoardHero(props: {
   );
 
   const run = useCallback(
-    async (operation: Promise<{ readonly _tag: string; readonly cause?: Cause.Cause<unknown> }>) => {
+    async (
+      operation: Promise<{ readonly _tag: string; readonly cause?: Cause.Cause<unknown> }>,
+    ) => {
       const result = await operation;
       const message = failureMessage(result);
       if (message !== null) {
@@ -800,9 +792,7 @@ function BoardCard(props: {
           {assignee !== null ? (
             <span className="flex min-w-0 items-center gap-0.5">
               <BotIcon className="size-2.5 shrink-0" />
-              <span className="truncate">
-                {assignee.botProfile?.displayName ?? assignee.title}
-              </span>
+              <span className="truncate">{assignee.botProfile?.displayName ?? assignee.title}</span>
             </span>
           ) : null}
           {executionStatus !== null ? (

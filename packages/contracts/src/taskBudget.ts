@@ -41,6 +41,6 @@ export const TaskBudgetStatus = Schema.Struct({
 });
 export type TaskBudgetStatus = typeof TaskBudgetStatus.Type;
 
-export class TaskBudgetError extends Schema.TaggedErrorClass<TaskBudgetError>()("TaskBudgetError", {
+export class TaskBudgetError extends Schema.TaggedError<TaskBudgetError>()("TaskBudgetError", {
   detail: Schema.String,
 }) {}
