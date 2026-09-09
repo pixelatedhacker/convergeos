@@ -1,6 +1,6 @@
 ---
 name: agent-orchestrator
-description: Orchestrate multi-agent work in ConvergeOS using the native MCP Agent Mesh. Discover configured models, spawn isolated workers in dedicated Git worktrees, enforce inline task prompting with conventional commit refs, integrate completed worker branches, launch clean-room adversarial auditors, and clean up temporary worktrees.
+description: Orchestrate multi-agent work in ConvergeOS using the native MCP Agent Mesh. Discover configured models, spawn isolated workers in dedicated Git worktrees, enforce inline task prompting with conventional commits, integrate completed worker branches from typed mesh metadata, launch clean-room adversarial auditors, and clean up temporary worktrees.
 ---
 
 # Agent Orchestrator
@@ -28,7 +28,7 @@ Agent mesh tools are capability-gated:
 | `agents_spawn` | Provision isolated worker | `requestId`, `title`, `task`, `modelSelection` | Provisions a new worker thread and temporary Git worktree on a `convergeos/<8 hex>` branch (the code still emits the legacy `t3code/` prefix until the ref rename lands; treat both as temporary), branched from `caller.branch`. The worker inherits the caller's model unless `modelSelection` is supplied, and always inherits the caller's runtime mode. Returns `delegationId`, `targetThreadId`, `state`. |
 | `agents_send` | Dispatch to existing bot | `requestId`, `targetThreadId`, `message` | Dispatches one turn to an idle bot thread with an existing distinct worktree. Rejects with `targetBusy` if the bot is running or has an open delegation. |
 | `agents_wait` | Bounded event-driven wait | `delegationIds` (1–8), `timeoutMs` (max 50,000), `maxChars` (256–32,000, default 8,000) | Waits on event streams without busy-polling. Resolves on `completed`, `failed`, `interrupted`, `attention`, or `timeout`. Output text is automatically capped. |
-| `agents_read` | Inspect thread state | `targetThreadId`, `maxChars` | Reads thread status and bounded latest assistant output from any agent in the project. |
+| `agents_read` | Inspect thread state | `targetThreadId`, `maxChars` | Reads thread status, checked-out `branch`, configured model selection, and bounded latest assistant output from any agent in the project. |
 | `agents_interrupt`| Abort runaway turn | `requestId`, `targetThreadId`, `observedTurnId` | Interrupts the exact turn ID previously observed. Fails if the target moved to a newer turn. |
 
 ---
@@ -44,7 +44,7 @@ The lead must package the complete specification, constraints, test commands, an
 ConvergeOS checkpoints are hidden refs under `refs/convergeos/checkpoints/` (legacy `refs/t3/checkpoints/` until the ref rename lands), not commits on the worker's branch. Uncommitted changes in the worker's worktree are invisible to a `git merge` from the lead.
 
 ### C. The Branch Discovery Protocol
-`AgentMeshWaitResult` returns `latestAssistant.text`, but does not expose the worker's branch name or worktree path.
+`AgentMeshWaitResult` returns `latestAssistant.text`, but does not expose the worker's branch name or worktree path. `agents_read` exposes the checked-out `branch` as typed metadata; use it instead of trusting prose from the worker.
 
 **Every delegation task prompt must conclude with this instruction:**
 
@@ -53,8 +53,7 @@ When your task is complete and tests pass:
 1. Run the test suite to verify your changes.
 2. Stage and commit everything, including new files, with a conventional commit:
    `git add -A && git commit -m "<type>(<scope>): <description>"`
-3. Conclude your final assistant response with exactly these two lines:
-   BRANCH: <current git branch name>
+3. Conclude your final assistant response with exactly this line:
    COMMIT: <HEAD commit hash>
 ```
 
@@ -71,13 +70,15 @@ Do not hardcode static model names. Call `agents_models` to inspect available op
 Call `agents_spawn`:
 - Pass a deterministic `requestId` (reusing it safely resumes on retry).
 - Select the worker model in `modelSelection`.
-- Embed full task requirements, test commands, and the commit/branch conclusion contract into `task`.
+- Embed full task requirements, test commands, and the commit conclusion contract into `task`.
 
 ### Step 3: Wait for Completion & Handle Outcomes
 Call `agents_wait([delegationId])`:
 - **`reason === "completed"`**:
-  Parse `BRANCH: <branch>` and `COMMIT: <hash>` from `latestAssistant.text`.
-  Confirm commit existence with `git log -1 <hash>`.
+  Call `agents_read` with the returned `targetThreadId` and read its typed `branch` field.
+  Parse `COMMIT: <hash>` from `latestAssistant.text`, then confirm both the commit and its
+  membership on that branch with `git log -1 <hash>` and
+  `git merge-base --is-ancestor <hash> <branch>`.
 - **`reason === "attention"`**:
   The worker is paused waiting for user approval or input (workers inherit `caller.runtimeMode`). Because no MCP tool can approve on its behalf, **alert the user immediately in the UI**:
   > *"Worker thread `<targetThreadId>` is waiting for approval. Please approve the prompt in the UI to allow delegation to proceed."*
