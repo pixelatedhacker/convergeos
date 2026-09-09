@@ -75,7 +75,8 @@ readiness before assigning work. An agent can keep routine work on a cheaper mod
 bounded review from a model you selected for stronger judgment, including through another provider.
 An explicit selection determines the spawned worker; omitting it inherits the caller's saved model.
 
-Existing bot listings include their configured model and reasoning options. These are configuration,
+Existing bot listings include their configured model, reasoning options, and current branch. The
+branch lets a lead pick up a bot's finished work by name. The model and options are configuration,
 not proof that a particular turn ran with that model. The lead should collect the completed result
 and check its evidence. Unavailable credentials, incompatible runtime modes, and missing tools still
 need resolution before that path can work.

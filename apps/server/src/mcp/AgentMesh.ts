@@ -100,6 +100,7 @@ const projectAgent = (
     normalizeProjectPathForComparison(caller.worktreePath ?? workspaceRoot)
       ? "shared"
       : "isolated",
+  branch: thread.branch,
   updatedAt: thread.updatedAt,
   current: thread.id === caller.id,
   ...(thread.botProfile == null ? {} : { botProfile: thread.botProfile }),
