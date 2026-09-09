@@ -4461,6 +4461,8 @@ describe("agent MCP access", () => {
         Layer.provide(runtimeRepositoryLayer),
       );
       const projectionLayer = Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        listSchedules: () => Effect.die("unused"),
+        listDueSchedules: () => Effect.die("unused"),
         getTurnStartMessage: () => Effect.die("unused"),
         getImportedAgentSessionSources: () => Effect.die("unused"),
         getUserInputActivity: () => Effect.die("unused"),
@@ -4520,7 +4522,9 @@ describe("agent MCP access", () => {
             enableAgentBrowserAccess: settings.enableAgentBrowserAccess,
             enableAgentUsageAccess: settings.enableAgentUsageAccess,
             enableAgentMeshAccess: settings.enableAgentMeshAccess,
-            agentKanbanAccess: settings.agentKanbanAccess,
+            ...(settings.agentKanbanAccess === undefined
+              ? {}
+              : { agentKanbanAccess: settings.agentKanbanAccess }),
             projectAgentBrowserAccessOverrides:
               settings.projectOverride === undefined
                 ? {}

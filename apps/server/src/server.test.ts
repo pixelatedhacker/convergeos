@@ -98,6 +98,7 @@ const encodeTestJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unk
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as BotComputer from "./botComputer/BotComputerService.ts";
+import * as BotComputerViewerAccess from "./botComputer/BotComputerViewerAccess.ts";
 import * as ServerConfig from "./config.ts";
 import { HTTP_ROUTER_CONFIG, makeRoutesLayer } from "./server.ts";
 import {
@@ -1027,7 +1028,7 @@ const buildAppUnderTest = (options?: {
       ),
     );
 
-    const appLayer = servedRoutesLayer.pipe(
+    const appLayerWithRuntimeStubs = servedRoutesLayer.pipe(
       Layer.provide(resourceTelemetryLayer),
       Layer.provide(UsageService.layerTest),
       Layer.provide(
@@ -1182,6 +1183,9 @@ const buildAppUnderTest = (options?: {
           ),
         };
       }),
+    );
+
+    const appLayer = appLayerWithRuntimeStubs.pipe(
       Layer.provideMerge(makeAuthTestLayer()),
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provide(workspaceAndProjectServicesLayer),
@@ -1190,7 +1194,7 @@ const buildAppUnderTest = (options?: {
       Layer.provide(layerConfig),
     );
 
-    yield* Layer.build(appLayer);
+    yield* Layer.build(appLayer.pipe(Layer.provide(BotComputerViewerAccess.layer)));
     return config;
   });
 

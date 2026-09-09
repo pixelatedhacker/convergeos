@@ -261,22 +261,23 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
             env: { PATH: "" },
           },
         ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, noSpawn));
+        const realTempDir = NodeFS.realpathSync(tempDir);
 
         expect(capabilities).toEqual({
           provider: driver("packageTool"),
           packageName: "@example/package-tool",
           update: {
-            command: `npm install -g --prefix ${tempDir} --allow-scripts=@example/package-tool @example/package-tool@latest`,
+            command: `npm install -g --prefix ${realTempDir} --allow-scripts=@example/package-tool @example/package-tool@latest`,
             executable: "npm",
             args: [
               "install",
               "-g",
               "--prefix",
-              tempDir,
+              realTempDir,
               "--allow-scripts=@example/package-tool",
               "@example/package-tool@latest",
             ],
-            lockKey: `npm-global:${normalizeCommandPath(tempDir)}`,
+            lockKey: `npm-global:${normalizeCommandPath(realTempDir)}`,
           },
         });
       }),
@@ -536,11 +537,12 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
             env: { PATH: "" },
           },
         ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, noSpawn));
+        const realKeg = NodeFS.realpathSync(keg);
 
         expect(capabilities.update).toMatchObject({
           executable: "npm",
-          args: expect.arrayContaining(["--prefix", keg]),
-          lockKey: `npm-global:${normalizeCommandPath(keg)}`,
+          args: expect.arrayContaining(["--prefix", realKeg]),
+          lockKey: `npm-global:${normalizeCommandPath(realKeg)}`,
         });
       }),
   );

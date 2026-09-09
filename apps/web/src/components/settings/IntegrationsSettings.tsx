@@ -34,6 +34,7 @@ import {
   type PreviewAppearancePreference,
   type PreviewViewportSetting,
 } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { PREVIEW_VIEWPORT_PRESETS } from "@t3tools/shared/previewViewport";
 import { Link } from "@tanstack/react-router";
 import { InfoIcon, MoreVertical, Plus as PlusIcon } from "lucide-react";
@@ -87,6 +88,7 @@ import {
   persistClientSettingsUpdate,
   useClientSettings,
   useClientSettingsHydrated,
+  usePrimarySettings,
   useUpdatePrimarySettings,
 } from "~/hooks/useSettings";
 

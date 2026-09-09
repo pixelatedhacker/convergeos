@@ -5,6 +5,7 @@ export type SettingsSheetTarget =
   | "SettingsAppearance"
   | "SettingsProjectGrouping"
   | "SettingsClientStorage"
+  | "SettingsBots"
   | "SettingsKanban"
   | "SettingsUsage";
 

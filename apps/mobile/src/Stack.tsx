@@ -60,6 +60,7 @@ import { SettingsProjectGroupingRouteScreen } from "./features/settings/Settings
 import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { KanbanRouteScreen } from "./features/kanban/KanbanRouteScreen";
+import { BotsRouteScreen } from "./features/bots/BotsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { ShowcaseCaptureCoordinator } from "./features/showcase/ShowcaseCaptureCoordinator";
 import {
@@ -216,6 +217,14 @@ const SettingsContentStack = createNativeStackNavigator({
       linking: "kanban",
       options: {
         title: "Kanban",
+      },
+    }),
+    SettingsBots: createNativeStackScreen({
+      screen: BotsRouteScreen,
+      linking: "bots",
+      options: {
+        ...SHEET_SOLID_HEADER_OPTIONS,
+        title: "Bots",
       },
     }),
   },

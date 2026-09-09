@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { BotComputerCapability } from "./botComputer.ts";
+import { BotComputerCapability, BotComputerState } from "./botComputer.ts";
 
 const decodeCapability = Schema.decodeUnknownSync(BotComputerCapability);
 
@@ -15,5 +15,28 @@ describe("BotComputerCapability", () => {
         warning: "This computer uses container isolation. It is not containment for hostile code.",
       }).networkAccessModes,
     ).toEqual(["outbound"]);
+  });
+
+  it("decodes both legacy host-local and authenticated remote running states", () => {
+    const base = {
+      threadId: "thread-1",
+      status: "running",
+      containerId: "container-1",
+      isolation: "container",
+      networkAccess: "outbound",
+      warning: "This computer uses container isolation. It is not containment for hostile code.",
+    } as const;
+    const decode = Schema.decodeUnknownSync(BotComputerState);
+    expect(
+      decode({
+        ...base,
+        viewerAccess: "host-local",
+        viewerPort: 49152,
+        viewerUrl: "http://127.0.0.1:49152/vnc.html",
+      }).viewerAccess,
+    ).toBe("host-local");
+    expect(decode({ ...base, viewerAccess: "authenticated-remote" }).viewerAccess).toBe(
+      "authenticated-remote",
+    );
   });
 });

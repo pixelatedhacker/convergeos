@@ -72,11 +72,13 @@ function readInstanceCustomModels(
   if (instanceId !== defaultInstanceId) {
     return [];
   }
-  const legacyProviders = settings.providers as Record<
-    string,
-    { readonly customModels: ReadonlyArray<unknown> } | undefined
-  >;
-  return readCustomModelEntries(legacyProviders[driverKind]?.customModels ?? []);
+  const legacyProvider = Object.entries(settings.providers).find(
+    ([kind]) => kind === driverKind,
+  )?.[1];
+  if (!legacyProvider || !("customModels" in legacyProvider)) {
+    return [];
+  }
+  return readCustomModelEntries(legacyProvider.customModels);
 }
 
 export interface AppModelOption {

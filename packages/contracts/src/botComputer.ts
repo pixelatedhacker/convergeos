@@ -6,7 +6,7 @@ export const BOT_COMPUTER_ISOLATION_WARNING =
   "This computer uses container isolation. It is not containment for hostile code." as const;
 
 export const BotComputerCapability = Schema.Struct({
-  viewerAccess: Schema.Literal("host-local"),
+  viewerAccess: Schema.Literals(["host-local", "authenticated-remote"]),
   isolation: Schema.Literal("container"),
   networkAccessModes: Schema.Tuple([Schema.Literal("outbound")]),
   warning: Schema.Literal(BOT_COMPUTER_ISOLATION_WARNING),
@@ -15,7 +15,6 @@ export type BotComputerCapability = typeof BotComputerCapability.Type;
 
 const BotComputerStateBase = {
   threadId: ThreadId,
-  viewerAccess: Schema.Literal("host-local"),
   isolation: Schema.Literal("container"),
   warning: Schema.Literal(BOT_COMPUTER_ISOLATION_WARNING),
 };
@@ -25,34 +24,48 @@ export type BotComputerNetworkAccess = typeof BotComputerNetworkAccess.Type;
 
 export const BotComputerRunningState = Schema.Struct({
   ...BotComputerStateBase,
+  viewerAccess: Schema.Literal("authenticated-remote"),
+  status: Schema.Literal("running"),
+  containerId: TrimmedNonEmptyString,
+  networkAccess: BotComputerNetworkAccess,
+});
+export type BotComputerRunningState = typeof BotComputerRunningState.Type;
+
+const LegacyBotComputerRunningState = Schema.Struct({
+  ...BotComputerStateBase,
+  viewerAccess: Schema.Literal("host-local"),
   status: Schema.Literal("running"),
   containerId: TrimmedNonEmptyString,
   viewerPort: NonNegativeInt.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThan(65_536)),
   viewerUrl: TrimmedNonEmptyString,
   networkAccess: BotComputerNetworkAccess,
 });
-export type BotComputerRunningState = typeof BotComputerRunningState.Type;
 
 export const BotComputerState = Schema.Union([
   Schema.Struct({
     ...BotComputerStateBase,
+    viewerAccess: Schema.Literals(["host-local", "authenticated-remote"]),
     status: Schema.Literal("unavailable"),
     reason: Schema.Literals(["unsupported-platform", "docker-unavailable"]),
     detail: TrimmedNonEmptyString,
   }),
   Schema.Struct({
     ...BotComputerStateBase,
+    viewerAccess: Schema.Literals(["host-local", "authenticated-remote"]),
     status: Schema.Literal("absent"),
   }),
   Schema.Struct({
     ...BotComputerStateBase,
+    viewerAccess: Schema.Literals(["host-local", "authenticated-remote"]),
     status: Schema.Literal("suspended"),
     containerId: TrimmedNonEmptyString,
     networkAccess: BotComputerNetworkAccess,
   }),
   BotComputerRunningState,
+  LegacyBotComputerRunningState,
   Schema.Struct({
     ...BotComputerStateBase,
+    viewerAccess: Schema.Literals(["host-local", "authenticated-remote"]),
     status: Schema.Literal("failed"),
     operation: Schema.Literals(["inspect", "start", "suspend", "resume", "reset", "destroy"]),
     detail: TrimmedNonEmptyString,
@@ -69,6 +82,12 @@ export const BotComputerStartInput = Schema.Struct({
   networkAccess: BotComputerNetworkAccess,
 });
 export type BotComputerStartInput = typeof BotComputerStartInput.Type;
+
+export const BotComputerViewerAccess = Schema.Struct({
+  viewerPath: TrimmedNonEmptyString,
+  expiresAt: Schema.DateTimeUtcFromString,
+});
+export type BotComputerViewerAccess = typeof BotComputerViewerAccess.Type;
 
 const ComputerCoordinate = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),

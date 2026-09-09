@@ -9,6 +9,7 @@ import type {
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { HeaderHeightContext } from "@react-navigation/elements";
+import { useAtomValue } from "@effect/atom-react";
 import {
   getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,

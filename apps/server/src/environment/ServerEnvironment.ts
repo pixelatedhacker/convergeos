@@ -231,7 +231,7 @@ export const make = Effect.gen(function* () {
       ...(hostPlatform === "linux" || hostPlatform === "darwin"
         ? {
             botComputer: {
-              viewerAccess: "host-local",
+              viewerAccess: "authenticated-remote",
               isolation: "container",
               networkAccessModes: ["outbound"],
               warning: BOT_COMPUTER_ISOLATION_WARNING,

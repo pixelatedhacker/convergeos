@@ -5,13 +5,13 @@ import {
   botComputerDisplayState,
   botComputerPrimaryAction,
   botComputerStatusLabel,
-  canOpenHostLocalViewer,
+  legacyBotComputerViewerUrl,
 } from "./BotComputerPanel.logic";
 
 const threadId = "thread-1" as ThreadId;
 const base = {
   threadId,
-  viewerAccess: "host-local" as const,
+  viewerAccess: "authenticated-remote" as const,
   isolation: "container" as const,
   warning:
     "This computer uses container isolation. It is not containment for hostile code." as const,
@@ -36,8 +36,6 @@ describe("BotComputerPanel logic", () => {
       ...base,
       status: "running",
       containerId: "container-1",
-      viewerPort: 49152,
-      viewerUrl: "http://127.0.0.1:49152/vnc.html",
       networkAccess: "outbound",
     } satisfies BotComputerState;
 
@@ -61,31 +59,24 @@ describe("BotComputerPanel logic", () => {
     expect(botComputerDisplayState(absent, absent)).toEqual(absent);
   });
 
-  it("only embeds the expected cross-origin loopback viewer", () => {
+  it("keeps legacy host-local viewers limited to a loopback environment", () => {
     const input = {
       environmentHttpBaseUrl: "http://localhost:13773",
       viewerUrl: "http://127.0.0.1:49152/vnc.html?autoconnect=1",
       viewerPort: 49152,
-      clientOrigin: "http://localhost:5733",
     } as const;
-
-    expect(canOpenHostLocalViewer(input)).toBe(true);
+    expect(legacyBotComputerViewerUrl(input)).toBe(input.viewerUrl);
     expect(
-      canOpenHostLocalViewer({ ...input, environmentHttpBaseUrl: "https://devbox.tailnet.ts.net" }),
-    ).toBe(false);
-    expect(canOpenHostLocalViewer({ ...input, viewerUrl: "https://example.com/vnc.html" })).toBe(
-      false,
-    );
-    expect(canOpenHostLocalViewer({ ...input, viewerUrl: "http://127.0.0.1:49153/vnc.html" })).toBe(
-      false,
-    );
-    expect(
-      canOpenHostLocalViewer({
+      legacyBotComputerViewerUrl({
         ...input,
-        viewerUrl: "http://localhost:5733/vnc.html",
-        viewerPort: 5733,
+        environmentHttpBaseUrl: "https://devbox.tailnet.ts.net",
       }),
-    ).toBe(false);
-    expect(canOpenHostLocalViewer({ ...input, viewerUrl: "not a url" })).toBe(false);
+    ).toBeNull();
+    expect(
+      legacyBotComputerViewerUrl({
+        ...input,
+        viewerUrl: "http://127.evil.example:49152/vnc.html",
+      }),
+    ).toBeNull();
   });
 });

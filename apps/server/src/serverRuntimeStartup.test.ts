@@ -122,13 +122,13 @@ it.effect("launchStartupHeartbeat does not block the caller while counts are loa
 
       yield* ServerRuntimeStartup.launchStartupHeartbeat.pipe(
         Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+          listSchedules: () => Effect.die("unused"),
+          listDueSchedules: () => Effect.die("unused"),
           getUserInputActivity: () => Effect.die("unused"),
           getCommandReadModel: () => Effect.die("unused"),
           getSnapshot: () => Effect.die("unused"),
           getShellSnapshot: () => Effect.die("unused"),
           getArchivedShellSnapshot: () => Effect.die("unused"),
-          listSchedules: () => Effect.die("unused"),
-          listDueSchedules: () => Effect.die("unused"),
           getSnapshotSequence: () => Effect.die("unused"),
           getEventReplayStats: () => Effect.die("unused"),
           getCounts: () =>
@@ -167,7 +167,6 @@ it.effect("launchStartupHeartbeat does not block the caller while counts are loa
     }),
   ),
 );
-
 
 it.effect("resolveWelcomeBase derives cwd and project name from server config", () =>
   Effect.gen(function* () {
@@ -372,6 +371,8 @@ it.effect(
           autoBootstrapProjectFromCwd: true,
         } as never),
         Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+          listSchedules: () => Effect.die("unused"),
+          listDueSchedules: () => Effect.die("unused"),
           getUserInputActivity: () => Effect.die("unused"),
           getCommandReadModel: () => Effect.die("unused"),
           getSnapshot: () => Effect.die("unused"),

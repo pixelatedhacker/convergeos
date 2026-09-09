@@ -13,6 +13,7 @@ import {
   BotComputerInput,
   BotComputerStartInput,
   BotComputerState,
+  BotComputerViewerAccess,
 } from "./botComputer.ts";
 import {
   ProviderAuthCancelInput,
@@ -328,6 +329,7 @@ export const WS_METHODS = {
   previewAutomationFocusHost: "previewAutomation.focusHost",
 
   botComputerInspect: "botComputer.inspect",
+  botComputerViewerAccess: "botComputer.viewerAccess",
   botComputerStart: "botComputer.start",
   botComputerSuspend: "botComputer.suspend",
   botComputerResume: "botComputer.resume",
@@ -1098,6 +1100,12 @@ export const WsBotComputerInspectRpc = Rpc.make(WS_METHODS.botComputerInspect, {
   error: BotComputerRpcError,
 });
 
+export const WsBotComputerViewerAccessRpc = Rpc.make(WS_METHODS.botComputerViewerAccess, {
+  payload: BotComputerInput,
+  success: BotComputerViewerAccess,
+  error: BotComputerRpcError,
+});
+
 export const WsBotComputerStartRpc = Rpc.make(WS_METHODS.botComputerStart, {
   payload: BotComputerStartInput,
   success: BotComputerState,
@@ -1387,6 +1395,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewAutomationRespondRpc,
   WsPreviewAutomationFocusHostRpc,
   WsBotComputerInspectRpc,
+  WsBotComputerViewerAccessRpc,
   WsBotComputerStartRpc,
   WsBotComputerSuspendRpc,
   WsBotComputerResumeRpc,

@@ -90,6 +90,8 @@ const engineLayer = Layer.effect(
     );
     return OrchestrationEngine.OrchestrationEngineService.of({
       readEvents: () => Stream.empty,
+      readThreadEvents: () => Stream.empty,
+      getThreadReplayStats: () => Effect.die("thread replay stats are not stubbed in this test"),
       dispatch: () => Effect.die("dispatch is not stubbed in this test"),
       streamDomainEvents: Stream.empty,
       subscribeDomainEvents: Effect.succeed(Stream.empty),
