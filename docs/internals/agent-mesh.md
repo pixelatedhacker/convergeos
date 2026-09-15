@@ -149,6 +149,8 @@ provider semantics and the rules for consuming these reports.
 
 ## Operating guide
 
-The lead-agent procedure for using these tools, including the worker commit contract, branch
-integration before auditing, and worktree cleanup order, lives in
-`.agents/skills/agent-orchestrator/SKILL.md`.
+ConvergeOS owns the mesh transport and contracts, not a prescribed agent workflow. Teams that want
+an opinionated procedure for worker selection, delegation, review, and cleanup can install the
+optional [Coherent Stack](https://github.com/pixelatedhacker/coherent-stack) skill package. Keeping
+that procedure outside this repository lets the core product and the workflow package evolve
+independently.

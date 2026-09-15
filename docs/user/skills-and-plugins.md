@@ -14,6 +14,10 @@ The import is an independent copy. Editing the source does not update the instal
 
 Start a new provider session to load changed packages. If you use more than one provider instance with the same skill directory, an import or removal affects each instance that reads that directory.
 
+## Optional workflow packages
+
+ConvergeOS does not bundle an opinionated engineering workflow. If you want a maintained workflow router for planning, implementation, delegation, review, and delivery, clone [Coherent Stack](https://github.com/pixelatedhacker/coherent-stack) on the environment that runs ConvergeOS and import its `skills/coherent-stack` directory. Importing creates a provider-managed copy; removing that copy uninstalls the add-on without changing ConvergeOS or the cloned repository.
+
 ## Manage Claude Code plugins
 
 **Installed plugins** shows the current user and selected project's installations. **Discover plugins** uses the marketplaces already configured in that Claude Code instance. Each entry identifies its source. Review it before installing: plugins can contain scripts, hooks, and MCP servers.
