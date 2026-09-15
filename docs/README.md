@@ -15,6 +15,7 @@
 - [Import browser sessions](./user/browser-import.md)
 - [Glance at the dashboard](./user/dashboard.md)
 - [Use Project Home](./user/project-home.md)
+- [Devices](./user/devices.md)
 - [Usage and limits](./user/usage.md)
 - [Use agent mesh](./user/agent-mesh.md)
 - [Plan work with Kanban](./user/kanban.md)
@@ -55,6 +56,7 @@ source alone does not explain. Most code changes do not need an internal documen
 - [Mobile navigation](./internals/mobile-navigation.md)
 - [Mobile development lifecycle](./internals/mobile-development.md)
 - [Terminal runtime](./internals/terminal-runtime.md)
+- [Devices](./internals/devices.md)
 - [Voice input](./internals/voice-input.md)
 
 ### Runbooks

@@ -34,7 +34,7 @@ import { useSchedules } from "../../state/schedulesView";
 import { scheduleEnvironment } from "../../state/schedules";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
-import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {

@@ -21,6 +21,10 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import {
+  legacyThreadPullRequestKey,
+  threadPullRequestKeysEqual,
+} from "@t3tools/shared/threadPullRequests";
 
 import { toPersistenceSqlError, type ProjectionRepositoryError } from "../../persistence/Errors.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
@@ -37,6 +41,7 @@ import {
   type ProjectionThreadProposedPlan,
   ProjectionThreadProposedPlanRepository,
 } from "../../persistence/Services/ProjectionThreadProposedPlans.ts";
+import * as ProjectionThreadPullRequests from "../../persistence/ProjectionThreadPullRequests.ts";
 import { ProjectionThreadSessionRepository } from "../../persistence/Services/ProjectionThreadSessions.ts";
 import {
   type ProjectionTurn,
@@ -495,6 +500,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const projectionThreadRepository = yield* ProjectionThreadRepository;
     const projectionThreadMessageRepository = yield* ProjectionThreadMessageRepository;
     const projectionThreadProposedPlanRepository = yield* ProjectionThreadProposedPlanRepository;
+    const projectionThreadPullRequestRepository =
+      yield* ProjectionThreadPullRequests.ProjectionThreadPullRequestRepository;
     const projectionThreadActivityRepository = yield* ProjectionThreadActivityRepository;
     const projectionThreadSessionRepository = yield* ProjectionThreadSessionRepository;
     const projectionTurnRepository = yield* ProjectionTurnRepository;
@@ -614,6 +621,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     )(function* (event, attachmentSideEffects) {
       switch (event.type) {
         case "thread.created":
+          // A draft retry can re-create this id; links belong to the old incarnation.
+          yield* projectionThreadPullRequestRepository.deleteByThreadId({
+            threadId: event.payload.threadId,
+          });
           yield* projectionThreadRepository.upsert({
             threadId: event.payload.threadId,
             projectId: event.payload.projectId,
@@ -815,6 +826,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.activeOrderKey !== undefined
               ? { activeOrderKey: event.payload.activeOrderKey }
               : {}),
+            ...(event.payload.titleState !== undefined
+              ? { titleState: event.payload.titleState }
+              : {}),
             ...(event.payload.titleRegeneration !== undefined
               ? {
                   titleRegenerationRequestId: event.payload.titleRegeneration?.requestId ?? null,
@@ -834,6 +848,102 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.branchPullRequest !== undefined
               ? { branchPullRequest: event.payload.branchPullRequest }
               : {}),
+            updatedAt: event.payload.updatedAt,
+          });
+          // Legacy single-link events replay into the link table. The old
+          // field held one user-chosen link, so it only ever owns the manual
+          // rows; created/agent/stack links are left alone.
+          if (event.payload.linkedPullRequest !== undefined) {
+            yield* projectionThreadPullRequestRepository.deleteByThreadIdAndSource({
+              threadId: event.payload.threadId,
+              source: "manual",
+            });
+            if (event.payload.linkedPullRequest !== null) {
+              const linked = event.payload.linkedPullRequest;
+              yield* projectionThreadPullRequestRepository.upsert({
+                threadId: event.payload.threadId,
+                ...legacyThreadPullRequestKey(linked),
+                url: linked.url,
+                source: "manual",
+                linkedAt: event.payload.updatedAt,
+                snapshot: null,
+                stack: null,
+              });
+            }
+          }
+          return;
+        }
+
+        case "thread.pull-request-linked": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadPullRequestRepository.upsert({
+            threadId: event.payload.threadId,
+            ...event.payload.link,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.pull-request-unlinked": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          const links = yield* projectionThreadPullRequestRepository.listByThreadId({
+            threadId: event.payload.threadId,
+          });
+          const link = links.find((candidate) =>
+            threadPullRequestKeysEqual(candidate, event.payload),
+          );
+          if (link !== undefined) {
+            yield* projectionThreadPullRequestRepository.delete({
+              threadId: event.payload.threadId,
+              host: link.host,
+              repository: link.repository,
+              number: link.number,
+            });
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.pull-request-synced": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          // A sync for a link the user removed in the meantime is stale; drop it.
+          const links = yield* projectionThreadPullRequestRepository.listByThreadId({
+            threadId: event.payload.threadId,
+          });
+          const link = links.find((candidate) =>
+            threadPullRequestKeysEqual(candidate, event.payload),
+          );
+          if (link === undefined) {
+            return;
+          }
+          yield* projectionThreadPullRequestRepository.upsert({
+            ...link,
+            snapshot: event.payload.snapshot,
+            stack: event.payload.stack,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
             updatedAt: event.payload.updatedAt,
           });
           return;
@@ -908,6 +1018,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (!recreatedLater) {
             attachmentSideEffects.deletedThreadIds.add(event.payload.threadId);
           }
+          // A tombstoned thread must not show up as linked to a pull request.
+          yield* projectionThreadPullRequestRepository.deleteByThreadId({
+            threadId: event.payload.threadId,
+          });
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
@@ -1070,6 +1184,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               role: event.payload.role,
               text: event.payload.text,
               ...(attachments !== undefined ? { attachments: [...attachments] } : {}),
+              ...(event.payload.context !== undefined ? { context: event.payload.context } : {}),
               createdAt: event.payload.createdAt,
               updatedAt: event.payload.updatedAt,
             });
@@ -1098,6 +1213,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             role: event.payload.role,
             text: nextText,
             ...(nextAttachments !== undefined ? { attachments: [...nextAttachments] } : {}),
+            ...((event.payload.context ?? previousMessage?.context) !== undefined
+              ? { context: event.payload.context ?? previousMessage?.context }
+              : {}),
             isStreaming: false,
             createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
@@ -2363,6 +2481,7 @@ export const OrchestrationProjectionPipelineLive = Layer.effect(
   Layer.provideMerge(ProjectionThreadRepositoryLive),
   Layer.provideMerge(ProjectionThreadMessageRepositoryLive),
   Layer.provideMerge(ProjectionThreadProposedPlanRepositoryLive),
+  Layer.provideMerge(ProjectionThreadPullRequests.layer),
   Layer.provideMerge(ProjectionThreadActivityRepositoryLive),
   Layer.provideMerge(ProjectionThreadSessionRepositoryLive),
   Layer.provideMerge(ProjectionTurnRepositoryLive),

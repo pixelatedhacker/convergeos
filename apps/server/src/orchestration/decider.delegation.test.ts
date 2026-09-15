@@ -39,6 +39,7 @@ const thread = (id: ThreadId): OrchestrationThread => ({
   branch: null,
   worktreePath: `/worktrees/${id}`,
   linkedPullRequest: null,
+  pullRequests: [],
   botProfile:
     id === targetThreadId
       ? {

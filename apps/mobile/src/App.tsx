@@ -24,6 +24,8 @@ import { OverlayPortalHost } from "./components/OverlayPortal";
 import { appBlurTargetRef } from "./lib/appBlurTarget";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
 
+import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
+
 import "../global.css";
 
 if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
@@ -44,6 +46,8 @@ const appLinking = {
     "t3code-dev://",
     "t3code-preview://",
   ],
+  // Keep the compact thread list available beneath a directly opened thread.
+  config: { initialRouteName: "Home" },
   // The Expo dev client launches the app via
   // <scheme>://expo-development-client/?url=<packager> — that URL addresses
   // the launcher, not app navigation. Without this filter it falls through
@@ -85,6 +89,7 @@ function AppContent() {
   return (
     <>
       <SplashScreenCoordinator />
+      <SubscriptionUsageCoordinator />
       <GestureHandlerRootView className="flex-1">
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>

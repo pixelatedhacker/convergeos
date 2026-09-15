@@ -528,6 +528,9 @@ OTLP export:
 - `CONVERGEOS_OTLP_METRICS_URL`: OTLP metric endpoint
 - `CONVERGEOS_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
 - `CONVERGEOS_OTLP_SERVICE_NAME`: service name, default `t3-server`
+- `CONVERGEOS_OTLP_HEADERS`: extra headers for both exporters, same format as
+  `OTEL_EXPORTER_OTLP_HEADERS`: comma-separated `key=value` pairs with percent-encoded values.
+- `CONVERGEOS_OTLP_PROTOCOL`: `http/json` (default) or `http/protobuf`
 
 If the OTLP URLs are unset, local tracing still works and metrics stay in-process only.
 

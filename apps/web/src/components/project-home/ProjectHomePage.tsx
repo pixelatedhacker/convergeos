@@ -46,7 +46,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useSchedules } from "../../state/schedulesView";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { formatScheduleInstant } from "../schedules/SchedulesPage.logic";
 import { formatWorkingDurationLabel, parseTimestampMs } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";

@@ -281,6 +281,7 @@ function makeService(
     branch: "codex/test-bot",
     botProfile: threadFields.botProfile,
     worktreePath: "/tmp/project-worktree",
+    pullRequests: [],
     latestTurn: null,
     createdAt: now,
     updatedAt: now,

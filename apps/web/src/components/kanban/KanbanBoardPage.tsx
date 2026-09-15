@@ -26,7 +26,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useThreadShells } from "../../state/entities";
 import { kanbanEnvironment } from "../../state/kanban";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { SidebarInset } from "../ui/sidebar";

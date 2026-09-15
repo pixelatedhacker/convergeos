@@ -53,6 +53,7 @@ const thread = (
   checkpoints: [],
   session: null,
   ...overrides,
+  pullRequests: overrides.pullRequests ?? [],
 });
 
 const readModel = (

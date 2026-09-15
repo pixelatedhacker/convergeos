@@ -92,7 +92,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     >
       <span
         className={cn(
-          "truncate text-xs font-semibold tracking-[0.12em] uppercase",
+          "truncate text-sm font-medium tracking-tight [text-box:trim-both_cap_alphabetic]",
           onBackdrop ? "text-white/70" : "text-muted-foreground",
         )}
       >
@@ -221,7 +221,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
-    <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+    <SidebarFooter className="px-[var(--sidebar-content-inset)] py-1">
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <SidebarUtilityMenu />

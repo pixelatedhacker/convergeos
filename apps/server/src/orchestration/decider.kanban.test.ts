@@ -38,6 +38,7 @@ const botThread: OrchestrationThread = {
   branch: "codex/planner",
   worktreePath: "/worktrees/planner",
   linkedPullRequest: null,
+  pullRequests: [],
   botProfile: {
     displayName: "Planner",
     description: null,
