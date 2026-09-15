@@ -52,6 +52,7 @@ const shell = (id: ThreadId): OrchestrationThreadShell => ({
   branch: null,
   worktreePath: null,
   linkedPullRequest: null,
+  pullRequests: [],
   latestTurn: null,
   createdAt: delegation.createdAt,
   updatedAt: delegation.updatedAt,

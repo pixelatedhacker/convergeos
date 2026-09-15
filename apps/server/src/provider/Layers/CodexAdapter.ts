@@ -2281,7 +2281,10 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ...(mcpSession
             ? {
                 environment: {
-                  ...(options?.environment ?? process.env),
+                  ...McpProviderSession.withAgentDeviceEnvironment(
+                    options?.environment ?? process.env,
+                    mcpSession,
+                  ),
                   [CONVERGEOS_MCP_BEARER_TOKEN_ENV]: mcpSession.authorizationHeader.replace(
                     /^Bearer\s+/,
                     "",
@@ -2297,7 +2300,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   "-c",
                   `mcp_servers.${CONVERGEOS_MCP_SERVER_NAME}.bearer_token_env_var="${CONVERGEOS_MCP_BEARER_TOKEN_ENV}"`,
                 ],
-                previewToolsAvailable: mcpSession.capabilities.has("preview"),
+                mcpCapabilities: mcpSession.capabilities,
               }
             : {}),
         };

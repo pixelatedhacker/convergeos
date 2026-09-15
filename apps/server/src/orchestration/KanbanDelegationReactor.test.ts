@@ -52,6 +52,7 @@ const bot: OrchestrationThread = {
   branch: "codex/builder",
   worktreePath: "/worktrees/builder",
   linkedPullRequest: null,
+  pullRequests: [],
   botProfile: {
     displayName: "Builder",
     description: null,

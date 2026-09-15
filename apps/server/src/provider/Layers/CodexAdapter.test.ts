@@ -518,7 +518,7 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
 
       const runtime = runtimeFactory.lastRuntime;
       NodeAssert.ok(runtime);
-      NodeAssert.equal(runtime.options.previewToolsAvailable, false);
+      NodeAssert.equal(runtime.options.mcpCapabilities?.has("preview"), false);
       NodeAssert.equal(session.mcpAttachment, "attached");
     }).pipe(
       Effect.ensuring(Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),

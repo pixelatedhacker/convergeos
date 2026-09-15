@@ -45,6 +45,7 @@ const caller: OrchestrationThreadShell = {
   branch: null,
   worktreePath: null,
   linkedPullRequest: null,
+  pullRequests: [],
   latestTurn: null,
   createdAt: startedAt,
   updatedAt: startedAt,

@@ -12,6 +12,7 @@ import pkg from "./package.json" with { type: "json" };
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 
 const repoEnv = loadRepoEnv();
@@ -158,6 +159,15 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      thirdPartyLicensesPlugin({
+        bundleName: "web",
+        configFile: new URL("../../third-party-licenses.config.json", import.meta.url),
+        packageManifests: [
+          { bundle: "web", path: new URL("./package.json", import.meta.url) },
+          { bundle: "server", path: new URL("../server/package.json", import.meta.url) },
+          { bundle: "desktop", path: new URL("../desktop/package.json", import.meta.url) },
+        ],
+      }),
       // Route components load as split chunks so settings, pull-request, and
       // usage code stay out of the cold-start payload; the router prefetches
       // them on navigation intent (see getRouter's defaultPreload).
@@ -232,26 +242,20 @@ export default defineConfig(() => {
         ? {
             // One entry per shared prefix; the server's dev catch-all 404s the
             // same list, so the two sides cannot drift. `/ws` is the app's own
-            // socket — Vite's HMR socket is matched separately and exactly
-            // (path "/" plus a vite-hmr subprotocol), so the two upgrade
-            // handlers don't collide.
-            proxy: {
-              "/api/bot-computer/view": {
-                target: devProxyTarget,
-                changeOrigin: true,
-                ws: true,
-              },
-              ...Object.fromEntries(
-                DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
-                  prefix,
-                  {
-                    target: devProxyTarget,
-                    changeOrigin: true,
-                    ...(prefix === "/ws" ? { ws: true } : {}),
-                  },
-                ]),
-              ),
-            },
+            // socket and `/api` carries the device hub's stream sockets —
+            // Vite's HMR socket is matched separately and exactly (path "/"
+            // plus a vite-hmr subprotocol), so the upgrade handlers don't
+            // collide.
+            proxy: Object.fromEntries(
+              DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
+                prefix,
+                {
+                  target: devProxyTarget,
+                  changeOrigin: true,
+                  ...(prefix === "/ws" || prefix === "/api" ? { ws: true } : {}),
+                },
+              ]),
+            ),
           }
         : {}),
       // Electron's BrowserWindow needs the HMR socket pinned to an explicit

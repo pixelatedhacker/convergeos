@@ -406,6 +406,7 @@ export function createDevRunnerEnv({
       deleteConvergeOsEnvironmentVariable(output, "MODE");
       deleteConvergeOsEnvironmentVariable(output, "NO_BROWSER");
       deleteConvergeOsEnvironmentVariable(output, "HOST");
+      delete output.T3CODE_DEV_AUTH_TOKEN;
     }
 
     if (!isDesktopMode && host !== undefined) {

@@ -127,6 +127,14 @@ export function makeDevelopmentEnvironmentScript(environment) {
       "CONVERGEOS_OTLP_EXPORT_INTERVAL_MS",
       environment.CONVERGEOS_OTLP_EXPORT_INTERVAL_MS ?? environment.T3CODE_OTLP_EXPORT_INTERVAL_MS,
     ],
+    [
+      "CONVERGEOS_OTLP_HEADERS",
+      environment.CONVERGEOS_OTLP_HEADERS ?? environment.T3CODE_OTLP_HEADERS,
+    ],
+    [
+      "CONVERGEOS_OTLP_PROTOCOL",
+      environment.CONVERGEOS_OTLP_PROTOCOL ?? environment.T3CODE_OTLP_PROTOCOL,
+    ],
     ["CONVERGEOS_DESKTOP_APP_USER_MODEL_ID", APP_BUNDLE_ID],
   ].filter((entry) => typeof entry[1] === "string" && entry[1].trim().length > 0);
   return [

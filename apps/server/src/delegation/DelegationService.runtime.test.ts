@@ -74,6 +74,7 @@ const thread = (input: {
   branch: "main",
   worktreePath: input.worktreePath,
   linkedPullRequest: null,
+  pullRequests: [],
   botProfile:
     input.bot === true
       ? {

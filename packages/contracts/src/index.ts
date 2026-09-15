@@ -2,6 +2,8 @@ export * from "./baseSchemas.ts";
 export * from "./agentMesh.ts";
 export * from "./meshReceipt.ts";
 export * from "./assistantCitations.ts";
+export * from "./composerContext.ts";
+export * from "./composerContextClipboard.ts";
 export * from "./background.ts";
 export * from "./botComputer.ts";
 export * from "./auth.ts";
@@ -27,6 +29,7 @@ export * from "./settings.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";
 export * from "./sourceControl.ts";
+export * from "./projectClone.ts";
 export * from "./pullRequest.ts";
 export * from "./orchestration.ts";
 export * from "./t3ProjectFile.ts";
@@ -38,13 +41,13 @@ export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./browserImport.ts";
 export * from "./browserProfile.ts";
+export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./subscriptionQuota.ts";
 export * from "./rpc.ts";
-
 export * from "./invocationUsage.ts";
 export * from "./delegationUsage.ts";
 
@@ -52,3 +55,4 @@ export * from "./taskBudget.ts";
 export * from "./agentLiveness.ts";
 
 export * from "./skillStore.ts";
+export * from "./worktreeSetup.ts";

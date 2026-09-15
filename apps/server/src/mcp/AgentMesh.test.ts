@@ -84,6 +84,7 @@ const shell = (
   backgroundLiveness: null,
   planProgress: null,
   ...overrides,
+  pullRequests: overrides.pullRequests ?? [],
 });
 
 const makeHarness = (

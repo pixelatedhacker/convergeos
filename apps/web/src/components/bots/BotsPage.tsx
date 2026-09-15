@@ -26,7 +26,7 @@ import { newMessageId } from "../../lib/utils";
 import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {

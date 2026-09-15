@@ -50,6 +50,7 @@ const thread = (overrides: Partial<OrchestrationThread> = {}): OrchestrationThre
   checkpoints: [],
   session: null,
   ...overrides,
+  pullRequests: overrides.pullRequests ?? [],
 });
 
 const readModel = (...threads: ReadonlyArray<OrchestrationThread>): OrchestrationReadModel => ({
