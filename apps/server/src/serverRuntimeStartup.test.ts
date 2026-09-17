@@ -144,6 +144,7 @@ it.effect("launchStartupHeartbeat does not block the caller while counts are loa
 
       yield* ServerRuntimeStartup.launchStartupHeartbeat.pipe(
         Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+          getDeletedWorktreeThreads: () => Effect.die("unused"),
           listSchedules: () => Effect.die("unused"),
           listDueSchedules: () => Effect.die("unused"),
           listActivitiesByKind: () => Effect.die("unused"),
@@ -225,6 +226,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
         getCommandReadModel: () => Effect.die("unused"),
         getSnapshot: () => Effect.die("unused"),
         getShellSnapshot: () => Effect.die("unused"),
+        getDeletedWorktreeThreads: () => Effect.die("unused"),
         getArchivedShellSnapshot: () => Effect.die("unused"),
         listSchedules: () => Effect.die("unused"),
         listDueSchedules: () => Effect.die("unused"),
@@ -357,6 +359,7 @@ it.effect.each([
         getCommandReadModel: () => Effect.die("unused"),
         getSnapshot: () => Effect.die("unused"),
         getShellSnapshot: () => Effect.die("unused"),
+        getDeletedWorktreeThreads: () => Effect.die("unused"),
         getArchivedShellSnapshot: () => Effect.die("unused"),
         listSchedules: () => Effect.die("unused"),
         listDueSchedules: () => Effect.die("unused"),
@@ -440,6 +443,7 @@ it.effect(
           autoBootstrapProjectFromCwd: true,
         } as never),
         Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+          getDeletedWorktreeThreads: () => Effect.die("unused"),
           listSchedules: () => Effect.die("unused"),
           listDueSchedules: () => Effect.die("unused"),
           getUserInputActivity: () => Effect.die("unused"),
@@ -511,6 +515,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         getCommandReadModel: () => Effect.die("unused"),
         getSnapshot: () => Effect.die("unused"),
         getShellSnapshot: () => Effect.die("unused"),
+        getDeletedWorktreeThreads: () => Effect.die("unused"),
         getArchivedShellSnapshot: () => Effect.die("unused"),
         listSchedules: () => Effect.die("unused"),
         listDueSchedules: () => Effect.die("unused"),

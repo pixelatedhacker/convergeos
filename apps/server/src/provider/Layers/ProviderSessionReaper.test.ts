@@ -238,6 +238,7 @@ describe("ProviderSessionReaper", () => {
           getCommandReadModel: () => Effect.die("unused"),
           getSnapshot: () => Effect.die("unused"),
           getShellSnapshot: () => Effect.die("unused"),
+          getDeletedWorktreeThreads: () => Effect.die("unused"),
           getArchivedShellSnapshot: () => Effect.die("unused"),
           listSchedules: () => Effect.die("unused"),
           listDueSchedules: () => Effect.die("unused"),
