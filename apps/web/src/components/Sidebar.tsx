@@ -4707,7 +4707,7 @@ export default function Sidebar() {
               onClick={handleDashboardClick}
             >
               <LayoutDashboardIcon className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Dashboard</span>
+              <span className="min-w-0 flex-1 truncate">Command center</span>
             </SidebarMenuButton>
             <SidebarMenuButton
               aria-current={isSchedulesRoute ? "page" : undefined}
