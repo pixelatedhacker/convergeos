@@ -262,6 +262,7 @@ export interface ThreadFeedProps {
   readonly freeze: SharedValue<boolean>;
   readonly anchorMessageId: MessageId | null;
   readonly submittedMessageId: MessageId | null;
+  readonly scrollToEndRequest: number;
   readonly contentInsetEndAdjustment: SharedValue<number>;
   readonly contentTopInset?: number;
   readonly contentBottomInset?: number;
@@ -1982,7 +1983,8 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // whenever the viewport drifts back inside its geometric threshold, which
   // yanked users off history they were reading every time a stream chunk grew
   // a row. Scrolling away or expanding a disclosure above the end breaks
-  // follow; reaching the end (or sending / switching threads) re-arms it.
+  // follow; a user scroll to the end, the jump button, sending, or switching
+  // threads re-arms it. Layout compensation alone must never re-arm follow.
   const [endFollowEnabled, setEndFollowEnabled] = useState(true);
   const endFollowEnabledRef = useRef(true);
   // A "user scroll session" spans from drag start through the end of its
@@ -2430,7 +2432,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     clearUserScrollSettle();
     userScrollSessionRef.current = false;
     transitionEndFollow({ type: "reset" });
-  }, [clearUserScrollSettle, feedThreadKey, transitionEndFollow]);
+  }, [clearUserScrollSettle, feedThreadKey, props.scrollToEndRequest, transitionEndFollow]);
   useEffect(() => {
     if (props.submittedMessageId !== null) {
       clearUserScrollSettle();
@@ -2940,7 +2942,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             drawDistance={500}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="none"
-            keyboardLiftBehavior="whenAtEnd"
+            keyboardLiftBehavior={endFollowEnabled ? "whenAtEnd" : "never"}
             // Seed the list's scroll math with the real viewport before its own
             // onLayout: the empty→filled remount can then tell at mount that
             // short content underflows the viewport and skip programmatic
