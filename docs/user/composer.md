@@ -228,3 +228,7 @@ automatically. HTML previews cannot access your ConvergeOS session.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
+
+## Reading chat history on mobile
+
+Scrolling away from the bottom pauses automatic following. Incoming messages, keyboard changes, and expanding or collapsing activity do not resume it. Scroll back to the bottom or tap the down arrow to follow new output again. Sending a message or opening another thread also returns to the live conversation.
