@@ -4,6 +4,7 @@
 
 - [Install ConvergeOS](./user/install.md)
 - [Messages and context](./user/composer.md)
+- [Files on mobile](./user/mobile-files.md)
 - [Working with threads](./user/thread-sidebar.md)
 - [Permission modes](./user/permission-modes.md)
 - [Terminal history](./user/terminal.md)
