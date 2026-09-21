@@ -43,6 +43,7 @@ import {
   BotIcon,
   CalendarClockIcon,
   LayoutDashboardIcon,
+  PackageIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
@@ -1812,6 +1813,9 @@ export default function Sidebar() {
   });
   const isSchedulesRoute = useLocation({
     select: (location) => location.pathname === "/schedules",
+  });
+  const isSkillsRoute = useLocation({
+    select: (location) => location.pathname === "/skills",
   });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -3610,6 +3614,10 @@ export default function Sidebar() {
     if (isMobile) setOpenMobile(false);
     void router.navigate({ to: "/schedules" });
   }, [isMobile, router, setOpenMobile]);
+  const handleSkillsClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({ to: "/skills" });
+  }, [isMobile, router, setOpenMobile]);
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3890,6 +3898,15 @@ export default function Sidebar() {
             >
               <CalendarClockIcon className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">Schedules</span>
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              aria-current={isSkillsRoute ? "page" : undefined}
+              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+              isActive={isSkillsRoute}
+              onClick={handleSkillsClick}
+            >
+              <PackageIcon className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Skills</span>
             </SidebarMenuButton>
           </SidebarGroup>
         }

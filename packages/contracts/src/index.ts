@@ -22,6 +22,7 @@ export * from "./kanban.ts";
 export * from "./pages.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
+export * from "./skillStore.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";
 export * from "./sourceControl.ts";

@@ -11,6 +11,7 @@ This is a living glossary for ConvergeOS. It explains what common terms mean in 
 - [Orchestration](#orchestration)
 - [Pages](#pages)
 - [Provider runtime](#provider-runtime)
+- [Skill store](#skill-store)
 - [Checkpointing](#checkpointing)
 - [Appearance](#appearance)
 
@@ -140,6 +141,22 @@ A point-in-time view of state. The word is used in multiple layers, including or
 
 The per-driver list of current model slugs that decides which models land in the model picker's legacy section. Bundled at `apps/server/src/provider/model-manifest.json` and refreshed at runtime from the same file on `main`, so classification updates ship as commits instead of releases. See the [provider architecture][16] model manifest section.
 
+### Skill store
+
+The skill store surfaces the skills.sh registry inside ConvergeOS. See [skill-store.md](skill-store.md).
+
+#### Skill
+
+A third-party agent capability bundle (a `SKILL.md` plus supporting files) installed from the skills.sh registry. Identified by `<owner>/<repo>/<skillId>`. Discovery is HTTP against the registry; installation runs the vendored `skills` CLI on the target environment.
+
+#### Harness
+
+An install target for skills, named by its `skills` CLI agent slug (`claude-code`, `codex`, `cursor`, `grok`, `opencode`, `antigravity`). Provider driver kinds map onto harnesses via `SKILL_STORE_HARNESS_BY_DRIVER_KIND` in [the skill store contracts][27]; drivers without a mapping are not valid install targets.
+
+#### Skill store manifest
+
+The per-environment record of installed skills, `skill-store.json` in the environment's state directory, owned by [SkillStoreService.ts][28]. It maps each skill to its targets (global or one project, times a set of harnesses) and is plain local state, not orchestration events.
+
 ### Checkpointing
 
 Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
@@ -220,3 +237,5 @@ ships ConvergeOS already matching it.
 [24]: ./overview.md
 [25]: ../../apps/server/src/environmentTheme.ts
 [26]: ../user/environment-theme.md
+[27]: ../../packages/contracts/src/skillStore.ts
+[28]: ../../apps/server/src/skillStore/SkillStoreService.ts

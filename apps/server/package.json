@@ -34,6 +34,7 @@
     "effect": "catalog:",
     "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
+    "skills": "catalog:",
     "yaml": "catalog:",
     "yauzl": "^3.4.0"
   },

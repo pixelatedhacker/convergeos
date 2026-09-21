@@ -57,6 +57,7 @@ import {
   type RelayClientInstallProgressEvent,
   ServerSelfUpdateError,
   type ServerSelfUpdateProgressEvent,
+  SkillStoreError,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
   AssetWorkspaceContextNotFoundError,
@@ -109,6 +110,7 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import * as SkillStore from "./skillStore/SkillStoreService.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -597,6 +599,33 @@ const makeWsRpcLayer = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const skillStore = yield* SkillStore.SkillStoreService;
+
+      // Project-scope skill installs run the CLI in the project's workspace
+      // root; the projection is the source of truth for where that is.
+      const resolveSkillStoreProjectCwd: SkillStore.ResolveProjectCwd = (projectId) =>
+        projectionSnapshotQuery.getProjectShellById(projectId).pipe(
+          Effect.mapError(
+            (cause) =>
+              new SkillStoreError({
+                reason: "invalidInput",
+                detail: "Failed to resolve the project for a project-scope skill target",
+                cause,
+              }),
+          ),
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.fail(
+                  new SkillStoreError({
+                    reason: "notFound",
+                    detail: `Project '${projectId}' was not found`,
+                  }),
+                ),
+              onSome: (project) => Effect.succeed(project.workspaceRoot),
+            }),
+          ),
+        );
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -1804,6 +1833,36 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "server",
             },
+          ),
+        [WS_METHODS.skillStoreSearch]: (input) =>
+          observeRpcEffect(WS_METHODS.skillStoreSearch, skillStore.search(input), {
+            "rpc.aggregate": "skillStore",
+          }),
+        [WS_METHODS.skillStoreGetDetail]: (input) =>
+          observeRpcEffect(WS_METHODS.skillStoreGetDetail, skillStore.getDetail(input), {
+            "rpc.aggregate": "skillStore",
+          }),
+        [WS_METHODS.skillStoreListInstalled]: (_input) =>
+          observeRpcEffect(WS_METHODS.skillStoreListInstalled, skillStore.listInstalled, {
+            "rpc.aggregate": "skillStore",
+          }),
+        [WS_METHODS.skillStoreInstall]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.skillStoreInstall,
+            skillStore.install(input, resolveSkillStoreProjectCwd),
+            { "rpc.aggregate": "skillStore" },
+          ),
+        [WS_METHODS.skillStoreUninstall]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.skillStoreUninstall,
+            skillStore.uninstall(input, resolveSkillStoreProjectCwd),
+            { "rpc.aggregate": "skillStore" },
+          ),
+        [WS_METHODS.skillStoreSetHarnessEnabled]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.skillStoreSetHarnessEnabled,
+            skillStore.setHarnessEnabled(input, resolveSkillStoreProjectCwd),
+            { "rpc.aggregate": "skillStore" },
           ),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(

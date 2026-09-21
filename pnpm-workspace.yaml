@@ -51,6 +51,7 @@ catalog:
   effect: 4.0.0-beta.103
   jose: 6.2.2
   lightningcss: 1.33.0
+  skills: 1.5.25
   tailwindcss: 4.3.3
   typescript: ~6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
@@ -90,6 +91,7 @@ minimumReleaseAgeExclude:
   - expo-updates@57.0.19
   - expo@57.0.18
   - expo-widgets@57.0.15
+  - skills@1.5.25
 
 overrides:
   # The SDK always receives the user's Claude executable, so its bundled binaries are unused.
@@ -181,6 +183,6 @@ peerDependencyRules:
     vite: "*"
 
 supportedArchitectures:
-  cpu: [current, x64]
-  libc: [current, glibc]
-  os: [current, linux]
+  cpu: [ current, x64 ]
+  libc: [ current, glibc ]
+  os: [ current, linux ]

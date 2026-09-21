@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsageRouteImport } from './routes/usage'
+import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as PairRouteImport } from './routes/pair'
@@ -37,6 +38,11 @@ import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$e
 const UsageRoute = UsageRouteImport.update({
   id: '/usage',
   path: '/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/connect/callback': typeof ConnectCallbackRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
   '/pull-requests': typeof ChatPullRequestsRoute
   '/connect/callback': typeof ConnectCallbackRoute
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/pair': typeof PairRoute
   '/schedules': typeof SchedulesRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
   '/connect_/callback': typeof ConnectCallbackRoute
@@ -242,6 +251,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/schedules'
     | '/settings'
+    | '/skills'
     | '/usage'
     | '/pull-requests'
     | '/connect/callback'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/schedules'
     | '/settings'
+    | '/skills'
     | '/usage'
     | '/pull-requests'
     | '/connect/callback'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/schedules'
     | '/settings'
+    | '/skills'
     | '/usage'
     | '/_chat/pull-requests'
     | '/connect_/callback'
@@ -319,6 +331,7 @@ export interface RootRouteChildren {
   PairRoute: typeof PairRoute
   SchedulesRoute: typeof SchedulesRoute
   SettingsRoute: typeof SettingsRouteWithChildren
+  SkillsRoute: typeof SkillsRoute
   UsageRoute: typeof UsageRoute
   ConnectCallbackRoute: typeof ConnectCallbackRoute
   KanbanProjectKeyRoute: typeof KanbanProjectKeyRoute
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/usage'
       fullPath: '/usage'
       preLoaderRoute: typeof UsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -550,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   PairRoute: PairRoute,
   SchedulesRoute: SchedulesRoute,
   SettingsRoute: SettingsRouteWithChildren,
+  SkillsRoute: SkillsRoute,
   UsageRoute: UsageRoute,
   ConnectCallbackRoute: ConnectCallbackRoute,
   KanbanProjectKeyRoute: KanbanProjectKeyRoute,

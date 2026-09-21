@@ -102,6 +102,18 @@ import {
 } from "./provider.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
+  InstalledSkill,
+  SkillStoreDetail,
+  SkillStoreDetailInput,
+  SkillStoreError,
+  SkillStoreInstallInput,
+  SkillStoreListResult,
+  SkillStoreSearchInput,
+  SkillStoreSearchResult,
+  SkillStoreSetHarnessEnabledInput,
+  SkillStoreUninstallInput,
+} from "./skillStore.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestCommentInput,
@@ -333,6 +345,14 @@ export const WS_METHODS = {
   serverGetSubscriptionQuota: "server.getSubscriptionQuota",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  // Skill store methods
+  skillStoreSearch: "skillStore.search",
+  skillStoreGetDetail: "skillStore.getDetail",
+  skillStoreListInstalled: "skillStore.listInstalled",
+  skillStoreInstall: "skillStore.install",
+  skillStoreUninstall: "skillStore.uninstall",
+  skillStoreSetHarnessEnabled: "skillStore.setHarnessEnabled",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -514,6 +534,42 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsPatch }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreSearchRpc = Rpc.make(WS_METHODS.skillStoreSearch, {
+  payload: SkillStoreSearchInput,
+  success: SkillStoreSearchResult,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreGetDetailRpc = Rpc.make(WS_METHODS.skillStoreGetDetail, {
+  payload: SkillStoreDetailInput,
+  success: SkillStoreDetail,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreListInstalledRpc = Rpc.make(WS_METHODS.skillStoreListInstalled, {
+  payload: Schema.Struct({}),
+  success: SkillStoreListResult,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreInstallRpc = Rpc.make(WS_METHODS.skillStoreInstall, {
+  payload: SkillStoreInstallInput,
+  success: InstalledSkill,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreUninstallRpc = Rpc.make(WS_METHODS.skillStoreUninstall, {
+  payload: SkillStoreUninstallInput,
+  success: SkillStoreListResult,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreSetHarnessEnabledRpc = Rpc.make(WS_METHODS.skillStoreSetHarnessEnabled, {
+  payload: SkillStoreSetHarnessEnabledInput,
+  success: InstalledSkill,
+  error: Schema.Union([SkillStoreError, EnvironmentAuthorizationError]),
 });
 
 export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
@@ -1326,4 +1382,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetPageContentRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsSkillStoreSearchRpc,
+  WsSkillStoreGetDetailRpc,
+  WsSkillStoreListInstalledRpc,
+  WsSkillStoreInstallRpc,
+  WsSkillStoreUninstallRpc,
+  WsSkillStoreSetHarnessEnabledRpc,
 );

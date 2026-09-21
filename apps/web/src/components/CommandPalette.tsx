@@ -51,6 +51,7 @@ import {
   FolderPlusIcon,
   LinkIcon,
   MessageSquareIcon,
+  PackageIcon,
   PaletteIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -1662,6 +1663,17 @@ function OpenCommandPaletteDialog(props: {
     icon: <CalendarClockIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/schedules" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:skills",
+    searchTerms: ["skills", "skill store", "extensions", "plugins", "marketplace"],
+    title: "Open skill store",
+    icon: <PackageIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/skills" });
     },
   });
 
