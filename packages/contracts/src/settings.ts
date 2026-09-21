@@ -1137,11 +1137,10 @@ export const ServerSettings = Schema.Struct({
    * Whether agents may discover, read, message, and interrupt other agent
    * threads in the same project through the server's MCP toolkit.
    *
-   * Disabled by default because this grants cross-thread read and mutation
-   * authority. The server derives new-session MCP capabilities from this
+   * Enabled by default. The server derives new-session MCP capabilities from this
    * value; browser access is an independent permission.
    */
-  enableAgentMeshAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  enableAgentMeshAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /** Project-scoped Kanban authority granted to newly started agent sessions. */
   agentKanbanAccess: AgentKanbanAccess.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_KANBAN_ACCESS)),
