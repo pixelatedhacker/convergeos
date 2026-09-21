@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { SkillStorePage } from "../components/skills/SkillStorePage";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/skills")({
-  component: SkillStorePage,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/skills", replace: true });
+  },
 });

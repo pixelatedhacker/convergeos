@@ -2,7 +2,7 @@
 
 Open **Settings → Skills & plugins** on web, desktop, or mobile. Choose the environment and provider instance you want to manage. Paths refer to that environment's computer, including when you connect remotely.
 
-The Skills tab shows the provider's reported skills, their enabled state, scope, and file location. Enter a project directory and select **Use directory** to inspect project skills. Select **Refresh** after changes made outside ConvergeOS.
+The Skills tab shows the provider's reported skills, their enabled state, scope, and file location. Choose a project to inspect its skills. For another directory, expand **Use another project directory** and enter its path. Select **Refresh** after changes made outside ConvergeOS.
 
 For Codex, use **Enable** or **Disable** to change whether an existing skill is available. This writes Codex's own configuration. Providers that do not expose supported skill enablement controls only show the current state.
 

@@ -1871,10 +1871,10 @@ function OpenCommandPaletteDialog(props: {
     kind: "action",
     value: "action:skills",
     searchTerms: ["skills", "skill store", "extensions", "plugins", "marketplace"],
-    title: "Open skill store",
+    title: "Open skills & plugins",
     icon: <PackageIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
-      await navigate({ to: "/skills" });
+      await navigate({ to: "/settings/skills" });
     },
   });
 

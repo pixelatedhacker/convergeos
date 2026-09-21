@@ -1,6 +1,8 @@
 import * as Cause from "effect/Cause";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, ServerProvider, SkillStoreAction } from "@t3tools/contracts";
+import { SkillStoreBrowser } from "../skills/SkillStorePage";
+import { useProjects } from "../../state/entities";
 import { useState } from "react";
 import { useEnvironments } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
@@ -13,6 +15,7 @@ import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 export function SkillStoreSettingsPanel() {
   const { environments } = useEnvironments();
   const [selected, setSelected] = useState<string>("");
+  const [view, setView] = useState<"installed" | "browse">("installed");
   const environment =
     environments.find((item) => item.environmentId === selected) ??
     environments.find((item) => item.connection.phase === "connected");
@@ -20,8 +23,7 @@ export function SkillStoreSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Skills & plugins">
         <p className="px-3 text-sm text-muted-foreground">
-          Manage packages on the selected environment. Imported skills are independent copies;
-          original sources stay unchanged.
+          Find installed skills and plugins, or browse skills to add to your providers.
         </p>
         <label className="flex flex-col gap-2 text-sm">
           Environment
@@ -37,11 +39,34 @@ export function SkillStoreSettingsPanel() {
             ))}
           </select>
         </label>
+        <div className="flex gap-2" aria-label="Skills views">
+          <Button
+            variant={view === "installed" ? "default" : "outline"}
+            aria-pressed={view === "installed"}
+            onClick={() => setView("installed")}
+          >
+            Installed
+          </Button>
+          <Button
+            variant={view === "browse" ? "default" : "outline"}
+            aria-pressed={view === "browse"}
+            onClick={() => setView("browse")}
+          >
+            Browse skills
+          </Button>
+        </div>
         {environment ? (
-          <EnvironmentStore
-            key={environment.environmentId}
-            environmentId={environment.environmentId}
-          />
+          view === "browse" ? (
+            <SkillStoreBrowser
+              key={environment.environmentId}
+              environmentId={environment.environmentId}
+            />
+          ) : (
+            <EnvironmentStore
+              key={environment.environmentId}
+              environmentId={environment.environmentId}
+            />
+          )
         ) : (
           <p className="text-sm text-muted-foreground">
             Connect an environment to manage its skills.
@@ -53,6 +78,7 @@ export function SkillStoreSettingsPanel() {
 }
 
 function EnvironmentStore({ environmentId }: { environmentId: EnvironmentId }) {
+  const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const [selected, setSelected] = useState("");
   const provider =
@@ -75,25 +101,50 @@ function EnvironmentStore({ environmentId }: { environmentId: EnvironmentId }) {
           ))}
         </select>
       </label>
-      <form
-        className="flex items-end gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setCwd(draftCwd.trim());
-        }}
-      >
-        <label className="flex flex-1 flex-col gap-2 text-sm">
-          Project directory on this environment, optional
-          <Input
-            value={draftCwd}
-            onChange={(event) => setDraftCwd(event.target.value)}
-            placeholder="/path/to/project"
-          />
+      {projects.length > 0 ? (
+        <label className="flex flex-col gap-2 text-sm">
+          Project
+          <select
+            className="rounded border bg-background p-2"
+            value={projects.some((project) => project.workspaceRoot === cwd) ? cwd : ""}
+            onChange={(event) => {
+              setCwd(event.target.value);
+              setDraftCwd(event.target.value);
+            }}
+          >
+            <option value="">User skills</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.workspaceRoot}>
+                {project.title}
+              </option>
+            ))}
+          </select>
         </label>
-        <Button type="submit" variant="outline">
-          Use directory
-        </Button>
-      </form>
+      ) : null}
+      <details>
+        <summary className="cursor-pointer text-sm text-muted-foreground">
+          Use another project directory
+        </summary>
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setCwd(draftCwd.trim());
+          }}
+        >
+          <label className="flex flex-1 flex-col gap-2 text-sm">
+            Project directory on this environment, optional
+            <Input
+              value={draftCwd}
+              onChange={(event) => setDraftCwd(event.target.value)}
+              placeholder="/path/to/project"
+            />
+          </label>
+          <Button type="submit" variant="outline">
+            Use directory
+          </Button>
+        </form>
+      </details>
       {provider ? (
         <ProviderStore
           key={`${provider.instanceId}:${cwd}`}
@@ -159,19 +210,21 @@ function ProviderStore({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        {(["skills", "installed", "discover"] as const).map((value) => (
-          <Button
-            key={value}
-            variant={tab === value ? "default" : "outline"}
-            onClick={() => setTab(value)}
-          >
-            {value === "skills"
-              ? "Skills"
-              : value === "installed"
-                ? "Installed plugins"
-                : "Discover plugins"}
-          </Button>
-        ))}
+        {(["skills", "installed", "discover"] as const)
+          .filter((value) => value === "skills" || query.data?.pluginManagement === true)
+          .map((value) => (
+            <Button
+              key={value}
+              variant={tab === value ? "default" : "outline"}
+              onClick={() => setTab(value)}
+            >
+              {value === "skills"
+                ? "Skills"
+                : value === "installed"
+                  ? "Installed plugins"
+                  : "Discover plugins"}
+            </Button>
+          ))}
         <Button
           variant="ghost"
           disabled={pending || query.isPending}
