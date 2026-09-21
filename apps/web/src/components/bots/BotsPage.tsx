@@ -1,7 +1,16 @@
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { vcsEnvironment } from "../../state/vcs";
+import { EnvironmentModelField } from "../EnvironmentModelField";
+import { Label } from "../ui/label";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { BotComputerCapability, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type {
+  BotComputerCapability,
+  EnvironmentId,
+  ProjectId,
+  ModelSelection,
+} from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpRightIcon,
@@ -9,8 +18,6 @@ import {
   CheckCircle2Icon,
   CircleAlertIcon,
   CircleDashedIcon,
-  GitBranchIcon,
-  InboxIcon,
   PencilIcon,
   PlusIcon,
   SaveIcon,
@@ -21,8 +28,7 @@ import { useMemo, useState } from "react";
 
 import { isElectron } from "../../env";
 import { openCommandPalette } from "../../commandPaletteBus";
-import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
-import { newMessageId } from "../../lib/utils";
+import { newMessageId, newThreadId } from "../../lib/utils";
 import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -86,7 +92,6 @@ export function BotsPage() {
   const threads = useThreadShells();
   const serverConfigs = useServerConfigs();
   const projectGroups = useSettingsProjectGroups();
-  const createThread = useNewThreadHandler();
   const configureBot = useAtomCommand(threadEnvironment.configureBot, { reportFailure: false });
   const disableBot = useAtomCommand(threadEnvironment.disableBot, { reportFailure: false });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
@@ -130,13 +135,22 @@ export function BotsPage() {
   const botProjects = useMemo(
     () =>
       projectGroups.flatMap((group) =>
-        group.memberProjects.map((project) => ({
-          environmentId: project.environmentId,
-          id: project.id,
-          name: group.displayName,
-        })),
+        group.memberProjects
+          .filter(
+            (project) =>
+              serverConfigs.get(project.environmentId)?.environment.capabilities.botProfiles ===
+              true,
+          )
+          .map((project) => ({
+            environmentId: project.environmentId,
+            id: project.id,
+            name: group.displayName,
+            workspaceRoot: project.workspaceRoot,
+            defaultModelSelection: project.defaultModelSelection,
+            environmentLabel: project.environmentLabel,
+          })),
       ),
-    [projectGroups],
+    [projectGroups, serverConfigs],
   );
 
   const reconciledSelectedKey = reconcileSelectedBotKey(selectedKey, botRows);
@@ -233,7 +247,7 @@ export function BotsPage() {
       if (result._tag === "Failure") {
         toastManager.add({
           type: "error",
-          title: "Could not dispatch task",
+          title: "Could not send task",
           description: errorMessage(squashAtomCommandFailure(result)),
         });
         return false;
@@ -249,13 +263,6 @@ export function BotsPage() {
     } finally {
       setThreadBusy(key, false);
     }
-  };
-
-  const startBotThread = async (project: BotProjectChoice) => {
-    const created = await createThread(scopeProjectRef(project.environmentId, project.id), {
-      envMode: "worktree",
-    });
-    if (created !== null) setCreateOpen(false);
   };
 
   return (
@@ -278,7 +285,7 @@ export function BotsPage() {
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
             <aside className="flex shrink-0 flex-col border-b border-border bg-muted/15 md:w-72 md:border-r md:border-b-0">
               <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-                <span>{bots.length} in fleet</span>
+                <span>{bots.length} bots</span>
                 {fleetSummary.working > 0 && <span>· {fleetSummary.working} working</span>}
                 {fleetSummary.attention > 0 && (
                   <span className="text-warning">· {fleetSummary.attention} need you</span>
@@ -328,16 +335,21 @@ export function BotsPage() {
         )}
       </div>
 
-      <CreateBotDialog
-        busyThreadKeys={busyThreadKeys}
-        candidates={candidates}
-        open={createOpen}
-        projectNameByRef={projectNameByRef}
-        projects={botProjects}
-        onOpenChange={setCreateOpen}
-        onSave={saveProfile}
-        onStartThread={startBotThread}
-      />
+      {createOpen && (
+        <CreateBotDialog
+          busyThreadKeys={busyThreadKeys}
+          candidates={candidates}
+          open={createOpen}
+          projectNameByRef={projectNameByRef}
+          projects={botProjects}
+          onOpenChange={setCreateOpen}
+          onSave={saveProfile}
+          onCreated={(key) => {
+            setSelectedKey(key);
+            setCreateOpen(false);
+          }}
+        />
+      )}
       <EditBotDialog
         key={editingBot ? threadKey(editingBot) : "closed"}
         busy={editingBot !== null && busyThreadKeys.has(threadKey(editingBot))}
@@ -365,44 +377,24 @@ function EmptyFleet({
           <BotIcon className="size-7" />
         </span>
         <h2 className="text-balance font-heading text-3xl font-semibold tracking-tight">
-          Build a fleet that keeps working.
+          Create a bot
         </h2>
         <p className="mt-3 max-w-lg text-balance text-base leading-relaxed text-muted-foreground">
-          Bots are persistent, named agent threads. Dispatch work here, assign Kanban tasks, or let
-          another harness reach them through the ConvergeOS agent mesh.
+          Save instructions for an agent you reuse. Send it tasks here or assign work from your
+          project board.
         </p>
-        <div className="mt-8 grid gap-4 border-y border-border py-6 sm:grid-cols-3">
-          <FleetCapability icon={<InboxIcon />} label="Dedicated inbox" />
-          <FleetCapability icon={<GitBranchIcon />} label="Isolated worktree" />
-          <FleetCapability icon={<ArrowUpRightIcon />} label="Mesh addressable" />
-        </div>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Button onClick={onCreate}>
-            <PlusIcon /> {candidateCount > 0 ? "Promote a thread" : "Create your first bot"}
+            <PlusIcon /> Create your first bot
           </Button>
           <span className="text-sm text-muted-foreground">
             {candidateCount > 0
               ? `${candidateCount} isolated ${candidateCount === 1 ? "thread is" : "threads are"} ready`
-              : "Start an isolated thread first, then return here."}
+              : "Choose a project to get started."}
           </span>
         </div>
       </div>
     </main>
-  );
-}
-
-function FleetCapability({
-  icon,
-  label,
-}: {
-  readonly icon: React.ReactNode;
-  readonly label: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 text-sm font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground">
-      {icon}
-      {label}
-    </div>
   );
 }
 
@@ -468,6 +460,7 @@ function BotWorkspace({
   readonly onMessageChange: (message: string) => void;
   readonly onOpen: () => void;
 }) {
+  const [computerOpen, setComputerOpen] = useState(false);
   const availability = resolveBotAvailability(thread);
   const status = STATUS_PRESENTATION[availability];
   const StatusIcon = status.icon;
@@ -505,22 +498,10 @@ function BotWorkspace({
           </Button>
         </div>
 
-        <div className="pt-7">
-          <BotComputerPanel
-            key={`${thread.environmentId}:${thread.id}`}
-            capability={computerCapability}
-            environmentId={thread.environmentId}
-            threadId={thread.id}
-          />
-        </div>
-
         <section className="py-7">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold">Dispatch work</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Send a task without leaving the fleet.
-              </p>
+              <h3 className="text-sm font-semibold">Send a task</h3>
             </div>
             <Button size="sm" variant="ghost" onClick={onOpen}>
               Open conversation <ArrowUpRightIcon />
@@ -557,6 +538,24 @@ function BotWorkspace({
           </div>
         </section>
 
+        <details
+          className="mb-7 rounded-lg border border-border p-3"
+          onToggle={(event) => setComputerOpen(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer text-sm font-medium">Computer</summary>
+          <p className="my-2 text-xs text-muted-foreground">
+            Open a browser desktop for tasks that need one.
+          </p>
+          {computerOpen ? (
+            <BotComputerPanel
+              key={`${thread.environmentId}:${thread.id}`}
+              capability={computerCapability}
+              environmentId={thread.environmentId}
+              threadId={thread.id}
+            />
+          ) : null}
+        </details>
+
         <section className="grid border-y border-border sm:grid-cols-3 sm:divide-x sm:divide-border">
           <BotFact
             label="Current work"
@@ -572,7 +571,7 @@ function BotWorkspace({
 
         <div className="mt-7 flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            Kanban and MCP harnesses can address this bot by its thread identity.
+            Disabling the bot keeps its conversation and files.
           </p>
           <Button disabled={busy} size="sm" variant="ghost" onClick={onDisable}>
             <Trash2Icon /> Disable bot
@@ -607,6 +606,9 @@ interface BotProjectChoice {
   readonly environmentId: EnvironmentId;
   readonly id: ProjectId;
   readonly name: string;
+  readonly workspaceRoot: string;
+  readonly defaultModelSelection: ModelSelection | null;
+  readonly environmentLabel: string | null;
 }
 
 function CreateBotDialog({
@@ -617,7 +619,7 @@ function CreateBotDialog({
   projects,
   onOpenChange,
   onSave,
-  onStartThread,
+  onCreated,
 }: {
   readonly busyThreadKeys: ReadonlySet<string>;
   readonly candidates: ReadonlyArray<EnvironmentThreadShell>;
@@ -630,96 +632,243 @@ function CreateBotDialog({
     displayName: string,
     description: string,
   ) => Promise<boolean>;
-  readonly onStartThread: (project: BotProjectChoice) => Promise<void>;
+  readonly onCreated: (key: string) => void;
 }) {
+  const [projectKey, setProjectKey] = useState("");
+  const project =
+    projects.find((entry) => `${entry.environmentId}:${entry.id}` === projectKey) ?? projects[0];
+  const [creating, setCreating] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!creating) onOpenChange(next);
+      }}
+    >
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>New bot</DialogTitle>
           <DialogDescription>
-            Promote an isolated thread into a persistent fleet member.
+            Save instructions and choose a provider. Tasks run in the bot's own worktree.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-2">
-          {candidates.length === 0 ? (
-            projects.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center">
-                <p className="text-sm font-medium">Add a project to create a bot</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Bots need a project and an isolated worktree.
-                </p>
-                <Button
-                  className="mt-4"
-                  size="sm"
-                  onClick={() => {
-                    onOpenChange(false);
-                    openCommandPalette({ open: "add-project" });
-                  }}
+        <DialogPanel className="flex flex-col gap-4">
+          {project ? (
+            <>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Project
+                <select
+                  disabled={creating}
+                  className="h-9 rounded-md border bg-background px-2"
+                  value={`${project.environmentId}:${project.id}`}
+                  onChange={(event) => setProjectKey(event.target.value)}
                 >
-                  <PlusIcon /> Add project
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="pb-1 text-sm text-muted-foreground">
-                  Choose a project. ConvergeOS will open a new thread in an isolated worktree.
-                </p>
-                {projects.map((project) => (
-                  <button
-                    className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-left transition-colors hover:bg-accent"
-                    key={`${project.environmentId}:${project.id}`}
-                    type="button"
-                    onClick={() => void onStartThread(project)}
+                  {projects.map((entry) => (
+                    <option
+                      key={`${entry.environmentId}:${entry.id}`}
+                      value={`${entry.environmentId}:${entry.id}`}
+                    >
+                      {entry.name}
+                      {entry.environmentLabel ? ` · ${entry.environmentLabel}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <NewBotForm
+                key={`${project.environmentId}:${project.id}`}
+                project={project}
+                onBusyChange={setCreating}
+                onCreated={onCreated}
+              />
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              <p>Add a project on a connected environment that supports bots.</p>
+              <Button
+                className="mt-3"
+                onClick={() => {
+                  onOpenChange(false);
+                  openCommandPalette({ open: "add-project" });
+                }}
+              >
+                Add project
+              </Button>
+            </div>
+          )}
+          {candidates.length > 0 && !creating ? (
+            <details className="border-t pt-3">
+              <summary className="cursor-pointer text-sm">Use an existing thread</summary>
+              <div className="mt-3 flex flex-col gap-2">
+                {candidates.map((thread) => (
+                  <div
+                    key={threadKey(thread)}
+                    className="flex items-center gap-3 rounded-md border p-3"
                   >
-                    <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <GitBranchIcon className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{project.name}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        Start isolated bot thread
-                      </span>
-                    </span>
-                    <ArrowUpRightIcon className="size-4 text-muted-foreground" />
-                  </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">{thread.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {projectNameByRef.get(`${thread.environmentId}:${thread.projectId}`) ??
+                          "Unknown project"}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={busyThreadKeys.has(threadKey(thread))}
+                      onClick={() =>
+                        void onSave(thread, thread.title, "").then((saved) => {
+                          if (saved) onOpenChange(false);
+                        })
+                      }
+                    >
+                      Use thread
+                    </Button>
+                  </div>
                 ))}
               </div>
-            )
-          ) : (
-            candidates.map((thread) => (
-              <div
-                key={threadKey(thread)}
-                className="flex min-w-0 items-center gap-3 rounded-xl border border-border px-3 py-3"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <BotIcon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{thread.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {projectNameByRef.get(`${thread.environmentId}:${thread.projectId}`) ??
-                      "Unknown project"}
-                    {thread.branch ? ` · ${thread.branch}` : ""}
-                  </p>
-                </div>
-                <Button
-                  disabled={busyThreadKeys.has(threadKey(thread))}
-                  size="sm"
-                  onClick={() =>
-                    void onSave(thread, thread.title, "").then(
-                      (saved) => saved && onOpenChange(false),
-                    )
-                  }
-                >
-                  Add
-                </Button>
-              </div>
-            ))
-          )}
+            </details>
+          ) : null}
         </DialogPanel>
       </DialogPopup>
     </Dialog>
+  );
+}
+
+function NewBotForm({
+  project,
+  onBusyChange,
+  onCreated,
+}: {
+  readonly project: BotProjectChoice;
+  readonly onBusyChange: (busy: boolean) => void;
+  readonly onCreated: (key: string) => void;
+}) {
+  const settings = useEnvironmentSettings(project.environmentId);
+  const resolvedSettings = resolveProjectSettings(settings, project.id, project).settings;
+  const createWorktree = useAtomCommand(vcsEnvironment.createWorktree, { reportFailure: false });
+  const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const configureBot = useAtomCommand(threadEnvironment.configureBot, { reportFailure: false });
+  const [name, setName] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [model, setModel] = useState<ModelSelection | null>(null);
+  const [threadId] = useState(newThreadId);
+  const [worktree, setWorktree] = useState<{ path: string; refName: string } | null>(null);
+  const [threadCreated, setThreadCreated] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const create = async () => {
+    if (busy || model === null || !name.trim()) return;
+    setBusy(true);
+    onBusyChange(true);
+    setError(null);
+    try {
+      let targetWorktree = worktree;
+      if (targetWorktree === null) {
+        const result = await createWorktree({
+          environmentId: project.environmentId,
+          input: {
+            cwd: project.workspaceRoot,
+            refName: "HEAD",
+            newRefName: `bot/${threadId}`,
+            path: null,
+          },
+        });
+        if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+        targetWorktree = result.value.worktree;
+        setWorktree(targetWorktree);
+      }
+      if (!threadCreated) {
+        const result = await createThread({
+          environmentId: project.environmentId,
+          input: {
+            threadId,
+            projectId: project.id,
+            title: name.trim(),
+            modelSelection: model,
+            runtimeMode: resolvedSettings.defaultRuntimeMode,
+            interactionMode: "default",
+            branch: targetWorktree.refName,
+            worktreePath: targetWorktree.path,
+          },
+        });
+        if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+        setThreadCreated(true);
+      }
+      const result = await configureBot({
+        environmentId: project.environmentId,
+        input: {
+          threadId,
+          expectedRevision: null,
+          displayName: name.trim(),
+          description: instructions.trim() || null,
+        },
+      });
+      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+      onCreated(`${project.environmentId}:${threadId}`);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(false);
+      onBusyChange(false);
+    }
+  };
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void create();
+      }}
+    >
+      <label className="flex flex-col gap-1.5 text-sm">
+        Bot name
+        <Input
+          required
+          maxLength={80}
+          disabled={busy || threadCreated}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm">
+        Instructions
+        <Textarea
+          rows={4}
+          maxLength={2000}
+          disabled={busy}
+          placeholder="What should this bot do on every task?"
+          value={instructions}
+          onChange={(event) => setInstructions(event.target.value)}
+        />
+      </label>
+      <div className="flex flex-col gap-1.5">
+        <Label>Provider and model</Label>
+        <fieldset disabled={busy || threadCreated}>
+          <EnvironmentModelField
+            environmentId={project.environmentId}
+            projectDefault={resolvedSettings.defaultModelSelection}
+            selection={model}
+            onChange={setModel}
+          />
+        </fieldset>
+      </div>
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+          {threadCreated
+            ? " The thread was created. Retry to finish saving the bot."
+            : worktree
+              ? " The worktree was created. Retry to finish setup."
+              : ""}
+        </p>
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        Creating a bot does not send a task. You can edit its instructions or disable it later.
+      </p>
+      <Button type="submit" disabled={busy || model === null || !name.trim()}>
+        {busy ? "Creating bot…" : error ? "Retry creation" : "Create bot"}
+      </Button>
+    </form>
   );
 }
 

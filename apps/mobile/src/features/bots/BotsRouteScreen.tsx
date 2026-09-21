@@ -1,3 +1,4 @@
+import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { resolveBotComputerViewerUrl } from "@t3tools/client-runtime/state/bot-computer";
 import type {
@@ -74,19 +75,28 @@ function Action(props: {
   );
 }
 
-export function BotsRouteScreen() {
+export function BotsRouteScreen({
+  route,
+}: StaticScreenProps<{ projectKeys?: string[] } | undefined>) {
+  const projectKeys = route.params?.projectKeys;
+  const navigation = useNavigation();
+  const [computerKey, setComputerKey] = useState<string | null>(null);
   const threads = useThreadShells();
   const serverConfigs = useServerConfigs();
   const bots = useMemo(
     () =>
       threads
-        .filter((thread) => thread.botProfile != null)
+        .filter(
+          (thread) =>
+            thread.botProfile != null &&
+            (!projectKeys || projectKeys.includes(`${thread.environmentId}:${thread.projectId}`)),
+        )
         .sort((left, right) =>
           (left.botProfile?.displayName ?? left.title).localeCompare(
             right.botProfile?.displayName ?? right.title,
           ),
         ),
-    [threads],
+    [threads, projectKeys],
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected =
@@ -103,7 +113,8 @@ export function BotsRouteScreen() {
       {bots.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-center text-base text-foreground-muted">
-            Create a Bot with an isolated worktree before giving it a computer.
+            No bots in this project yet. Create one from Bots in the web or desktop app, then send
+            it tasks here.
           </Text>
         </View>
       ) : (
@@ -140,14 +151,53 @@ export function BotsRouteScreen() {
             })}
           </ScrollView>
           {selected === null ? null : (
-            <BotComputer
-              key={`${selected.environmentId}:${selected.id}`}
-              capability={
-                serverConfigs.get(selected.environmentId)?.environment.capabilities.botComputer
-              }
-              environmentId={selected.environmentId}
-              threadId={selected.id}
-            />
+            <>
+              <View className="gap-3 p-4">
+                {selected.botProfile?.description ? (
+                  <Text className="text-sm text-foreground-muted">
+                    {selected.botProfile.description}
+                  </Text>
+                ) : null}
+                <Action
+                  label="Open conversation"
+                  onPress={() =>
+                    navigation.navigate("Thread", {
+                      environmentId: selected.environmentId,
+                      threadId: selected.id,
+                    })
+                  }
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    expanded: computerKey === `${selected.environmentId}:${selected.id}`,
+                  }}
+                  onPress={() =>
+                    setComputerKey(
+                      computerKey === `${selected.environmentId}:${selected.id}`
+                        ? null
+                        : `${selected.environmentId}:${selected.id}`,
+                    )
+                  }
+                >
+                  <Text className="py-2 text-foreground">
+                    {computerKey === `${selected.environmentId}:${selected.id}`
+                      ? "Hide computer"
+                      : "Open computer"}
+                  </Text>
+                </Pressable>
+              </View>
+              {computerKey === `${selected.environmentId}:${selected.id}` ? (
+                <BotComputer
+                  key={computerKey}
+                  capability={
+                    serverConfigs.get(selected.environmentId)?.environment.capabilities.botComputer
+                  }
+                  environmentId={selected.environmentId}
+                  threadId={selected.id}
+                />
+              ) : null}
+            </>
           )}
         </>
       )}

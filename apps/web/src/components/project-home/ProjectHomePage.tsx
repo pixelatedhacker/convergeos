@@ -279,7 +279,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                     {representative.workspaceRoot}
                   </p>
                   <p className="mt-0.5 text-sm text-foreground/80">
-                    {status ?? "Nothing in flight. Start something."}
+                    {status ?? "No work running."}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -299,22 +299,6 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                   </Button>
                 </div>
               </div>
-
-              {roster.length > 0 ? (
-                <HomeSection count={roster.length} icon={<BotIcon />} title="The team">
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {roster.map((bot) => (
-                      <BotCard
-                        key={`${bot.environmentId}:${bot.threadId}`}
-                        bot={bot}
-                        onClick={() =>
-                          openThread({ environmentId: bot.environmentId, threadId: bot.threadId })
-                        }
-                      />
-                    ))}
-                  </div>
-                </HomeSection>
-              ) : null}
 
               {attention.length > 0 ? (
                 <HomeSection
@@ -339,20 +323,8 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                 </HomeSection>
               ) : null}
 
-              <BoardHero
-                board={board}
-                cards={boardQuery.data?.cards ?? []}
-                delegations={boardQuery.data?.delegations ?? []}
-                error={boardQuery.error}
-                isPending={boardQuery.isPending && boardQuery.data === null}
-                environmentId={representative.environmentId}
-                projectId={representative.id}
-                onOpenBoard={openBoard}
-                onRefresh={boardQuery.refresh}
-              />
-
               <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
-                <HomeSection count={recent.length} icon={<HistoryIcon />} title="Jump back in">
+                <HomeSection count={recent.length} icon={<HistoryIcon />} title="Recent threads">
                   {recent.length === 0 ? (
                     <p className="px-2 py-1.5 text-sm text-muted-foreground">
                       No threads yet. Start one and it will show up here.
@@ -441,6 +413,33 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                   </HomeSection>
                 </div>
               </div>
+              <BoardHero
+                board={board}
+                cards={boardQuery.data?.cards ?? []}
+                delegations={boardQuery.data?.delegations ?? []}
+                error={boardQuery.error}
+                isPending={boardQuery.isPending && boardQuery.data === null}
+                environmentId={representative.environmentId}
+                projectId={representative.id}
+                onOpenBoard={openBoard}
+                onRefresh={boardQuery.refresh}
+              />
+
+              {roster.length > 0 ? (
+                <HomeSection count={roster.length} icon={<BotIcon />} title="Project bots">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {roster.map((bot) => (
+                      <BotCard
+                        key={`${bot.environmentId}:${bot.threadId}`}
+                        bot={bot}
+                        onClick={() =>
+                          openThread({ environmentId: bot.environmentId, threadId: bot.threadId })
+                        }
+                      />
+                    ))}
+                  </div>
+                </HomeSection>
+              ) : null}
             </WorkspacePageContainer>
           )}
         </ScrollArea>
@@ -645,7 +644,7 @@ function BoardHero(props: {
           <div className="flex items-center gap-2">
             <Input
               aria-label="New task title"
-              placeholder="Dump a task here — it lands in the backlog…"
+              placeholder="Add a task"
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
               onKeyDown={(event) => {
@@ -661,32 +660,34 @@ function BoardHero(props: {
               <PlusIcon /> Add
             </Button>
           </div>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={() => setActiveCardId(null)}
-          >
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-              {props.board.columns.map((column) => (
-                <BoardColumn
-                  key={column.status}
-                  column={column}
-                  bots={bots}
-                  delegations={props.delegations}
-                  onOpenBoard={props.onOpenBoard}
-                />
-              ))}
-            </div>
-            <DragOverlay>
-              {activeCard === null ? null : (
-                <div className="rounded-md border border-border bg-card p-2 text-xs font-medium shadow-lg">
-                  {activeCard.title}
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+          {props.board.total > 0 ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={() => setActiveCardId(null)}
+            >
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                {props.board.columns.map((column) => (
+                  <BoardColumn
+                    key={column.status}
+                    column={column}
+                    bots={bots}
+                    delegations={props.delegations}
+                    onOpenBoard={props.onOpenBoard}
+                  />
+                ))}
+              </div>
+              <DragOverlay>
+                {activeCard === null ? null : (
+                  <div className="rounded-md border border-border bg-card p-2 text-xs font-medium shadow-lg">
+                    {activeCard.title}
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+          ) : null}
         </>
       )}
       <button

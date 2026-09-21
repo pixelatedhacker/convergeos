@@ -92,7 +92,7 @@ function ConfiguredSettingsRouteScreen() {
         <SettingsSection title="Workspace tools">
           <SettingsRow icon="square.stack.3d.up" label="Skills & plugins" target="SettingsSkills" />
           <SettingsRow icon="desktopcomputer" label="Bots" target="SettingsBots" />
-          <SettingsRow icon="rectangle.3.group" label="Kanban" target="SettingsKanban" />
+          <SettingsRow icon="rectangle.3.group" label="Board" target="SettingsKanban" />
         </SettingsSection>
         <SettingsIndexSections />
       </ScrollView>
@@ -129,7 +129,7 @@ function LocalSettingsRouteScreen() {
         <SettingsSection title="Workspace tools">
           <SettingsRow icon="square.stack.3d.up" label="Skills & plugins" target="SettingsSkills" />
           <SettingsRow icon="desktopcomputer" label="Bots" target="SettingsBots" />
-          <SettingsRow icon="rectangle.3.group" label="Kanban" target="SettingsKanban" />
+          <SettingsRow icon="rectangle.3.group" label="Board" target="SettingsKanban" />
         </SettingsSection>
         <SettingsIndexSections />
       </ScrollView>

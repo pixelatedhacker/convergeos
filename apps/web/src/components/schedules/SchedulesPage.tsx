@@ -1,3 +1,4 @@
+import { EnvironmentModelField } from "../EnvironmentModelField";
 import { squashAtomCommandFailure, settlePromise } from "@t3tools/client-runtime/state/runtime";
 import {
   ScheduleId,
@@ -6,9 +7,7 @@ import {
   type ProjectId,
   type ScheduleRecurrence,
 } from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
 import { useNavigate } from "@tanstack/react-router";
-import { useAtomValue } from "@effect/atom-react";
 import {
   ArrowUpRightIcon,
   CalendarClockIcon,
@@ -16,26 +15,15 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
 import { randomUUID } from "../../lib/utils";
 import { readLocalApi } from "../../localApi";
-import { getCustomModelOptionsByInstance } from "../../modelSelection";
-import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  resolveDefaultProviderModelSelection,
-  sortProviderInstanceEntries,
-} from "../../providerInstances";
-import { useEnvironmentSettings } from "../../hooks/useSettings";
-import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useSchedules } from "../../state/schedulesView";
 import { scheduleEnvironment } from "../../state/schedules";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
-import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -787,7 +775,7 @@ function ScheduleEditorDialog({
 
           {environmentId !== null ? (
             <Field label="Model">
-              <ScheduleModelField
+              <EnvironmentModelField
                 environmentId={environmentId}
                 projectDefault={
                   editing?.modelSelection ?? selectedProject?.defaultModelSelection ?? null
@@ -819,78 +807,6 @@ function ScheduleEditorDialog({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
-  );
-}
-
-function ScheduleModelField({
-  environmentId,
-  projectDefault,
-  selection,
-  onChange,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly projectDefault: ModelSelection | null;
-  readonly selection: ModelSelection | null;
-  readonly onChange: (selection: ModelSelection) => void;
-}) {
-  const projectSettings = useEnvironmentSettings(environmentId);
-  const navigate = useNavigate();
-  const serverProviders =
-    useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
-  const resolvedSelection = resolveDefaultProviderModelSelection(
-    serverProviders,
-    selection ?? projectDefault,
-  );
-  const instanceEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(
-          deriveProviderInstanceEntries(serverProviders),
-          projectSettings,
-        ),
-      ),
-    [projectSettings, serverProviders],
-  );
-  const modelOptionsByInstance = useMemo(
-    () =>
-      getCustomModelOptionsByInstance(
-        projectSettings,
-        serverProviders,
-        resolvedSelection?.instanceId ?? null,
-        resolvedSelection?.model ?? null,
-      ),
-    [projectSettings, resolvedSelection?.instanceId, resolvedSelection?.model, serverProviders],
-  );
-
-  useEffect(() => {
-    if (selection === null && resolvedSelection !== null) {
-      onChange(resolvedSelection);
-    }
-  }, [onChange, resolvedSelection, selection]);
-
-  if (resolvedSelection === null) {
-    return <span className="text-sm text-muted-foreground">No providers available</span>;
-  }
-
-  return (
-    <ProviderModelPicker
-      activeInstanceId={resolvedSelection.instanceId}
-      instanceEntries={instanceEntries}
-      lockedProvider={null}
-      model={resolvedSelection.model}
-      modelOptionsByInstance={modelOptionsByInstance}
-      triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-      triggerVariant="outline"
-      onOpenProviderSetup={(instanceId) => {
-        void navigate({
-          to: "/settings/providers",
-          search: { environmentId, instanceId },
-        });
-      }}
-      onInstanceModelChange={(instanceId, model) => {
-        onChange(createModelSelection(instanceId, model));
-      }}
-    />
   );
 }
 

@@ -321,7 +321,7 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: KanbanRouteScreen,
       linking: "kanban",
       options: {
-        title: "Kanban",
+        title: "Board",
       },
     }),
     SettingsBots: createNativeStackScreen({
@@ -616,6 +616,16 @@ const RootStackConfig = createNativeStackNavigator({
         headerBackVisible: false,
         ...getCompactBrandHeaderOptions(),
       },
+    }),
+    Bots: createNativeStackScreen({
+      screen: BotsRouteScreen,
+      linking: "bots",
+      options: { ...SOLID_HEADER_OPTIONS, title: "Bots" },
+    }),
+    Board: createNativeStackScreen({
+      screen: KanbanRouteScreen,
+      linking: "board",
+      options: { ...SOLID_HEADER_OPTIONS, title: "Board" },
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,

@@ -22,9 +22,11 @@ import {
 } from "@t3tools/contracts";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { useNavigation } from "@react-navigation/native";
+import { AppText as Text } from "../../components/AppText";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -1117,6 +1119,14 @@ export function HomeScreen(props: HomeScreenProps) {
     projectCount: props.projects.length,
   });
 
+  const workspaceProjectKeys = selectedProjectScope
+    ? selectedProjectScope.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`)
+    : props.selectedEnvironmentId === null
+      ? undefined
+      : props.projects
+          .filter((project) => project.environmentId === props.selectedEnvironmentId)
+          .map((project) => `${project.environmentId}:${project.id}`);
+
   if (!hasAnyThreads) {
     return (
       <View className={Platform.OS === "android" ? "flex-1 bg-header" : "flex-1 bg-screen"}>
@@ -1131,6 +1141,9 @@ export function HomeScreen(props: HomeScreenProps) {
           }}
         >
           <View className="w-full max-w-[430px]">
+            {props.projects.length > 0 ? (
+              <WorkspaceTools projectKeys={workspaceProjectKeys} />
+            ) : null}
             <EmptyState
               title={emptyState.title}
               detail={emptyState.detail}
@@ -1161,19 +1174,22 @@ export function HomeScreen(props: HomeScreenProps) {
   }
 
   const showMachineStrip = props.environments.length >= 2 && props.searchQuery.trim() === "";
-  const listHeader = showMachineStrip ? (
+  const listHeader = (
     <>
       {Platform.OS === "ios" ? null : <HomeTopContentSpacer />}
-      <EnvironmentCommandStrip
-        environments={props.environments}
-        summaries={environmentWork}
-        selectedEnvironmentId={props.selectedEnvironmentId}
-        onEnvironmentChange={props.onEnvironmentChange}
-        onSelectThread={props.onSelectThread}
-      />
+      {props.searchQuery.trim() === "" ? (
+        <WorkspaceTools projectKeys={workspaceProjectKeys} />
+      ) : null}
+      {showMachineStrip ? (
+        <EnvironmentCommandStrip
+          environments={props.environments}
+          summaries={environmentWork}
+          selectedEnvironmentId={props.selectedEnvironmentId}
+          onEnvironmentChange={props.onEnvironmentChange}
+          onSelectThread={props.onSelectThread}
+        />
+      ) : null}
     </>
-  ) : Platform.OS === "ios" ? null : (
-    <HomeTopContentSpacer />
   );
 
   // Project scoping stays in the header filter menu; the machine strip is a
@@ -1347,6 +1363,28 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         </SwipeableScrollGateProvider>
       </View>
+    </View>
+  );
+}
+
+function WorkspaceTools({ projectKeys }: { readonly projectKeys: string[] | undefined }) {
+  const navigation = useNavigation();
+  return (
+    <View className="flex-row flex-wrap gap-3 px-4 py-3">
+      <Pressable
+        accessibilityRole="button"
+        className="rounded-lg bg-card px-4 py-3"
+        onPress={() => navigation.navigate("Bots", { projectKeys })}
+      >
+        <Text className="font-t3-medium text-foreground">Bots</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        className="rounded-lg bg-card px-4 py-3"
+        onPress={() => navigation.navigate("Board", { projectKeys })}
+      >
+        <Text className="font-t3-medium text-foreground">Board</Text>
+      </Pressable>
     </View>
   );
 }
