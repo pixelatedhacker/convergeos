@@ -2,6 +2,7 @@ import {
   BOT_COMPUTER_ISOLATION_WARNING,
   EnvironmentId,
   ORCHESTRATION_PROTOCOL_VERSION,
+  PAGE_MAX_DOCUMENT_BYTES,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
@@ -248,6 +249,7 @@ export const make = Effect.gen(function* () {
           }
         : {}),
       kanban: true,
+      pages: { maxDocumentBytes: PAGE_MAX_DOCUMENT_BYTES },
       scheduledTurns: true,
       threadPinReorder: true,
       threadActiveReorder: true,

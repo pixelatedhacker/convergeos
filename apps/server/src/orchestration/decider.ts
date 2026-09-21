@@ -18,6 +18,9 @@ import {
   type ThreadPullRequestKey,
   type ThreadPullRequestLink,
   type OrchestrationThreadActivity,
+  type Page,
+  type PageRevision,
+  PageRevisionId,
   type Schedule,
 } from "@t3tools/contracts";
 import {
@@ -43,6 +46,8 @@ import {
 } from "./Errors.ts";
 import { isValidScheduleTimeZone, nextRunAfter } from "./SchedulePolicy.ts";
 import {
+  findPageById,
+  listPagesByProjectId,
   listThreadsByProjectId,
   requireActiveProject,
   requireActiveProjectWorkspaceRootAbsent,
@@ -65,6 +70,59 @@ const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const decodeUserInputRequestedPayload = Schema.decodeUnknownOption(UserInputRequestedPayload);
 const threadPullRequestLinksEqual = Schema.toEquivalence(Schema.NullOr(ThreadLinkedPullRequest));
+
+const nextRevisionId = Effect.flatMap(Crypto.Crypto, (crypto) =>
+  Effect.map(crypto.randomUUIDv4, PageRevisionId.make),
+);
+
+/**
+ * Hosted pages are references to public sites opened in the platform
+ * browser. Loopback and localhost targets are dev-server links, not
+ * portable saved pages, and are rejected outright.
+ */
+function isUnportableHostedUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return true;
+  }
+  const normalizedHost = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    normalizedHost === "" ||
+    normalizedHost === "localhost" ||
+    normalizedHost.endsWith(".localhost") ||
+    normalizedHost === "::1" ||
+    normalizedHost === "::" ||
+    normalizedHost === "0.0.0.0" ||
+    /^127\./.test(normalizedHost)
+  );
+}
+
+function requireActivePage(input: {
+  readonly readModel: DelegationDecisionReadModel;
+  readonly pageId: Page["id"];
+  readonly commandType: string;
+}): Effect.Effect<Page, OrchestrationCommandInvariantError> {
+  const page = findPageById(input.readModel, input.pageId);
+  if (page === undefined) {
+    return Effect.fail(
+      new OrchestrationCommandInvariantError({
+        commandType: input.commandType,
+        detail: `page ${input.pageId} is unavailable`,
+      }),
+    );
+  }
+  if (page.archivedAt !== null) {
+    return Effect.fail(
+      new OrchestrationCommandInvariantError({
+        commandType: input.commandType,
+        detail: `page ${input.pageId} is archived`,
+      }),
+    );
+  }
+  return Effect.succeed(page);
+}
 
 const KANBAN_ORDER_DIGITS = "abcdefghijklmnopqrstuvwxyz";
 
@@ -473,7 +531,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Project '${command.projectId}' is not empty and cannot be deleted without force=true.`,
         });
       }
-      if (activeThreads.length > 0) {
+      // Pages never block deletion: they are archived with their project,
+      // keeping content and history intact while disappearing from active
+      // lists. Already-archived pages stay archived.
+      const activePages = listPagesByProjectId(readModel, command.projectId).filter(
+        (page) => page.archivedAt === null,
+      );
+      if (activeThreads.length > 0 || activePages.length > 0) {
+        const fanOutAt = yield* nowIso;
         return yield* decideCommandSequence({
           readModel,
           commands: [
@@ -482,6 +547,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
                 type: "thread.delete",
                 commandId: command.commandId,
                 threadId: thread.id,
+              }),
+            ),
+            ...activePages.map(
+              (page): Extract<OrchestrationCommand, { type: "page.archive" }> => ({
+                type: "page.archive",
+                commandId: command.commandId,
+                pageId: page.id,
+                expectedMetadataRevision: page.metadataRevision,
+                createdAt: fanOutAt,
               }),
             ),
             {
@@ -2185,6 +2259,317 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         })),
         type: "kanban.card-delegation-started",
         payload: { card },
+      };
+    }
+
+    case "page.create": {
+      if ((readModel.pages ?? []).some((page) => page.id === command.pageId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} already exists`,
+        });
+      }
+      if (command.projectId !== null) {
+        yield* requireActiveProject({ readModel, command, projectId: command.projectId });
+      }
+      if (
+        command.content.kind === "html"
+          ? command.content.byteSize < 1
+          : isUnportableHostedUrl(command.content.url)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            command.content.kind === "html"
+              ? `page ${command.pageId} has empty content`
+              : `page ${command.pageId} has an unportable hosted URL; use a public https link`,
+        });
+      }
+      const acceptedAt = yield* nowIso;
+      const revisionId = yield* nextRevisionId;
+      const page: Page = {
+        id: command.pageId,
+        projectId: command.projectId,
+        title: command.title,
+        kind: command.content.kind === "html" ? "htmlDocument" : "hostedUrl",
+        sourceThreadId: command.sourceThreadId,
+        maintainerThreadId: null,
+        currentRevisionId: revisionId,
+        currentRevision: 1,
+        metadataRevision: 1,
+        createdAt: acceptedAt,
+        updatedAt: acceptedAt,
+        archivedAt: null,
+      };
+      const revision: PageRevision = {
+        id: revisionId,
+        pageId: command.pageId,
+        predecessorRevisionId: null,
+        revision: 1,
+        content: command.content,
+        dataAt: command.dataAt,
+        author: command.author,
+        acceptedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt: acceptedAt,
+          commandId: command.commandId,
+        })),
+        type: "page.created",
+        payload: { page, revision },
+      };
+    }
+
+    case "page.publish": {
+      const current = yield* requireActivePage({
+        readModel,
+        pageId: command.pageId,
+        commandType: command.type,
+      });
+      // The caller must have observed the current revision. Two writers
+      // against the same base cannot overwrite each other; the loser reloads
+      // and proposes against the winner's revision.
+      if (current.currentRevisionId !== command.baseRevisionId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} revision changed since ${command.baseRevisionId}`,
+        });
+      }
+      if (
+        command.content.kind === "html"
+          ? command.content.byteSize < 1
+          : isUnportableHostedUrl(command.content.url)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            command.content.kind === "html"
+              ? `page ${command.pageId} has empty content`
+              : `page ${command.pageId} has an unportable hosted URL; use a public https link`,
+        });
+      }
+      const acceptedAt = yield* nowIso;
+      const revisionId = yield* nextRevisionId;
+      const revision: PageRevision = {
+        id: revisionId,
+        pageId: command.pageId,
+        predecessorRevisionId: current.currentRevisionId,
+        revision: current.currentRevision + 1,
+        content: command.content,
+        dataAt: command.dataAt,
+        author: command.author,
+        acceptedAt,
+      };
+      const page: Page = {
+        ...current,
+        currentRevisionId: revisionId,
+        currentRevision: current.currentRevision + 1,
+        updatedAt: acceptedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt: acceptedAt,
+          commandId: command.commandId,
+        })),
+        type: "page.published",
+        payload: { page, revision },
+      };
+    }
+
+    case "page.restore-revision": {
+      const current = yield* requireActivePage({
+        readModel,
+        pageId: command.pageId,
+        commandType: command.type,
+      });
+      if (current.currentRevisionId !== command.baseRevisionId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} revision changed since ${command.baseRevisionId}`,
+        });
+      }
+      const source = (readModel.pageRevisions ?? []).find(
+        (revision) =>
+          revision.id === command.sourceRevisionId && revision.pageId === command.pageId,
+      );
+      if (source === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} has no revision ${command.sourceRevisionId}`,
+        });
+      }
+      // Returning to an older revision appends a publication pointing at the
+      // retained content; history itself is never rewritten.
+      const acceptedAt = yield* nowIso;
+      const revisionId = yield* nextRevisionId;
+      const revision: PageRevision = {
+        id: revisionId,
+        pageId: command.pageId,
+        predecessorRevisionId: current.currentRevisionId,
+        revision: current.currentRevision + 1,
+        content: source.content,
+        dataAt: source.dataAt,
+        author: command.author,
+        acceptedAt,
+      };
+      const page: Page = {
+        ...current,
+        currentRevisionId: revisionId,
+        currentRevision: current.currentRevision + 1,
+        updatedAt: acceptedAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt: acceptedAt,
+          commandId: command.commandId,
+        })),
+        type: "page.published",
+        payload: { page, revision },
+      };
+    }
+
+    case "page.rename": {
+      const current = yield* requireActivePage({
+        readModel,
+        pageId: command.pageId,
+        commandType: command.type,
+      });
+      if (current.metadataRevision !== command.expectedMetadataRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} metadata revision changed`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      const page: Page = {
+        ...current,
+        title: command.title,
+        metadataRevision: current.metadataRevision + 1,
+        updatedAt: occurredAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "page.renamed",
+        payload: { page },
+      };
+    }
+
+    case "page.archive": {
+      const current = yield* requireActivePage({
+        readModel,
+        pageId: command.pageId,
+        commandType: command.type,
+      });
+      if (current.metadataRevision !== command.expectedMetadataRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} metadata revision changed`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      const page: Page = {
+        ...current,
+        archivedAt: occurredAt,
+        metadataRevision: current.metadataRevision + 1,
+        updatedAt: occurredAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "page.archived",
+        payload: { page },
+      };
+    }
+
+    case "page.restore": {
+      const page = findPageById(readModel, command.pageId);
+      if (page === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} is unavailable`,
+        });
+      }
+      if (page.archivedAt === null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} is not archived`,
+        });
+      }
+      if (page.metadataRevision !== command.expectedMetadataRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} metadata revision changed`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      const restored: Page = {
+        ...page,
+        archivedAt: null,
+        metadataRevision: page.metadataRevision + 1,
+        updatedAt: occurredAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "page.restored",
+        payload: { page: restored },
+      };
+    }
+
+    case "page.assign-project": {
+      const current = yield* requireActivePage({
+        readModel,
+        pageId: command.pageId,
+        commandType: command.type,
+      });
+      if (current.metadataRevision !== command.expectedMetadataRevision) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `page ${command.pageId} metadata revision changed`,
+        });
+      }
+      if (command.projectId !== null) {
+        yield* requireActiveProject({ readModel, command, projectId: command.projectId });
+      }
+      const occurredAt = yield* nowIso;
+      const page: Page = {
+        ...current,
+        projectId: command.projectId,
+        // A bot never keeps a page outside its own project. (Maintenance
+        // schedules arrive with page maintenance and are disabled here too.)
+        ...(command.projectId === current.projectId ? {} : { maintainerThreadId: null }),
+        metadataRevision: current.metadataRevision + 1,
+        updatedAt: occurredAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "page",
+          aggregateId: command.pageId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "page.project-assigned",
+        payload: { page },
       };
     }
 

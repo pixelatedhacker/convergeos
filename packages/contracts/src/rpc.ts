@@ -100,6 +100,15 @@ import {
 import { KeybindingsConfigError } from "./keybindings.ts";
 import { KanbanBoardInput, KanbanBoardStreamItem } from "./kanban.ts";
 import {
+  PageContentRequest,
+  PageContentSnapshot,
+  PageDetailInput,
+  PageDetailSnapshot,
+  PageListInput,
+  PageListSnapshot,
+  PagesQueryError,
+} from "./pages.ts";
+import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
@@ -1399,6 +1408,24 @@ export const WsOrchestrationListSchedulesRpc = Rpc.make(ORCHESTRATION_WS_METHODS
   error: Schema.Union([OrchestrationListSchedulesError, EnvironmentAuthorizationError]),
 });
 
+export const WsOrchestrationListPagesRpc = Rpc.make(ORCHESTRATION_WS_METHODS.listPages, {
+  payload: PageListInput,
+  success: PageListSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationGetPageRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getPage, {
+  payload: PageDetailInput,
+  success: PageDetailSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationGetPageContentRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getPageContent, {
+  payload: PageContentRequest,
+  success: PageContentSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationSubscribeShellRpc = Rpc.make(ORCHESTRATION_WS_METHODS.subscribeShell, {
   payload: OrchestrationRpcSchemas.subscribeShell.input,
   success: OrchestrationRpcSchemas.subscribeShell.output,
@@ -1640,6 +1667,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationSearchThreadsRpc,
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationListSchedulesRpc,
+  WsOrchestrationListPagesRpc,
+  WsOrchestrationGetPageRpc,
+  WsOrchestrationGetPageContentRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
 );

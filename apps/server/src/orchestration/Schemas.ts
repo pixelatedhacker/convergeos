@@ -7,6 +7,12 @@ import {
   KanbanCardDelegationLinkedPayload as ContractsKanbanCardDelegationLinkedPayloadSchema,
   KanbanCardDelegationStartedPayload as ContractsKanbanCardDelegationStartedPayloadSchema,
   KanbanCardDelegationCompletedPayload as ContractsKanbanCardDelegationCompletedPayloadSchema,
+  PageCreatedPayload as ContractsPageCreatedPayloadSchema,
+  PagePublishedPayload as ContractsPagePublishedPayloadSchema,
+  PageRenamedPayload as ContractsPageRenamedPayloadSchema,
+  PageProjectAssignedPayload as ContractsPageProjectAssignedPayloadSchema,
+  PageArchivedPayload as ContractsPageArchivedPayloadSchema,
+  PageRestoredPayload as ContractsPageRestoredPayloadSchema,
   ProjectCreatedPayload as ContractsProjectCreatedPayloadSchema,
   ProjectMetaUpdatedPayload as ContractsProjectMetaUpdatedPayloadSchema,
   ProjectDeletedPayload as ContractsProjectDeletedPayloadSchema,
@@ -64,6 +70,13 @@ export const KanbanCardDelegationLinkedPayload = ContractsKanbanCardDelegationLi
 export const KanbanCardDelegationStartedPayload = ContractsKanbanCardDelegationStartedPayloadSchema;
 export const KanbanCardDelegationCompletedPayload =
   ContractsKanbanCardDelegationCompletedPayloadSchema;
+
+export const PageCreatedPayload = ContractsPageCreatedPayloadSchema;
+export const PagePublishedPayload = ContractsPagePublishedPayloadSchema;
+export const PageRenamedPayload = ContractsPageRenamedPayloadSchema;
+export const PageProjectAssignedPayload = ContractsPageProjectAssignedPayloadSchema;
+export const PageArchivedPayload = ContractsPageArchivedPayloadSchema;
+export const PageRestoredPayload = ContractsPageRestoredPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;

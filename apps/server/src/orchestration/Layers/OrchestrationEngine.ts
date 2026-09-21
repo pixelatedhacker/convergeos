@@ -4,6 +4,7 @@ import type {
   OrchestrationEvent,
   DelegationId,
   KanbanCardId,
+  PageId,
   ProjectId,
   ScheduleId,
   ThreadId,
@@ -69,8 +70,20 @@ interface CommandEnvelope {
 }
 
 function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: "project" | "thread" | "kanban-card" | "delegation" | "schedule";
-  readonly aggregateId: ProjectId | ThreadId | KanbanCardId | DelegationId | ScheduleId;
+  readonly aggregateKind:
+    | "project"
+    | "thread"
+    | "kanban-card"
+    | "delegation"
+    | "schedule"
+    | "page";
+  readonly aggregateId:
+    | ProjectId
+    | ThreadId
+    | KanbanCardId
+    | DelegationId
+    | ScheduleId
+    | PageId;
 } {
   switch (command.type) {
     case "project.create":
@@ -109,6 +122,17 @@ function commandToAggregateRef(command: OrchestrationCommand): {
       return {
         aggregateKind: "schedule",
         aggregateId: command.scheduleId,
+      };
+    case "page.create":
+    case "page.rename":
+    case "page.publish":
+    case "page.restore-revision":
+    case "page.archive":
+    case "page.restore":
+    case "page.assign-project":
+      return {
+        aggregateKind: "page",
+        aggregateId: command.pageId,
       };
     default:
       return {

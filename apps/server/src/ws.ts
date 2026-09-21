@@ -62,6 +62,9 @@ import {
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
+  PagesQueryError,
+  type PageContentSnapshot,
+  type PageId,
   type ProjectEntriesFailure,
   type ProjectFileFailure,
   type ProjectFileOperation,
@@ -116,6 +119,7 @@ import {
 } from "./orchestration/Normalizer.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { makePageContentStore } from "./pages/pageContentStore.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
@@ -196,6 +200,13 @@ import * as RelayClient from "@t3tools/shared/relayClient";
 const decodeSkillStoreCodexSettings = Schema.decodeUnknownEffect(CodexSettings);
 
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isPagesQueryError = Schema.is(PagesQueryError);
+
+const failPageNotFound = (pageId: PageId) =>
+  new PagesQueryError({
+    reason: "notFound",
+    detail: `Page ${pageId} was not found on this environment`,
+  });
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -2323,6 +2334,99 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.listPages]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.listPages,
+            projectionSnapshotQuery
+              .listPages({
+                ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+                includeArchived: input.includeArchived,
+                limit: input.limit,
+              })
+              .pipe(
+                Effect.map((pages) => ({ pages })),
+                Effect.tapError((cause) =>
+                  Effect.logError("orchestration page list load failed", { cause }),
+                ),
+                Effect.mapError(
+                  (cause) =>
+                    new PagesQueryError({
+                      reason: "failed",
+                      detail: "Failed to load pages",
+                      cause,
+                    }),
+                ),
+              ),
+            { "rpc.aggregate": "pages" },
+          ),
+        [ORCHESTRATION_WS_METHODS.getPage]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getPage,
+            projectionSnapshotQuery.getPageDetail(input.pageId).pipe(
+              Effect.flatMap(Option.match({ onNone: () => failPageNotFound(input.pageId), onSome: Effect.succeed })),
+              Effect.tapError((cause) =>
+                Effect.logError("orchestration page detail load failed", { cause }),
+              ),
+              Effect.mapError(
+                (cause) =>
+                  new PagesQueryError({
+                    reason: "failed",
+                    detail: "Failed to load the page",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "pages" },
+          ),
+        [ORCHESTRATION_WS_METHODS.getPageContent]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getPageContent,
+            Effect.gen(function* () {
+              const contentRef = yield* projectionSnapshotQuery.getPageContentRef(input.pageId);
+              if (Option.isNone(contentRef)) {
+                return yield* failPageNotFound(input.pageId);
+              }
+              if (contentRef.value.content.kind === "hostedUrl") {
+                return {
+                  pageId: contentRef.value.pageId,
+                  revisionId: contentRef.value.revisionId,
+                  content: { kind: "hostedUrl", url: contentRef.value.content.url },
+                } satisfies typeof PageContentSnapshot.Type;
+              }
+              const config = yield* ServerConfig.ServerConfig;
+              const fileSystem = yield* FileSystem.FileSystem;
+              const html = yield* makePageContentStore(
+                fileSystem,
+                config.pagesDir,
+              ).read(contentRef.value.content.digest);
+              if (html === null) {
+                return yield* new PagesQueryError({
+                  reason: "contentUnavailable",
+                  detail: `The stored document for page ${input.pageId} is missing from this environment`,
+                });
+              }
+              return {
+                pageId: contentRef.value.pageId,
+                revisionId: contentRef.value.revisionId,
+                content: { kind: "html", html },
+              } satisfies typeof PageContentSnapshot.Type;
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.logError("orchestration page content load failed", { cause }),
+              ),
+              Effect.mapError(
+                (cause) =>
+                  isPagesQueryError(cause)
+                    ? cause
+                    : new PagesQueryError({
+                        reason: "failed",
+                        detail: "Failed to load the page content",
+                        cause,
+                      }),
+              ),
+            ),
+            { "rpc.aggregate": "pages" },
           ),
         [ORCHESTRATION_WS_METHODS.subscribeThread]: (input) =>
           observeRpcStreamEffect(

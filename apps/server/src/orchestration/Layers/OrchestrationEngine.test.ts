@@ -447,6 +447,9 @@ describe("OrchestrationEngine", () => {
             }),
           listSchedules: () => Effect.succeed({ schedules: [], runs: [] }),
           listDueSchedules: () => Effect.succeed([]),
+          listPages: () => Effect.succeed([]),
+          getPageDetail: () => Effect.succeed(Option.none()),
+          getPageContentRef: () => Effect.succeed(Option.none()),
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: projectionSnapshot.snapshotSequence }),
           getCounts: () => Effect.succeed({ projectCount: 1, threadCount: 1 }),

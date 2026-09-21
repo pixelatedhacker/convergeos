@@ -64,3 +64,20 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 | Attachment inventory | The ordered image records shown as thumbnails above the prose, including images with no inline references.                          |
 
 See [composer context references](./composer-context-references.md) for the contract and lifecycle.
+
+## Pages
+
+Pages are durable homes for generated websites, reports, and small tools. See [pages.md](pages.md).
+
+#### Page
+
+A saved result owned by one environment and optionally one project. A page holds a title, a kind (`htmlDocument` or `hostedUrl`), source-thread provenance, and a current content revision. Unfiled pages have no project yet. Archive is reversible and preserves content and history. See the Page contract and the decider.
+
+#### Page revision
+
+An immutable publication of a page's content. Managed HTML references content-addressed bytes stored under the environment's userdata; hosted URLs reference an external site without a durability guarantee. Restoring an older revision appends a new publication instead of rewriting history.
+
+#### Maintainer
+
+The bot thread assigned to keep a page up to date. The maintainer reference is stored on the page; maintenance dispatch and schedules are part of page maintenance and reuse the existing orchestration lifecycle.
+
