@@ -479,6 +479,7 @@ it.layer(NodeServices.layer)("pages decider", (it) => {
               branch: null,
               worktreePath: null,
               botProfile: null,
+              pullRequests: [],
               latestTurn: null,
               createdAt: NOW,
               updatedAt: NOW,
@@ -531,9 +532,7 @@ it.layer(NodeServices.layer)("pages decider", (it) => {
       expect(model.pageRevisions?.length).toBe(2);
       expect(model.pageRevisions?.map((entry) => entry.revision)).toEqual([1, 2]);
       expect(model.pages?.[0]?.currentRevision).toBe(2);
-      expect(model.pages?.[0]?.currentRevisionId).toBe(
-        model.pageRevisions?.at(-1)?.id ?? null,
-      );
+      expect(model.pages?.[0]?.currentRevisionId).toBe(model.pageRevisions?.at(-1)?.id ?? null);
     }),
   );
 });

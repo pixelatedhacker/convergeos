@@ -214,7 +214,7 @@ describe("BotComputerViewerProxy integration", () => {
         const { token } = yield* issueAccess(access, port);
         const server = yield* HttpServer.HttpServer;
         const address = server.address;
-        if (address._tag !== "TcpAddress") {
+        if (address._tag !== "InetAddressV4" && address._tag !== "InetAddressV6") {
           return yield* Effect.die("Expected a TCP test server");
         }
         const websocket = new NodeSocket.NodeWS.WebSocket(

@@ -38,6 +38,9 @@ const makeProjectionSnapshotQueryLayer = (importedWorkspaceRoots: ReadonlyArray<
   Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
     listSchedules: () => Effect.die("unused"),
     listDueSchedules: () => Effect.die("unused"),
+    listPages: () => Effect.die("unused"),
+    getPageDetail: () => Effect.die("unused"),
+    getPageContentRef: () => Effect.die("unused"),
     getCommandReadModel: () => Effect.die("unused"),
     getUserInputActivity: () => Effect.die("unused"),
     listActivitiesByKind: () => Effect.die("unused"),

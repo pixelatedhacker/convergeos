@@ -695,7 +695,11 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
                 <Text
                   className={cn(
                     "min-w-0 flex-1 text-lg font-t3-bold",
-                    visuallySelected ? "text-thread-selected-foreground" : compact ? "text-foreground" : "text-drawer-foreground",
+                    visuallySelected
+                      ? "text-thread-selected-foreground"
+                      : compact
+                        ? "text-foreground"
+                        : "text-drawer-foreground",
                   )}
                   numberOfLines={1}
                 >
@@ -769,7 +773,11 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
               <Text
                 className={cn(
                   "min-w-0 flex-1 text-base font-t3-medium",
-                  visuallySelected ? "text-thread-selected-foreground" : compact ? "text-foreground" : "text-drawer-foreground",
+                  visuallySelected
+                    ? "text-thread-selected-foreground"
+                    : compact
+                      ? "text-foreground"
+                      : "text-drawer-foreground",
                 )}
                 numberOfLines={1}
               >

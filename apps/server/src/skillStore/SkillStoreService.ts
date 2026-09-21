@@ -51,7 +51,9 @@ import { fetchSkillDetail, searchRegistry } from "./SkillsRegistryClient.ts";
 import { installSkill, removeSkill } from "./SkillsCli.ts";
 
 /** Resolves a project's workspace root for project-scope CLI runs. Injected by the WS layer, which owns projections. */
-export type ResolveProjectCwd = (projectId: ProjectId) => Effect.Effect<string, RegistrySkillStoreError>;
+export type ResolveProjectCwd = (
+  projectId: ProjectId,
+) => Effect.Effect<string, RegistrySkillStoreError>;
 
 const SkillStoreManifest = Schema.Struct({
   version: Schema.Literal(1),
@@ -440,15 +442,22 @@ export const layerTest = (overrides?: Partial<SkillStoreService["Service"]>) =>
     SkillStoreService.of({
       search: () => Effect.succeed({ skills: [] }),
       getDetail: () =>
-        Effect.fail(new RegistrySkillStoreError({ reason: "notFound", detail: "not implemented in test" })),
+        Effect.fail(
+          new RegistrySkillStoreError({ reason: "notFound", detail: "not implemented in test" }),
+        ),
       listInstalled: Effect.succeed({ skills: [] }),
       install: () =>
         Effect.fail(
-          new RegistrySkillStoreError({ reason: "installFailed", detail: "not implemented in test" }),
+          new RegistrySkillStoreError({
+            reason: "installFailed",
+            detail: "not implemented in test",
+          }),
         ),
       uninstall: () => Effect.succeed({ skills: [] }),
       setHarnessEnabled: () =>
-        Effect.fail(new RegistrySkillStoreError({ reason: "notFound", detail: "not implemented in test" })),
+        Effect.fail(
+          new RegistrySkillStoreError({ reason: "notFound", detail: "not implemented in test" }),
+        ),
       ...overrides,
     }),
   );

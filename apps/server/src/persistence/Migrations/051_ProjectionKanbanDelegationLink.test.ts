@@ -6,7 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { runMigrations } from "../Migrations.ts";
 
-const migrationLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const migrationLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 migrationLayer("051_ProjectionKanbanDelegationLink", (it) => {
   it.effect("adds the durable delegation link and lookup index", () =>

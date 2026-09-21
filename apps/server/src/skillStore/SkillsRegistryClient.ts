@@ -106,7 +106,11 @@ const truncateContents = (contents: string): string =>
 export const searchRegistry = Effect.fn("SkillsRegistryClient.search")(function* (
   query: string,
   limit: number,
-): Effect.fn.Return<ReadonlyArray<SkillStoreEntry>, RegistrySkillStoreError, HttpClient.HttpClient> {
+): Effect.fn.Return<
+  ReadonlyArray<SkillStoreEntry>,
+  RegistrySkillStoreError,
+  HttpClient.HttpClient
+> {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const json = yield* getJson(`${REGISTRY_BASE_URL}/api/search?${params.toString()}`);
   const decoded = yield* decodeSearchResponse(json).pipe(

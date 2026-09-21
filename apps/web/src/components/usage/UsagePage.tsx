@@ -376,7 +376,15 @@ export function UsagePage() {
 
         <ScrollArea className="min-h-0 flex-1">
           <WorkspacePageContainer width="wide" title="Usage">
-            <SubscriptionQuotaOverview environments={selectedEnvironmentIds === null ? quotaEnvironments : quotaEnvironments.filter((entry) => selectedEnvironmentIds.has(entry.environmentId))} />
+            <SubscriptionQuotaOverview
+              environments={
+                selectedEnvironmentIds === null
+                  ? quotaEnvironments
+                  : quotaEnvironments.filter((entry) =>
+                      selectedEnvironmentIds.has(entry.environmentId),
+                    )
+              }
+            />
             {selectedEnvironments.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {environments.length === 0

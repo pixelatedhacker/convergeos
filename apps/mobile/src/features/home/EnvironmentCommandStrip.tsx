@@ -21,6 +21,8 @@ function statusLabel(state: EnvironmentConnectionPhase): string {
       return "Connecting";
     case "offline":
       return "Offline";
+    case "unsupported":
+      return "Update required";
     case "error":
       return "Connection failed";
     case "available":

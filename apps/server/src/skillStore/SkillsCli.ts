@@ -16,7 +16,11 @@ import * as NodeModule from "node:module";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChildProcess } from "effect/unstable/process";
-import { RegistrySkillStoreError, type SkillStoreHarness, type RegistrySkillStoreScope } from "@t3tools/contracts";
+import {
+  RegistrySkillStoreError,
+  type SkillStoreHarness,
+  type RegistrySkillStoreScope,
+} from "@t3tools/contracts";
 
 import { spawnAndCollect } from "../provider/providerSnapshot.ts";
 

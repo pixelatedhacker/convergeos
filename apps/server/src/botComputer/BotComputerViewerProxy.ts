@@ -140,8 +140,8 @@ const route = Effect.gen(function* () {
       upstream.writer,
     ]);
     const bridge = Effect.raceFirst(
-      downstream.runRaw((chunk) => writeUpstream(chunk)),
-      upstream.runRaw((chunk) => writeDownstream(chunk)),
+      pumpFrames(downstream, writeUpstream),
+      pumpFrames(upstream, writeDownstream),
     );
     const sessionRevoked = sessions.streamChanges.pipe(
       Stream.filter(
@@ -210,3 +210,11 @@ export const botComputerViewerProxyRouteLayer = HttpRouter.add(
   `${BOT_COMPUTER_VIEWER_ROUTE_PREFIX}/*`,
   route,
 );
+
+const pumpFrames = (source: Socket.Socket, sink: Socket.Writer) =>
+  Effect.gen(function* () {
+    const { pull } = yield* source.reader;
+    while (true) {
+      yield* sink.writeAll(yield* pull);
+    }
+  });

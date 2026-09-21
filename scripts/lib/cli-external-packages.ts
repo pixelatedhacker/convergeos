@@ -45,8 +45,24 @@ export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "utf-8-validate",
 ] as const;
 
+// The registry installer runs from disk with its dependency closure. Match package
+// boundaries so yaml does not accidentally externalize yaml-language-server.
+const CLI_RUNTIME_EXTERNAL_PACKAGES = [
+  "skills",
+  "tar",
+  "yaml",
+  "@isaacs/fs-minipass",
+  "chownr",
+  "minipass",
+  "minizlib",
+  "yallist",
+] as const;
+
 export function isRuntimeExternalCliDependency(id: string): boolean {
-  return CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));
+  return (
+    CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix)) ||
+    CLI_RUNTIME_EXTERNAL_PACKAGES.some((name) => id === name || id.startsWith(`${name}/`))
+  );
 }
 
 /**

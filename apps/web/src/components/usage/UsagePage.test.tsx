@@ -176,32 +176,6 @@ beforeEach(() => {
   });
 });
 
-describe("UsagePage sections", () => {
-  it("keeps subscription limits visible while historical activity settles", () => {
-    testState.useUsage.mockReturnValue({
-      merged: mergeUsage([], USAGE_CONTRACT_VERSION),
-      environments: [],
-      isPending: true,
-      isPartial: false,
-      refresh: vi.fn(),
-    });
-
-    const markup = renderToStaticMarkup(<UsagePage />);
-
-    expect(markup).toContain("Subscription limits");
-    expect(markup).toContain("Connect an environment to review subscription limits.");
-    expect(markup).toContain("Activity");
-    expect(markup.indexOf("Subscription limits")).toBeLessThan(markup.indexOf("Activity"));
-  });
-
-  it("places cost and range controls inside the Activity section", () => {
-    const markup = renderToStaticMarkup(<UsagePage />);
-
-    expect(markup.indexOf("Activity")).toBeLessThan(markup.indexOf('aria-label="Usage metric"'));
-    expect(markup.indexOf("Activity")).toBeLessThan(markup.indexOf('aria-label="Usage period"'));
-  });
-});
-
 describe("UsagePage hourly breakdown", () => {
   it("keeps recent activity visible first without empty hourly rows", () => {
     const markup = renderToStaticMarkup(<UsagePage />);

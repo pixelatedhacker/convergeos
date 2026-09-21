@@ -876,7 +876,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         <Text
           className={cn(
             "min-w-0 flex-1 text-base font-t3-medium",
-            selected ? selectedThreadRowColors.foregroundClassName : rowAppearance.foregroundClassName,
+            selected
+              ? selectedThreadRowColors.foregroundClassName
+              : rowAppearance.foregroundClassName,
           )}
           numberOfLines={2}
         >
@@ -1083,7 +1085,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               <Text
                 className={cn(
                   "min-w-0 flex-1 text-base",
-                  selected ? selectedThreadRowColors.foregroundClassName : rowAppearance.mutedForegroundClassName,
+                  selected
+                    ? selectedThreadRowColors.foregroundClassName
+                    : rowAppearance.mutedForegroundClassName,
                 )}
                 numberOfLines={1}
               >
