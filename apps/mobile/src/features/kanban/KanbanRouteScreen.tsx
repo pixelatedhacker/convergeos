@@ -1,3 +1,4 @@
+import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
 import { KanbanCardId, type KanbanStatus } from "@t3tools/contracts";
 import { deriveKanbanCardExecutionStatus } from "@t3tools/client-runtime/state/kanban";
@@ -25,8 +26,14 @@ const COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly label: st
   { status: "done", label: "Done" },
 ];
 
-export function KanbanRouteScreen() {
-  const projects = useProjects();
+export function KanbanRouteScreen({
+  route,
+}: StaticScreenProps<{ projectKeys?: string[] } | undefined>) {
+  const projects = useProjects().filter(
+    (project) =>
+      !route.params?.projectKeys ||
+      route.params.projectKeys.includes(`${project.environmentId}:${project.id}`),
+  );
   const insets = useSafeAreaInsets();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected =
@@ -39,7 +46,7 @@ export function KanbanRouteScreen() {
       {Platform.OS === "android" ? (
         <>
           <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Kanban" />
+          <AndroidScreenHeader title="Board" />
         </>
       ) : null}
       {projects.length === 0 ? (
@@ -132,6 +139,7 @@ function MobileProjectBoard({
       ),
     [environmentId, projectId, threads],
   );
+  const navigation = useNavigation();
   const createCard = useAtomCommand(kanbanEnvironment.createCard, { reportFailure: false });
   const moveCard = useAtomCommand(kanbanEnvironment.moveCard, { reportFailure: false });
   const deleteCard = useAtomCommand(kanbanEnvironment.deleteCard, { reportFailure: false });
@@ -270,45 +278,51 @@ function MobileProjectBoard({
                           </View>
                         );
                       })()}
-                      <View className="mt-3 flex-row items-center border-t border-border-subtle pt-2">
-                        <CardAction
-                          icon="arrow.left"
-                          label={`Move ${card.title} left`}
-                          disabled={columnIndex === 0}
+                      {board.delegations.find((entry) => entry.id === card.delegationId)
+                        ?.targetThreadId ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          className="mt-2 py-2"
                           onPress={() => {
-                            const target = COLUMNS[columnIndex - 1];
-                            if (target === undefined) return;
-                            void report(
-                              moveCard({
-                                environmentId,
-                                input: {
-                                  cardId: card.id,
-                                  expectedRevision: card.revision,
-                                  placement: { status: target.status, relation: "last" },
-                                },
-                              }),
-                            );
+                            const target = board.delegations.find(
+                              (entry) => entry.id === card.delegationId,
+                            )?.targetThreadId;
+                            if (target)
+                              navigation.navigate("Thread", { environmentId, threadId: target });
                           }}
-                        />
-                        <CardAction
-                          icon="arrow.right"
-                          label={`Move ${card.title} right`}
-                          disabled={columnIndex === COLUMNS.length - 1}
-                          onPress={() => {
-                            const target = COLUMNS[columnIndex + 1];
-                            if (target === undefined) return;
-                            void report(
-                              moveCard({
-                                environmentId,
-                                input: {
-                                  cardId: card.id,
-                                  expectedRevision: card.revision,
-                                  placement: { status: target.status, relation: "last" },
-                                },
-                              }),
-                            );
-                          }}
-                        />
+                        >
+                          <Text className="text-sm text-foreground">Open conversation</Text>
+                        </Pressable>
+                      ) : null}
+                      <View className="mt-3 flex-row flex-wrap items-center gap-2 border-t border-border-subtle pt-2">
+                        {[COLUMNS[columnIndex + 1], COLUMNS[columnIndex - 1]].map((target) =>
+                          target ? (
+                            <Pressable
+                              key={target.status}
+                              accessibilityRole="button"
+                              className="rounded-lg border border-border px-3 py-2"
+                              onPress={() =>
+                                void report(
+                                  moveCard({
+                                    environmentId,
+                                    input: {
+                                      cardId: card.id,
+                                      expectedRevision: card.revision,
+                                      placement: { status: target.status, relation: "last" },
+                                    },
+                                  }),
+                                )
+                              }
+                            >
+                              <Text className="text-xs text-foreground">
+                                {target.status === "ready" && card.assigneeThreadId !== null
+                                  ? `Queue for ${botNameById.get(card.assigneeThreadId) ?? "bot"}`
+                                  : `Move to ${target.label}`}
+                              </Text>
+                            </Pressable>
+                          ) : null,
+                        )}
+
                         <View className="flex-1" />
                         <CardAction
                           destructive

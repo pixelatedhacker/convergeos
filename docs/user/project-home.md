@@ -9,16 +9,17 @@ The header has three project actions:
 - **Board.** Opens the full Kanban board.
 - **Project settings.** Opens the project's settings.
 
-**The team** appears when the project has active bots. Each bot card shows its current state and
+**Project bots** appears when the project has active bots. Each bot card shows its current state and
 the number of open board tasks assigned to it. If the bot has a description, the card shows it
 above the task count. Select a bot to open its thread.
 
 **Waiting on you** lists threads that need an approval, an answer, a plan review, or a retry. The
 section stays hidden when no thread needs input.
 
-The board preview shows the five Kanban columns. Add a task to the backlog, or drag a card to
+Decisions needing you and recent work appear above bots and the board.
+An empty board shows only the task field. Once it has cards, the preview shows the five columns. Add a task to the backlog, or drag a card to
 another column. Select **Open board** to edit card details and assignments.
 
-**Jump back in** lists recent threads. **Running now** shows active agents and monitors. **Upcoming**
+**Recent threads** lists recent threads. **Running now** shows active agents and monitors. **Upcoming**
 shows the project's next scheduled runs and links to the full Schedules page. **Activity** counts
 threads touched during the last 14 days.

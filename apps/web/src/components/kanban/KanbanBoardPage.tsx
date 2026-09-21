@@ -6,16 +6,13 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import {
-  ArrowLeftIcon,
-  ArrowDownIcon,
   ArrowRightIcon,
-  ArrowUpIcon,
   BotIcon,
   Columns3Icon,
   PencilIcon,
   PlusIcon,
   SaveIcon,
-  Trash2Icon,
+  MoreHorizontalIcon,
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,6 +24,7 @@ import { useThreadShells } from "../../state/entities";
 import { kanbanEnvironment } from "../../state/kanban";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
+import { Menu, MenuTrigger, MenuPopup, MenuItem } from "../ui/menu";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { SidebarInset } from "../ui/sidebar";
@@ -234,6 +232,7 @@ function KanbanBoard({
                     <KanbanCardView
                       key={card.id}
                       card={card}
+                      environmentId={environmentId}
                       bots={bots}
                       delegation={
                         query.data?.delegations.find(
@@ -314,6 +313,7 @@ function KanbanBoard({
 
 function KanbanCardView({
   card,
+  environmentId,
   bots,
   delegation,
   canMoveLeft,
@@ -327,6 +327,7 @@ function KanbanCardView({
   onRetry,
 }: {
   card: KanbanCard;
+  environmentId: Parameters<typeof kanbanEnvironment.board>[0]["environmentId"];
   bots: ReturnType<typeof useThreadShells>;
   delegation: NonNullable<KanbanBoardState["delegations"]>[number] | null;
   canMoveLeft: boolean;
@@ -343,6 +344,7 @@ function KanbanCardView({
   onDelete: () => Promise<void>;
   onRetry: () => Promise<void>;
 }) {
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description);
@@ -360,6 +362,15 @@ function KanbanCardView({
     setDescription(card.description);
     setAssignee(card.assigneeThreadId ?? "");
   }, [card.assigneeThreadId, card.description, card.title, editing]);
+
+  const columnIndex = COLUMNS.findIndex((column) => column.status === card.status);
+  const nextColumn = COLUMNS[columnIndex + 1];
+  const previousColumn = COLUMNS[columnIndex - 1];
+  const targetThreadId = delegation?.targetThreadId;
+  const moveLabel = (column: (typeof COLUMNS)[number]) =>
+    column.status === "ready" && card.assigneeThreadId !== null
+      ? `Queue for ${assigneeBot?.botProfile?.displayName ?? "bot"}`
+      : `Move to ${column.label}`;
 
   if (editing) {
     return (
@@ -391,6 +402,11 @@ function KanbanCardView({
             ))}
           </select>
         </label>
+        {assignee !== "" && card.status === "ready" ? (
+          <p className="text-xs text-muted-foreground">
+            Tasks assigned in Ready can start automatically. Failed tasks require Retry.
+          </p>
+        ) : null}
         <div className="flex justify-end gap-1">
           <Button
             size="icon-xs"
@@ -457,54 +473,71 @@ function KanbanCardView({
           ) : null}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-1 border-t pt-2">
+      {executionStatus === "queued" && card.status === "ready" ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Queued. Starts when the bot is available.
+        </p>
+      ) : null}
+      {targetThreadId ? (
         <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Move ${card.title} left`}
-          disabled={!canMoveLeft}
-          onClick={() => void onMoveColumn(-1)}
+          className="mt-2"
+          size="xs"
+          variant="outline"
+          onClick={() =>
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: { environmentId, threadId: targetThreadId },
+            })
+          }
         >
-          <ArrowLeftIcon />
+          Open conversation
         </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Move ${card.title} right`}
-          disabled={!canMoveRight}
-          onClick={() => void onMoveColumn(1)}
-        >
-          <ArrowRightIcon />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Move ${card.title} up`}
-          disabled={!canMoveUp}
-          onClick={() => void onReorder(-1)}
-        >
-          <ArrowUpIcon />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Move ${card.title} down`}
-          disabled={!canMoveDown}
-          onClick={() => void onReorder(1)}
-        >
-          <ArrowDownIcon />
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Delete ${card.title}`}
-          className="ml-auto text-destructive"
-          onClick={() => {
-            if (window.confirm(`Delete “${card.title}”?`)) void onDelete();
-          }}
-        >
-          <Trash2Icon />
-        </Button>
+      ) : null}
+      <div className="mt-2 flex items-center justify-between gap-1 border-t pt-2">
+        {nextColumn ? (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!canMoveRight}
+            onClick={() => void onMoveColumn(1)}
+          >
+            <ArrowRightIcon />
+            {moveLabel(nextColumn)}
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">Done</span>
+        )}
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button size="icon-xs" variant="ghost" aria-label={`Actions for ${card.title}`} />
+            }
+          >
+            <MoreHorizontalIcon />
+          </MenuTrigger>
+          <MenuPopup>
+            <MenuItem onClick={() => setEditing(true)}>Edit task</MenuItem>
+            {previousColumn ? (
+              <MenuItem disabled={!canMoveLeft} onClick={() => void onMoveColumn(-1)}>
+                {moveLabel(previousColumn)}
+              </MenuItem>
+            ) : null}
+            <MenuItem disabled={!canMoveUp} onClick={() => void onReorder(-1)}>
+              Move up
+            </MenuItem>
+            <MenuItem disabled={!canMoveDown} onClick={() => void onReorder(1)}>
+              Move down
+            </MenuItem>
+            <MenuItem
+              variant="destructive"
+              onClick={() => {
+                if (window.confirm(`Delete "${card.title}"?`)) void onDelete();
+              }}
+            >
+              Delete task
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </div>
     </article>
   );

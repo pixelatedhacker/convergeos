@@ -2,11 +2,11 @@
 
 Each project has a shared Kanban board with five columns: **Backlog**, **Ready**, **In progress**,
 **Review**, and **Done**. Open the project picker and choose the columns button beside a project to
-open its board. On mobile, open **Settings → Kanban** and choose a project.
+open its board. On mobile, use **Board** above the thread list. Selecting a project first keeps the board scoped to that project. Board is also available in Settings.
 
 Add a task with the field above the board. A card can hold a title, description, and optional bot
-assignment. Use its arrow controls to move it to the adjacent stage, or edit it to change the text
-and assignee. Deleting a card asks for confirmation.
+assignment. Use the named stage action to move it forward. On web and desktop, the actions menu contains
+editing, moving back, reordering, and deletion. Deleting a card asks for confirmation.
 
 The board belongs to one environment-local project. Its updates travel through the same connection
 as threads, so web, desktop, and mobile clients see the same state without loading the board into
@@ -28,7 +28,8 @@ assignments, but new assignments require an active bot.
 
 ## Bot dispatch
 
-An assigned card in **Ready** is queued for its bot. When the bot has an isolated worktree and is
+**Queue for bot** moves an assigned card to Ready. This queues work for execution, so the action
+can start an agent task. An assigned card in **Ready** is queued for its bot. When the bot has an isolated worktree and is
 not already working or waiting for input, ConvergeOS starts one durable delegated turn using the
 card title and description. The card moves to **In progress** after the turn starts, then to
 **Review** when it completes.
@@ -36,3 +37,5 @@ card title and description. The card moves to **In progress** after the turn sta
 Failed or interrupted work returns to **Ready** and keeps its last result visible. Use **Retry** to
 clear that result and queue a new delegation. A bot accepts at most one open card at a time, so
 additional Ready cards wait without starting duplicate turns.
+
+Use **Open conversation** on a delegated card to inspect the work in its thread.
