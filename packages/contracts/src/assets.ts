@@ -14,18 +14,23 @@ const ASSET_PATH_MAX_LENGTH = 1024;
 export const AssetResource = Schema.Union([
   Schema.TaggedStruct("workspace-file", {
     threadId: ThreadId,
+    /** Download original bytes using a URL scoped to this file only. */
+    download: Schema.optionalKey(Schema.Literal(true)),
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
   }),
   // One file served in place from anywhere the environment host can read:
   // images, videos, HTML, and PDF. An absolute path may lie outside the
   // workspace; a relative one resolves against the thread's workspace.
   Schema.TaggedStruct("media-file", {
+    /** Explicit file downloads also support non-media formats. */
+    download: Schema.optionalKey(Schema.Literal(true)),
     threadId: ThreadId,
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
   }),
   // A workspace file named by a draft that has no thread yet. The draft names
   // its workspace root explicitly instead of resolving one from a thread.
   Schema.TaggedStruct("draft-workspace-file", {
+    download: Schema.optionalKey(Schema.Literal(true)),
     cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
   }),

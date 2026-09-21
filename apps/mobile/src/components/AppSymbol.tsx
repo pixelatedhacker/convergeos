@@ -90,6 +90,7 @@ import IconRefresh from "@tabler/icons-react-native/IconRefresh";
 import IconSearch from "@tabler/icons-react-native/IconSearch";
 import IconServer from "@tabler/icons-react-native/IconServer";
 import IconSettings from "@tabler/icons-react-native/IconSettings";
+import IconShare from "@tabler/icons-react-native/IconShare";
 import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStack2 from "@tabler/icons-react-native/IconStack2";
 import IconStar from "@tabler/icons-react-native/IconStar";
@@ -202,6 +203,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "slider.horizontal.3": IconAdjustmentsHorizontal,
   "square.and.pencil": IconEdit,
   "square.on.square": IconCopy,
+  "square.and.arrow.up": IconShare,
   "square.grid.2x2": IconApps,
   "square.split.2x1": IconLayoutColumns,
   star: IconStar,

@@ -1,7 +1,7 @@
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Platform, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { EnvironmentId, type ProjectReadFileResult, ThreadId } from "@t3tools/contracts";
@@ -9,7 +9,7 @@ import { videoMimeType } from "@t3tools/shared/video";
 import {
   isWorkspaceBrowserPreviewPath,
   isWorkspaceImagePreviewPath,
-  mediaMimeTypeFromExtension,
+  filePreviewKind,
 } from "@t3tools/shared/filePreview";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
 
@@ -20,8 +20,6 @@ import { FilePreviewModal, type FilePreviewSource } from "../../components/FileP
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { resolveFileSelectionNavigationAction } from "../../lib/adaptive-navigation";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
-import { isPdfFile } from "../../lib/filePreview";
-import { tryOpenExternalUrl } from "../../lib/openExternalUrl";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import type { MediaVideoPreviewSource } from "../../lib/videoPreviewSource";
 import { useMediaActions, type MediaActionsSource } from "../../lib/mediaActions";
@@ -51,12 +49,14 @@ import { WorkspaceFileVideoPreview } from "./WorkspaceFileVideoPreview";
 import { WorkspaceFileWebPreview } from "./WorkspaceFileWebPreview";
 import {
   basename,
+  resolveWorkspaceFilePath,
   fileHeaderSubtitle,
   isAudioPreviewFile,
   isMarkdownPreviewFile,
   isSvgImagePreviewFile,
   isVideoPreviewFile,
 } from "./filePath";
+import { workspaceFileMetadata, workspaceFileDownloadResource } from "./workspace-file-actions";
 import { useWorkspaceFileAssetUrlState } from "./workspaceFileAssetUrl";
 
 function FilesBrowserHeader(props: {
@@ -197,7 +197,8 @@ function normalizeRouteLine(value: string | null): number | null {
 
 function defaultViewMode(path: string | null): FileViewMode {
   return path !== null &&
-    (isWorkspaceBrowserPreviewPath(path) ||
+    (isMarkdownPreviewFile(path) ||
+      isWorkspaceBrowserPreviewPath(path) ||
       isWorkspaceImagePreviewPath(path) ||
       isVideoPreviewFile(path) ||
       isAudioPreviewFile(path))
@@ -207,6 +208,9 @@ function defaultViewMode(path: string | null): FileViewMode {
 
 function FileContent(props: {
   readonly activeMode: FileViewMode;
+  readonly onOpenFile: () => void;
+  readonly onShareFile: () => void;
+  readonly sharing: boolean;
   readonly cwd: string;
   readonly environmentId: EnvironmentId;
   readonly previewUri: string | null;
@@ -281,6 +285,38 @@ function FileContent(props: {
 
   if (props.activeMode === "preview" && isBrowserFile) {
     return <WorkspaceFileWebPreview uri={props.previewUri} />;
+  }
+
+  if (
+    props.fileError &&
+    props.fileContents === null &&
+    filePreviewKind({ name: props.relativePath }) === "unsupported"
+  ) {
+    return (
+      <View className="flex-1 items-center justify-center gap-4 bg-sheet px-6">
+        <EmptyState
+          title={basename(props.relativePath)}
+          detail="Open this file with your device's viewer, or save a copy."
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={props.onOpenFile}
+          className="rounded-xl bg-card px-5 py-3"
+        >
+          <Text className="text-foreground">Open file</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={props.onShareFile}
+          disabled={props.sharing}
+          className="rounded-xl bg-card px-5 py-3"
+        >
+          <Text className="text-foreground">
+            {props.sharing ? "Preparing file..." : "Share or save"}
+          </Text>
+        </Pressable>
+      </View>
+    );
   }
 
   if (props.fileError && props.fileContents === null) {
@@ -598,7 +634,9 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   const activeMode =
     relativePath !== null && modeOverride?.path === relativePath
       ? modeOverride.mode
-      : defaultViewMode(relativePath);
+      : targetLine !== null
+        ? "source"
+        : defaultViewMode(relativePath);
   const resolvedActiveMode =
     isVideoFile || isAudioFile ? "preview" : canPreview ? activeMode : "source";
   const assetPreviewPath =
@@ -612,28 +650,31 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     draftCwd: threadId === null ? cwd : null,
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
+  const refreshAssetPreview = assetPreview.refresh;
   const mediaSource = useMemo<MediaActionsSource | undefined>(
     () =>
-      environmentId !== null &&
-      relativePath !== null &&
-      assetPreview.resource !== null &&
-      "path" in assetPreview.resource &&
-      typeof assetPreview.resource.path === "string" &&
-      (isImageFile || isVideoFile)
+      environmentId !== null && relativePath !== null && cwd !== null
         ? {
-            reference: mediaFileReference(assetPreview.resource.path, cwd),
-            name: basename(relativePath),
-            mimeType:
-              mediaMimeTypeFromExtension(relativePath.slice(relativePath.lastIndexOf("."))) ??
-              "application/octet-stream",
+            reference: mediaFileReference(resolveWorkspaceFilePath(cwd, relativePath), cwd),
+            ...workspaceFileMetadata(relativePath),
             environmentId,
-            ...(threadId === null ? {} : { threadId }),
-            resource: assetPreview.resource,
+            ...(threadId !== null ? { threadId } : {}),
+            resource: workspaceFileDownloadResource(cwd, relativePath, threadId),
           }
         : undefined,
-    [assetPreview.resource, cwd, environmentId, isImageFile, isVideoFile, relativePath, threadId],
+    [cwd, environmentId, relativePath, threadId],
   );
   const mediaActions = useMediaActions(mediaSource);
+  const handleOpenFile = useCallback(() => {
+    if (!mediaSource || !("resource" in mediaSource)) return;
+    setFullScreenPreview({
+      kind: "document",
+      name: mediaSource.name,
+      mimeType: mediaSource.mimeType,
+      environmentId: mediaSource.environmentId,
+      resource: mediaSource.resource,
+    });
+  }, [mediaSource, setFullScreenPreview]);
   const videoSource = useMemo<MediaVideoPreviewSource | null>(
     () =>
       environmentId !== null &&
@@ -757,28 +798,15 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             onPress: () => setCodeWordBreak(!appearance.codeWordBreak),
           } as const)
         : null,
-      ...(mediaSource
-        ? mediaActions.actions
-            .filter(({ id }) => id !== "open-file")
-            .map((action) => ({
-              id: action.id,
-              title: action.title,
-              icon:
-                action.id === "save" ? ("square.and.arrow.up" as const) : ("doc.on.doc" as const),
-              inline: false,
-              onPress: action.run,
-            }))
-        : [
-            {
-              id: "copy-path",
-              title: "Copy path",
-              icon: "doc.on.doc",
-              inline: false,
-              onPress: () => copyTextWithHaptic(relativePath),
-            } as const,
-          ]),
-      // Selecting a long file by hand is painful on a phone, so copying the whole thing is
-      // the action most readers actually want. The attachment screen already offers it.
+      ...mediaActions.actions
+        .filter(({ id }) => id !== "open-file" && id !== "save")
+        .map((action) => ({
+          id: action.id,
+          title: action.title,
+          icon: "doc.on.doc" as const,
+          inline: false,
+          onPress: action.run,
+        })),
       fileData?.contents != null
         ? ({
             id: "copy-contents",
@@ -788,29 +816,13 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             onPress: () => copyTextWithHaptic(fileData.contents),
           } as const)
         : null,
-      isPdfFile({ name: relativePath }) && previewUri !== null
-        ? ({
-            id: "open-pdf",
-            title: "Open PDF",
-            icon: "arrow.up.left.and.arrow.down.right",
-            inline: false,
-            onPress: () =>
-              setFullScreenPreview({
-                kind: "pdf",
-                uri: previewUri,
-                name: basename(relativePath),
-              }),
-          } as const)
-        : null,
-      isBrowserFile && typeof assetPreviewUri === "string"
-        ? ({
-            id: "open-browser",
-            title: Platform.OS === "ios" ? "Open in Safari" : "Open in browser",
-            icon: "safari",
-            inline: false,
-            onPress: () => tryOpenExternalUrl(assetPreviewUri, "file-preview"),
-          } as const)
-        : null,
+      {
+        id: "open-file",
+        title: "Open file",
+        icon: "arrow.up.right.square" as const,
+        inline: false,
+        onPress: handleOpenFile,
+      },
       resolvedActiveMode === "preview" &&
       (isBrowserFile || isImageFile || isVideoFile || isAudioFile)
         ? ({
@@ -819,7 +831,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             icon: "arrow.clockwise",
             inline: false,
             onPress: async () => {
-              if (isVideoFile || isAudioFile) await assetPreview.refresh();
+              if (isVideoFile || isAudioFile) await refreshAssetPreview();
               setPreviewRevision((current) => current + 1);
             },
           } as const)
@@ -828,9 +840,9 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
   }, [
     appearance.codeWordBreak,
     setCodeWordBreak,
-    assetPreviewUri,
-    assetPreview.refresh,
-    previewUri,
+    setModeOverride,
+    setPreviewRevision,
+    refreshAssetPreview,
     canPreview,
     isAudioFile,
     isBrowserFile,
@@ -838,10 +850,9 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     isVideoFile,
     relativePath,
     resolvedActiveMode,
-    mediaSource,
     mediaActions.actions,
-    fileData?.contents,
-    fileData?.truncated,
+    handleOpenFile,
+    fileData,
   ]);
 
   const handleReturnToThread = useCallback(() => {
@@ -900,6 +911,9 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
         <FileContent
           key={previewKey}
           activeMode={resolvedActiveMode}
+          onOpenFile={handleOpenFile}
+          onShareFile={mediaActions.share}
+          sharing={mediaActions.sharing}
           cwd={cwd}
           environmentId={environmentId}
           previewUri={previewUri}

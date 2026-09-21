@@ -511,6 +511,101 @@ describe("AssetAccess", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("downloads original workspace files without granting access to siblings", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "workspace-download-" });
+      for (const name of ["report.docx", "archive.zip", "source.ts", ".env"]) {
+        const original = new Uint8Array([0, 1, 2, 255, 128]);
+        yield* fs.writeFile(path.join(root, name), original);
+        const resource = {
+          _tag: "workspace-file" as const,
+          threadId: ThreadId.make("thread-1"),
+          path: name,
+        };
+        const previewError = yield* issueAssetUrl({ resource, workspaceRoot: root }).pipe(
+          Effect.flip,
+        );
+        expect(previewError).toBeInstanceOf(AssetPreviewTypeValidationError);
+        const result = yield* issueAssetUrl({
+          resource: { ...resource, download: true },
+          workspaceRoot: root,
+        });
+        const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+        const token = suffix.slice(0, suffix.indexOf("/"));
+        const resolved = yield* resolveAsset(token, name);
+        expect(resolved).toEqual({
+          kind: "file",
+          path: yield* fs.realPath(path.join(root, name)),
+          download: true,
+          fileName: name,
+        });
+        if (resolved?.kind !== "file") throw new Error("Expected downloadable file");
+        expect(Array.from(yield* fs.readFile(resolved.path))).toEqual(Array.from(original));
+        expect(yield* resolveAsset(token, "sibling.txt")).toBeNull();
+        expect(yield* resolveAsset(token, "../report.docx")).toBeNull();
+        expect(yield* resolveAsset(`${token}tampered`, name)).toBeNull();
+      }
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("downloads a draft workspace file before a thread exists", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "draft-download-" });
+      yield* fs.writeFileString(path.join(root, "report.txt"), "Draft original");
+      const result = yield* issueAssetUrl({
+        resource: {
+          _tag: "draft-workspace-file",
+          cwd: root,
+          path: "report.txt",
+          download: true,
+        },
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const token = suffix.slice(0, suffix.indexOf("/"));
+      expect(yield* resolveAsset(token, "report.txt")).toEqual({
+        kind: "file",
+        path: yield* fs.realPath(path.join(root, "report.txt")),
+        download: true,
+        fileName: "report.txt",
+      });
+      expect(yield* resolveAsset(token, "another.txt")).toBeNull();
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("downloads an explicitly requested host document with file identity checks", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "host-download-" });
+      const filePath = path.join(root, "report.txt");
+      yield* fs.writeFileString(filePath, "Host original");
+      const result = yield* issueAssetUrl({
+        resource: {
+          _tag: "media-file",
+          threadId: ThreadId.make("thread-1"),
+          path: filePath,
+          download: true,
+        },
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const token = suffix.slice(0, suffix.indexOf("/"));
+      const resolved = yield* resolveAsset(token, "report.txt");
+      expect(resolved).toMatchObject({ kind: "file", download: true, fileName: "report.txt" });
+      if (resolved?.kind !== "file" || !("file" in resolved))
+        throw new Error("Expected open original file");
+      const handle = resolved.file.handle;
+      expect((yield* Effect.promise(() => handle.readFile())).toString()).toBe("Host original");
+      expect(yield* resolveAsset(token, "sibling.txt")).toBeNull();
+      yield* fs.rename(filePath, path.join(root, "previous.txt"));
+      yield* fs.writeFileString(filePath, "Replacement");
+      expect(yield* resolveAsset(token, "report.txt")).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
   it.effect("rejects workspace files outside the authorized root", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
