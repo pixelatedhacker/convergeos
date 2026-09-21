@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
   useUsage: vi.fn(),
+  useSubscriptionQuota: vi.fn(),
   metric: "cost" as "cost" | "tokens" | "limits",
   breakdown: "time" as "model" | "time",
 }));
@@ -39,6 +40,9 @@ vi.mock("react", async (importOriginal) => {
 });
 
 vi.mock("../../env", () => ({ isElectron: false }));
+vi.mock("../../state/subscriptionQuota", () => ({
+  useSubscriptionQuota: testState.useSubscriptionQuota,
+}));
 vi.mock("../../state/usage", () => ({ useUsage: testState.useUsage }));
 vi.mock("../ui/button", () => ({ Button: "button" }));
 vi.mock("../ui/scroll-area", () => ({ ScrollArea: "div" }));
@@ -142,6 +146,7 @@ const environments = [
 beforeEach(() => {
   testState.metric = "cost";
   testState.breakdown = "time";
+  testState.useSubscriptionQuota.mockReturnValue({ environments: [], refresh: vi.fn() });
   testState.useUsage.mockReturnValue({
     merged: {
       ...mergeUsage([], USAGE_CONTRACT_VERSION),
@@ -168,6 +173,32 @@ beforeEach(() => {
     isPending: false,
     isPartial: false,
     refresh: vi.fn(),
+  });
+});
+
+describe("UsagePage sections", () => {
+  it("keeps subscription limits visible while historical activity settles", () => {
+    testState.useUsage.mockReturnValue({
+      merged: mergeUsage([], USAGE_CONTRACT_VERSION),
+      environments: [],
+      isPending: true,
+      isPartial: false,
+      refresh: vi.fn(),
+    });
+
+    const markup = renderToStaticMarkup(<UsagePage />);
+
+    expect(markup).toContain("Subscription limits");
+    expect(markup).toContain("Connect an environment to review subscription limits.");
+    expect(markup).toContain("Activity");
+    expect(markup.indexOf("Subscription limits")).toBeLessThan(markup.indexOf("Activity"));
+  });
+
+  it("places cost and range controls inside the Activity section", () => {
+    const markup = renderToStaticMarkup(<UsagePage />);
+
+    expect(markup.indexOf("Activity")).toBeLessThan(markup.indexOf('aria-label="Usage metric"'));
+    expect(markup.indexOf("Activity")).toBeLessThan(markup.indexOf('aria-label="Usage period"'));
   });
 });
 

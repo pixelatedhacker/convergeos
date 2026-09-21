@@ -1065,6 +1065,11 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 30_000,
       refreshIntervalMs: 60_000,
     }),
+    subscriptionQuota: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:subscription-quota",
+      tag: WS_METHODS.serverGetSubscriptionQuota,
+      staleTimeMs: 60_000,
+    }),
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {

@@ -22,6 +22,19 @@ results appear as each one responds.
 If recent work is missing or a new model shows no cost, refresh to rescan session history and
 update model pricing.
 
+The **Subscription limits** section appears above historical activity. Each provider window shows
+the percentage remaining, a remaining-allowance meter, and its reset time. Connected environments
+stay in separate groups so subscriptions from different machines are never combined. Stale or
+partially failed snapshots remain visible with their status, while an unavailable percentage is
+shown as unknown rather than zero. The page-level refresh updates both subscription limits and the
+selected activity window.
+
+Connected clients can read the environment-wide quota snapshot. Agents with an active ConvergeOS MCP
+session can use `usage_snapshot` to read only quota that can be safely associated with their own
+provider instance. Account labels are omitted from the agent-facing result. If several configured
+instances use the same provider subscription and the account cannot be proven, the quota remains
+visible at environment scope but is withheld from the instance-scoped MCP tool.
+
 ## Set custom model prices
 
 On web or desktop, open the environment dropdown on **Usage**, then choose **Model prices** to add,

@@ -1,3 +1,5 @@
+import { useSubscriptionQuota } from "../../state/subscriptionQuota";
+import { SubscriptionQuotaOverview } from "./SubscriptionQuotaOverview";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -116,6 +118,7 @@ export function UsagePage() {
     window,
     selectedEnvironmentIds,
   );
+  const { environments: quotaEnvironments, refresh: refreshQuota } = useSubscriptionQuota();
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
@@ -186,6 +189,7 @@ export function UsagePage() {
   };
   const refreshWindow = () => {
     if (refreshingRef.current) return;
+    refreshQuota();
 
     if (showingLimits) {
       refreshingRef.current = true;
@@ -372,6 +376,7 @@ export function UsagePage() {
 
         <ScrollArea className="min-h-0 flex-1">
           <WorkspacePageContainer width="wide" title="Usage">
+            <SubscriptionQuotaOverview environments={selectedEnvironmentIds === null ? quotaEnvironments : quotaEnvironments.filter((entry) => selectedEnvironmentIds.has(entry.environmentId))} />
             {selectedEnvironments.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {environments.length === 0

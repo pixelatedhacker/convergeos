@@ -10,6 +10,14 @@ import * as Schema from "effect/Schema";
 const ShortText = Schema.String.check(Schema.isMaxLength(500));
 const OptionalShortText = Schema.optional(Schema.NullOr(ShortText));
 const Percent = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
+const CodexBarStructuredError = Schema.Struct({
+  code: Schema.Int.check(Schema.isBetween({ minimum: -2_147_483_648, maximum: 2_147_483_647 })),
+  message: ShortText,
+  kind: Schema.Literal("provider"),
+});
+const OptionalCodexBarError = Schema.optional(
+  Schema.NullOr(Schema.Union([ShortText, CodexBarStructuredError])),
+);
 
 const CodexBarWindow = Schema.Struct({
   kind: ShortText,
@@ -39,7 +47,7 @@ const CodexBarProvider = Schema.Struct({
   identity: Schema.optional(Schema.NullOr(CodexBarIdentity)),
   windows: Schema.Array(CodexBarWindow).check(Schema.isMaxLength(64)),
   credits: Schema.optional(Schema.NullOr(CodexBarCredits)),
-  error: OptionalShortText,
+  error: OptionalCodexBarError,
   updatedAt: Schema.optional(Schema.NullOr(ShortText)),
 });
 
