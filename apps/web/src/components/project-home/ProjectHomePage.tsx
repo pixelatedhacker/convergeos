@@ -1,3 +1,4 @@
+import { ProjectPages } from "../pages/ProjectPages";
 import {
   DndContext,
   DragOverlay,
@@ -40,7 +41,7 @@ import { isElectron } from "../../env";
 import { cn, randomUUID } from "../../lib/utils";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { useHandleNewThread } from "../../hooks/useHandleNewThread";
-import { useThreadShells } from "../../state/entities";
+import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { kanbanEnvironment } from "../../state/kanban";
 import { useEnvironmentQuery } from "../../state/query";
 import { useSchedules } from "../../state/schedulesView";
@@ -191,6 +192,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
   const memberProjects = group?.memberProjects;
   const keys = useMemo(() => projectMemberKeys(memberProjects ?? []), [memberProjects]);
   const threads = useThreadShells();
+  const serverConfigs = useServerConfigs();
   const { schedules, isPending: schedulesPending } = useSchedules();
   const { handleNewThread } = useHandleNewThread();
 
@@ -413,6 +415,19 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                   </HomeSection>
                 </div>
               </div>
+              {group.memberProjects.map((project) => {
+                const capability = serverConfigs.get(project.environmentId)?.environment
+                  .capabilities.pages;
+                return capability ? (
+                  <ProjectPages
+                    key={`${project.environmentId}:${project.id}`}
+                    environmentId={project.environmentId}
+                    projectId={project.id}
+                    environmentLabel={project.environmentLabel ?? "This environment"}
+                    maxDocumentBytes={capability.maxDocumentBytes}
+                  />
+                ) : null;
+              })}
               <BoardHero
                 board={board}
                 cards={boardQuery.data?.cards ?? []}

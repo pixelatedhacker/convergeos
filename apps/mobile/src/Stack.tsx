@@ -1,3 +1,4 @@
+import { PagesRouteScreen } from "./features/pages/PagesRouteScreen";
 import { SettingsSkillsRouteScreen } from "./features/settings/SettingsSkillsRouteScreen";
 import {
   createPathConfigForStaticNavigation,
@@ -626,6 +627,11 @@ const RootStackConfig = createNativeStackNavigator({
       screen: KanbanRouteScreen,
       linking: "board",
       options: { ...SOLID_HEADER_OPTIONS, title: "Board" },
+    }),
+    Pages: createNativeStackScreen({
+      screen: PagesRouteScreen,
+      linking: "pages",
+      options: { ...SOLID_HEADER_OPTIONS, title: "Pages" },
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,

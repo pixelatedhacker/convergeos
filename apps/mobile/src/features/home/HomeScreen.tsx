@@ -1369,6 +1369,8 @@ export function HomeScreen(props: HomeScreenProps) {
 
 function WorkspaceTools({ projectKeys }: { readonly projectKeys: string[] | undefined }) {
   const navigation = useNavigation();
+  const configs = useAtomValue(environmentServerConfigsAtom);
+  const hasPages = [...configs.values()].some((config) => config.environment.capabilities.pages);
   return (
     <View className="flex-row flex-wrap gap-3 px-4 py-3">
       <Pressable
@@ -1385,6 +1387,15 @@ function WorkspaceTools({ projectKeys }: { readonly projectKeys: string[] | unde
       >
         <Text className="font-t3-medium text-foreground">Board</Text>
       </Pressable>
+      {hasPages ? (
+        <Pressable
+          accessibilityRole="button"
+          className="rounded-lg bg-card px-4 py-3"
+          onPress={() => navigation.navigate("Pages", { projectKeys })}
+        >
+          <Text className="font-t3-medium text-foreground">Pages</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
