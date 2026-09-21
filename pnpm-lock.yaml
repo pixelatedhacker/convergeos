@@ -27,6 +27,9 @@ catalogs:
     jose:
       specifier: 6.2.2
       version: 6.2.2
+    skills:
+      specifier: 1.5.25
+      version: 1.5.25
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -534,6 +537,9 @@ importers:
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
+      skills:
+        specifier: 'catalog:'
+        version: 1.5.25
       stream-chain:
         specifier: ^4.2.5
         version: 4.2.5
@@ -9836,6 +9842,11 @@ packages:
 
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
+
+  skills@1.5.25:
+    resolution: {integrity: sha512-E4iBTLaeih3uwzajrlvXd55dWw9/ihxxaIPePB5OoN5GOQ0HrDF2CXhwYM+LpJQ/8Zbk/IA69A0B9C27/sMCbw==}
+    engines: {node: '>=22.20.0'}
+    hasBin: true
 
   slugify@1.6.9:
     resolution: {integrity: sha512-vZ7rfeehZui7wQs438JXBckYLkIIdfHOXsaVEUMyS5fHo1483l1bMdo0EDSWYclY0yZKFOipDy4KHuKs6ssvdg==}
@@ -21089,6 +21100,11 @@ snapshots:
       totalist: 3.0.1
 
   sisteransi@1.0.5: {}
+
+  skills@1.5.25:
+    dependencies:
+      tar: 7.5.22
+      yaml: 2.9.0
 
   slugify@1.6.9: {}
 

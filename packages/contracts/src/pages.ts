@@ -196,7 +196,7 @@ export const PagesQueryErrorReason = Schema.Literals([
 ]);
 export type PagesQueryErrorReason = typeof PagesQueryErrorReason.Type;
 
-export class PagesQueryError extends Schema.TaggedErrorClass<PagesQueryError>()(
+export class PagesQueryError extends Schema.TaggedError<PagesQueryError>()(
   "PagesQueryError",
   {
     reason: PagesQueryErrorReason,

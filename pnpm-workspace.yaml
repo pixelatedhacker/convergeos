@@ -47,6 +47,7 @@ catalog:
   effect: 4.0.0-rc.115
   jose: 6.2.2
   lightningcss: 1.33.0
+  skills: 1.5.25
   tailwindcss: 4.3.3
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
@@ -94,6 +95,7 @@ minimumReleaseAgeExclude:
   - "@distilled.cloud/prisma@1.0.0-rc.12"
   - "@distilled.cloud/railway@1.0.0-rc.12"
   - "@distilled.cloud/stripe@1.0.0-rc.12"
+  - skills@1.5.25
 
 overrides:
   # Earlier React Navigation declarations create a circular type alias in TypeScript 7.
@@ -207,6 +209,6 @@ peerDependencyRules:
     vite: "*"
 
 supportedArchitectures:
-  cpu: [current, x64]
-  libc: [current, glibc]
-  os: [current, linux]
+  cpu: [ current, x64 ]
+  libc: [ current, glibc ]
+  os: [ current, linux ]

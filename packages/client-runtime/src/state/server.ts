@@ -1065,11 +1065,6 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 30_000,
       refreshIntervalMs: 60_000,
     }),
-    subscriptionQuota: createEnvironmentRpcQueryAtomFamily(runtime, {
-      label: "environment-data:server:subscription-quota",
-      tag: WS_METHODS.serverGetSubscriptionQuota,
-      staleTimeMs: 60_000,
-    }),
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
@@ -1139,6 +1134,48 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
       },
+    }),
+    skillStoreInstalled: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:skill-store:installed",
+      tag: WS_METHODS.skillStoreListInstalled,
+      staleTimeMs: 5_000,
+    }),
+    skillStoreSearch: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:search",
+      tag: WS_METHODS.skillStoreSearch,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.query]),
+      },
+    }),
+    skillStoreGetDetail: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:get-detail",
+      tag: WS_METHODS.skillStoreGetDetail,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.source, input.skillId]),
+      },
+    }),
+    skillStoreListInstalled: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:list-installed",
+      tag: WS_METHODS.skillStoreListInstalled,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+    skillStoreInstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:install",
+      tag: WS_METHODS.skillStoreInstall,
+    }),
+    skillStoreUninstall: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:uninstall",
+      tag: WS_METHODS.skillStoreUninstall,
+    }),
+    skillStoreSetHarnessEnabled: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:skill-store:set-harness-enabled",
+      tag: WS_METHODS.skillStoreSetHarnessEnabled,
     }),
   };
 }

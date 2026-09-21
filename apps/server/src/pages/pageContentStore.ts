@@ -18,7 +18,7 @@ import * as NodePath from "node:path";
 
 import { PageContentDigest } from "@t3tools/contracts";
 
-export class PageContentStoreError extends Schema.TaggedErrorClass<PageContentStoreError>()(
+export class PageContentStoreError extends Schema.TaggedError<PageContentStoreError>()(
   "PageContentStoreError",
   {
     operation: Schema.String,
