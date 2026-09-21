@@ -23,3 +23,7 @@ another column. Select **Open board** to edit card details and assignments.
 **Recent threads** lists recent threads. **Running now** shows active agents and monitors. **Upcoming**
 shows the project's next scheduled runs and links to the full Schedules page. **Activity** counts
 threads touched during the last 14 days.
+
+Pages lists saved reports, documents, and website links for each environment in the project.
+Choose a page to open it, rename it, publish an update, or archive it. Show archived pages to
+restore one. See [Saved pages](pages.md).
