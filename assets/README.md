@@ -1,5 +1,14 @@
 # Brand icons
 
+ConvergeOS uses [its own source artwork](convergeos/README.md).
+`vp run icons:export` regenerates its PNG and ICO files with macOS `sips`,
+including the macOS assets. `vp run icons:check` verifies the output.
+
+## Upstream reference workflow
+
+The following documents T3 Code's retained Icon Composer sources. To export
+those reference assets explicitly, use `node scripts/export-brand-icons.ts`.
+
 The three Icon Composer projects are the source of truth for full application icons:
 
 - `dev/app-icon.icon`
