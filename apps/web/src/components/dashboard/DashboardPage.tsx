@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { formatProviderDriverKindLabel } from "../../providerModels";
 import { isElectron } from "../../env";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { useDashboardQuota } from "../../state/dashboard";
@@ -27,6 +28,7 @@ import { formatWorkingDurationLabel, parseTimestampMs } from "../Sidebar.logic";
 import { formatScheduleInstant } from "../schedules/SchedulesPage.logic";
 import {
   partitionDashboardThreads,
+  quotaResetLabel,
   recentRunRows,
   summarizeQuotaReport,
   upcomingSchedules,
@@ -34,6 +36,7 @@ import {
 } from "./DashboardPage.logic";
 
 const NOW_REFRESH_MS = 30_000;
+const quotaPercent = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
 function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -143,9 +146,9 @@ export function DashboardPage() {
       quota.environments.flatMap((environment) =>
         environment.report === null
           ? []
-          : summarizeQuotaReport(environment.report, environment.label),
+          : summarizeQuotaReport(environment.report, environment.label, now.getTime()),
       ),
-    [quota.environments],
+    [quota.environments, now],
   );
 
   const openThread = (row: {
@@ -172,7 +175,32 @@ export function DashboardPage() {
 
         <ScrollArea className="min-h-0 flex-1">
           <WorkspacePageContainer width="expanded" title="Command center">
-            <div className="flex flex-col gap-10">
+            <div className="flex flex-col gap-6">
+              <DashboardSection
+                count={attention.length}
+                icon={<BellRingIcon />}
+                title="Needs attention"
+              >
+                {attention.length === 0 ? (
+                  <p className="py-1.5 text-sm text-muted-foreground">Nothing is waiting on you.</p>
+                ) : (
+                  <ul className="-mx-2 flex flex-col">
+                    {attention.map((row) => {
+                      const badge = ATTENTION_BADGE[row.attentionReason ?? "input"];
+                      return (
+                        <CardRow
+                          key={`${row.environmentId}:${row.threadId}`}
+                          meta={`${projectName(row)} · ${relativeLabel(row.sortAt)}`}
+                          title={row.title}
+                          trailing={<Badge variant={badge.variant}>{badge.label}</Badge>}
+                          onClick={() => openThread(row)}
+                        />
+                      );
+                    })}
+                  </ul>
+                )}
+              </DashboardSection>
+
               <section className="flex min-w-0 flex-col gap-3" aria-label="Machines">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="text-sm font-medium text-foreground">Machines</h2>
@@ -224,7 +252,7 @@ export function DashboardPage() {
                               ? `${nextLabel}: ${nextThread.title} on ${environment.label}`
                               : `${environment.label}: ${status}; manage connection`
                           }
-                          className="group flex min-h-36 min-w-0 flex-col rounded-xl border border-border/70 bg-card p-4 text-left shadow-xs transition-colors hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="group flex min-w-0 flex-col rounded-xl border border-border/70 bg-card p-4 text-left shadow-xs transition-colors hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           key={environment.environmentId}
                           onClick={() =>
                             nextThread
@@ -252,7 +280,7 @@ export function DashboardPage() {
                               {status}
                             </span>
                           </span>
-                          <span className="mt-4 flex gap-2 text-xs text-muted-foreground">
+                          <span className="mt-2 flex gap-2 text-xs text-muted-foreground">
                             {connected ? null : <span>Last known ·</span>}
                             <span>Needs you {summary?.attentionCount ?? 0}</span>
                             <span aria-hidden>·</span>
@@ -272,32 +300,7 @@ export function DashboardPage() {
                   </div>
                 )}
               </section>
-              <DashboardSection
-                count={attention.length}
-                icon={<BellRingIcon />}
-                title="Needs attention"
-              >
-                {attention.length === 0 ? (
-                  <p className="py-1.5 text-sm text-muted-foreground">Nothing is waiting on you.</p>
-                ) : (
-                  <ul className="-mx-2 flex flex-col">
-                    {attention.map((row) => {
-                      const badge = ATTENTION_BADGE[row.attentionReason ?? "input"];
-                      return (
-                        <CardRow
-                          key={`${row.environmentId}:${row.threadId}`}
-                          meta={`${projectName(row)} · ${relativeLabel(row.sortAt)}`}
-                          title={row.title}
-                          trailing={<Badge variant={badge.variant}>{badge.label}</Badge>}
-                          onClick={() => openThread(row)}
-                        />
-                      );
-                    })}
-                  </ul>
-                )}
-              </DashboardSection>
-
-              <div className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                 <DashboardSection count={running.length} icon={<LoaderIcon />} title="Running now">
                   {running.length === 0 ? (
                     <p className="py-1.5 text-sm text-muted-foreground">
@@ -324,7 +327,7 @@ export function DashboardPage() {
                   )}
                 </DashboardSection>
 
-                <div className="flex min-w-0 flex-col gap-10">
+                <div className="flex min-w-0 flex-col gap-6">
                   <DashboardSection
                     count={upcoming.length}
                     icon={<CalendarClockIcon />}
@@ -333,9 +336,7 @@ export function DashboardPage() {
                     {schedulesPending && upcoming.length === 0 ? (
                       <p className="py-1.5 text-sm text-muted-foreground">Loading schedules…</p>
                     ) : upcoming.length === 0 && recentRuns.length === 0 ? (
-                      <p className="py-1.5 text-sm text-muted-foreground">
-                        No schedules yet. Create one from the Schedules page.
-                      </p>
+                      <p className="py-1.5 text-sm text-muted-foreground">No scheduled runs.</p>
                     ) : (
                       <>
                         {upcoming.length > 0 ? (
@@ -378,30 +379,37 @@ export function DashboardPage() {
                   <DashboardSection
                     count={quotaRows.length}
                     icon={<GaugeIcon />}
-                    title="Subscription quota"
+                    title="Subscription limits"
                   >
                     {quota.isPending ? (
                       <p className="py-1.5 text-sm text-muted-foreground">Reading quota…</p>
                     ) : quotaRows.length === 0 &&
                       quota.environments.every((environment) => environment.error === null) ? (
                       <p className="py-1.5 text-sm text-muted-foreground">
-                        No quota collectors reported.
+                        Usage limits are unavailable.
                       </p>
                     ) : (
                       <ul className="-mx-2 flex flex-col">
                         {quotaRows.map((row) => (
                           <CardRow
                             key={`${row.environmentId}:${row.subjectId}`}
-                            meta={
-                              row.worstWindowLabel === null
-                                ? `${row.environmentLabel} · ${row.status}`
-                                : `${row.environmentLabel} · ${row.worstWindowLabel}${
-                                    row.worstWindowResetsAt
-                                      ? ` · resets ${relativeLabel(row.worstWindowResetsAt)}`
-                                      : ""
-                                  }`
-                            }
-                            title={`${row.provider}${row.plan ? ` (${row.plan})` : ""}`}
+                            meta={[
+                              row.environmentLabel,
+                              row.status === "stale"
+                                ? "Last known allowance"
+                                : row.status === "failed"
+                                  ? "Could not refresh limits"
+                                  : row.status === "unavailable"
+                                    ? "Limits unavailable"
+                                    : null,
+                              row.worstWindowLabel,
+                              row.worstWindowResetsAt
+                                ? quotaResetLabel(row.worstWindowResetsAt, now.getTime())
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                            title={formatProviderDriverKindLabel(row.provider)}
                             trailing={
                               row.worstWindowRemainingPercent === null ? null : (
                                 <Badge
@@ -413,7 +421,7 @@ export function DashboardPage() {
                                         : "default"
                                   }
                                 >
-                                  {row.worstWindowRemainingPercent}% left
+                                  {quotaPercent.format(row.worstWindowRemainingPercent)}% left
                                 </Badge>
                               )
                             }

@@ -13,6 +13,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 
 import {
   partitionDashboardThreads,
+  quotaResetLabel,
   recentRunRows,
   summarizeQuotaReport,
   upcomingSchedules,
@@ -178,7 +179,7 @@ describe("summarizeQuotaReport", () => {
         plan: "pro",
         accountLabel: "acct@example.com",
         observedAt: null,
-        staleAt: null,
+        staleAt: "2026-09-06T16:00:00.000Z",
         windows: [
           { id: "w-week", label: "Weekly", usedPercent: 40, resetsAt: null, synthetic: false },
           {
@@ -195,18 +196,22 @@ describe("summarizeQuotaReport", () => {
       },
     ]);
 
-    const rows = summarizeQuotaReport(report, "Local");
+    const rows = summarizeQuotaReport(report, "Local", NOW.getTime());
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       environmentLabel: "Local",
       provider: ProviderDriverKind.make("codex"),
       plan: "pro",
+      status: "fresh",
       worstWindowLabel: "Daily",
       worstWindowRemainingPercent: 18,
       worstWindowResetsAt: "2026-09-07T00:00:00.000Z",
       creditsRemaining: 12.5,
     });
+    expect(
+      summarizeQuotaReport(report, "Local", Date.parse("2026-09-06T17:00:00Z"))[0]?.status,
+    ).toBe("stale");
   });
 
   it("reports null windows when nothing is readable", () => {
@@ -221,7 +226,9 @@ describe("summarizeQuotaReport", () => {
         accountLabel: null,
         observedAt: null,
         staleAt: null,
-        windows: [],
+        windows: [
+          { id: "offline", label: "Offline", usedPercent: 0, resetsAt: null, synthetic: false },
+        ],
         credits: null,
         warning: null,
       },
@@ -303,5 +310,16 @@ describe("recentRunRows", () => {
     const rows = recentRunRows(runs, schedules);
 
     expect(rows.map((row) => row.scheduleTitle)).toEqual(["Morning briefing", null]);
+  });
+});
+
+describe("quotaResetLabel", () => {
+  it("counts down future resets instead of describing them as just now", () => {
+    expect(quotaResetLabel("2026-09-06T17:13:00Z", NOW.getTime())).toBe("Resets in 2h 13m");
+    expect(quotaResetLabel("2026-09-08T15:00:00Z", NOW.getTime())).toBe("Resets in 2d 0h");
+  });
+  it("does not claim an expired observation has reset", () => {
+    expect(quotaResetLabel(NOW.toISOString(), NOW.getTime())).toBe("Reset due; refresh limits");
+    expect(quotaResetLabel("invalid", NOW.getTime())).toBe("Reset time unavailable");
   });
 });
