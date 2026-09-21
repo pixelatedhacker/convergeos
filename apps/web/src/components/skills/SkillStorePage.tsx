@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PackageIcon, PackageOpenIcon, SearchIcon, ServerIcon, Trash2Icon } from "lucide-react";
+import { PackageIcon, PackageOpenIcon, SearchIcon, Trash2Icon } from "lucide-react";
 import {
   SKILL_STORE_SEARCH_DEFAULT_LIMIT,
   type EnvironmentId,
@@ -11,10 +11,9 @@ import {
 } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
-import { isElectron } from "~/env";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "../../state/server";
-import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironments } from "../../state/environments";
 import { useEnvironmentQuery } from "../../state/query";
 import { readLocalApi } from "../../localApi";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
@@ -24,14 +23,9 @@ import { Checkbox } from "../ui/checkbox";
 import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { SidebarInset } from "../ui/sidebar";
 import { Switch } from "../ui/switch";
 import { toastManager } from "../ui/toast";
-import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
-import { WorkspacePageContainer } from "../WorkspacePageContainer";
-import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import {
   SKILL_STORE_HARNESSES,
   buildInstallPlan,
@@ -45,21 +39,17 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-export function SkillStorePage() {
+export function SkillStoreBrowser({
+  environmentId: activeEnvironmentId,
+}: {
+  environmentId: EnvironmentId;
+}) {
   const { environments } = useEnvironments();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
 
   const connectedEnvironments = useMemo(
     () => environments.filter((environment) => environment.connection.phase === "connected"),
     [environments],
   );
-  const [viewEnvironmentId, setViewEnvironmentId] = useState<EnvironmentId | null>(null);
-  const activeEnvironmentId =
-    viewEnvironmentId !== null &&
-    connectedEnvironments.some((environment) => environment.environmentId === viewEnvironmentId)
-      ? viewEnvironmentId
-      : (primaryEnvironmentId ?? connectedEnvironments[0]?.environmentId ?? null);
-
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ReadonlyArray<SkillStoreEntry> | null>(null);
   const [searching, setSearching] = useState(false);
@@ -100,114 +90,67 @@ export function SkillStorePage() {
   };
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <WorkspaceBreadcrumb ariaLabel="Skill store breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1>Skill store</h1>
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        </WorkspacePageHeader>
-
-        <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
-            {connectedEnvironments.length === 0 ? (
-              <EmptyNotice
-                title="No connected environments"
-                body="Connect a server to browse and install skills."
-              />
-            ) : (
-              <>
-                <section className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <ServerIcon className="size-4 text-muted-foreground" />
-                    <h2 className="text-sm font-medium">Environment</h2>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {connectedEnvironments.map((environment) => (
-                      <Button
-                        key={environment.environmentId}
-                        size="sm"
-                        variant={
-                          environment.environmentId === activeEnvironmentId ? "default" : "outline"
-                        }
-                        onClick={() => setViewEnvironmentId(environment.environmentId)}
-                      >
-                        {environment.label}
-                      </Button>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="flex flex-col gap-3">
-                  <h2 className="text-sm font-medium">Discover skills</h2>
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void runSearch();
-                    }}
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium">Discover skills</h2>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runSearch();
+          }}
+        >
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search the skills.sh registry…"
+            aria-label="Search skills"
+          />
+          <Button
+            type="submit"
+            disabled={searching || query.trim().length < 2}
+            size="sm"
+            className="shrink-0"
+          >
+            <SearchIcon /> {searching ? "Searching…" : "Search"}
+          </Button>
+        </form>
+        {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
+        {results !== null ? (
+          results.length === 0 ? (
+            <EmptyNotice title="No skills found" body="Try a different search query." />
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {results.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent/50"
+                    onClick={() => setSelectedEntry(entry)}
                   >
-                    <Input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search the skills.sh registry…"
-                      aria-label="Search skills"
-                    />
-                    <Button
-                      type="submit"
-                      disabled={searching || query.trim().length < 2}
-                      size="sm"
-                      className="shrink-0"
-                    >
-                      <SearchIcon /> {searching ? "Searching…" : "Search"}
-                    </Button>
-                  </form>
-                  {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
-                  {results !== null ? (
-                    results.length === 0 ? (
-                      <EmptyNotice title="No skills found" body="Try a different search query." />
-                    ) : (
-                      <ul className="grid gap-2 sm:grid-cols-2">
-                        {results.map((entry) => (
-                          <li key={entry.id}>
-                            <button
-                              type="button"
-                              className="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent/50"
-                              onClick={() => setSelectedEntry(entry)}
-                            >
-                              <div className="flex items-center gap-2">
-                                <PackageIcon className="size-4 shrink-0 text-muted-foreground" />
-                                <span className="truncate text-sm font-medium">{entry.name}</span>
-                                <Badge variant="secondary" className="ms-auto shrink-0">
-                                  {formatInstallCount(entry.installs)} installs
-                                </Badge>
-                              </div>
-                              <span className="truncate text-xs text-muted-foreground">
-                                {entry.source}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )
-                  ) : null}
-                </section>
+                    <div className="flex items-center gap-2">
+                      <PackageIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-sm font-medium">{entry.name}</span>
+                      <Badge variant="secondary" className="ms-auto shrink-0">
+                        {formatInstallCount(entry.installs)} installs
+                      </Badge>
+                    </div>
+                    <span className="truncate text-xs text-muted-foreground">{entry.source}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
+      </section>
 
-                <InstalledSkillsSection
-                  environmentId={activeEnvironmentId}
-                  skills={installedSkills}
-                  isPending={installedQuery.isPending}
-                  error={installedQuery.error}
-                  refresh={installedQuery.refresh}
-                />
-              </>
-            )}
-          </WorkspacePageContainer>
-        </ScrollArea>
-      </div>
-
+      <InstalledSkillsSection
+        environmentId={activeEnvironmentId}
+        skills={installedSkills}
+        isPending={installedQuery.isPending}
+        error={installedQuery.error}
+        refresh={installedQuery.refresh}
+      />
       <SkillDetailDialog
         key={selectedEntry?.id ?? "closed"}
         entry={selectedEntry}
@@ -219,7 +162,7 @@ export function SkillStorePage() {
         onClose={() => setSelectedEntry(null)}
         onInstalled={() => installedQuery.refresh()}
       />
-    </SidebarInset>
+    </div>
   );
 }
 
@@ -301,7 +244,7 @@ function InstalledSkillsSection({
     const api = readLocalApi();
     if (!api) return;
     const confirmed = await api.dialogs.confirm(
-      `Remove "${skill.name}" from this environment? This deletes it from every harness and scope it was installed to.`,
+      `Remove "${skill.name}" from this environment? This deletes it from every provider and scope it was installed to.`,
       { variant: "destructive" },
     );
     if (!confirmed) return;
@@ -327,15 +270,15 @@ function InstalledSkillsSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <PackageOpenIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">Installed on this environment</h2>
+        <h2 className="text-sm font-medium">Installed through the store</h2>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {skills.length === 0 ? (
         <EmptyNotice
-          title={isPending ? "Loading installed skills…" : "No skills installed"}
+          title={isPending ? "Loading installed skills…" : "No skills installed through the store"}
           body={
             isPending
-              ? "Reading the environment manifest."
+              ? "Checking store installations."
               : "Search above and install a skill to see it here."
           }
         />
@@ -599,7 +542,7 @@ function SkillDetailDialog({
             ) : null}
 
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium">Harnesses</h3>
+              <h3 className="text-sm font-medium">Providers</h3>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {SKILL_STORE_HARNESSES.map((harness) => (
                   <Label key={harness.id} className="flex items-center gap-1.5 text-sm font-normal">

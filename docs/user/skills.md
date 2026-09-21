@@ -4,8 +4,8 @@ The skill store lets you discover third-party agent skills and install them onto
 environments without leaving ConvergeOS. It is backed by the open skills.sh registry, the same
 ecosystem the `skills` CLI uses.
 
-Open it from the **Skills** entry in the sidebar, or search for "skill store" in the command
-palette.
+Open it from the **Skills & plugins** entry in the sidebar, or search for "skill store" in the command
+palette. The Installed view lists the selected provider’s skills and plugins. Choose Browse skills to search the store.
 
 ## Discovering skills
 
@@ -17,10 +17,10 @@ has been installed. Select a result to read its description and see the files it
 
 From the skill's detail view, choose:
 
-- **Harnesses** — which agent runtimes get the skill (Claude Code, Codex, Cursor, Grok,
-  OpenCode, Antigravity). Each harness stores skills in its own format and directory; the
+- **Providers**, which agent runtimes get the skill, such as Claude Code, Codex, Cursor, Grok,
+  OpenCode, and Antigravity. Each provider stores skills in its own format and directory; the
   install handles that for you.
-- **Where to install** — either one or more environments (the skill is available to every
+- **Where to install**, either one or more environments (the skill is available to every
   project on those environments) or a single project (the skill lands in that project's
   repository and only applies there).
 
@@ -29,12 +29,13 @@ outcome separately, so a failing remote does not block the others.
 
 ## Managing installed skills
 
-The **Installed on this environment** section lists everything the selected environment has
-installed. For each skill you can:
+The **Installed through the store** section in Browse lists installations made through the store.
+It does not include skills installed manually or by another tool. Use the Installed view to see
+the provider’s full catalog. Choose a project to include its local skills. For each skill you can:
 
-- toggle individual harnesses on and off per install location — disabling a harness removes the
-  skill from that harness only, keeping every other location and harness untouched;
-- remove the skill entirely, which deletes it from every harness and scope on that environment.
+- toggle individual providers on and off per install location; disabling a provider removes the
+  skill from that provider only, keeping every other location and provider untouched;
+- remove the skill entirely, which deletes it from every provider and scope on that environment.
 
 Skills are installed per environment. If you run ConvergeOS on several machines, switch the
 environment selector to manage each machine's set.

@@ -2181,7 +2181,7 @@ export default function Sidebar() {
     select: (location) => location.pathname === "/schedules",
   });
   const isSkillsRoute = useLocation({
-    select: (location) => location.pathname === "/skills",
+    select: (location) => location.pathname === "/settings/skills",
   });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -4782,7 +4782,7 @@ export default function Sidebar() {
               onClick={handleSkillsClick}
             >
               <PackageIcon className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Skills</span>
+              <span className="min-w-0 flex-1 truncate">Skills &amp; plugins</span>
             </SidebarMenuButton>
           </SidebarGroup>
         }
