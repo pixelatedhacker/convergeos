@@ -4,9 +4,10 @@ Agent mesh lets one running agent work with other agent threads in the same proj
 threads you already have, so delegated work keeps its normal conversation history, provider,
 permissions, and checkpoints.
 
-Agent mesh access is off by default. Turn on **Settings → Integrations → Agents → Agent mesh
-access** to give newly started agent sessions the mesh tools. Browser access is a separate setting.
-A running session keeps the tools it received when it started.
+Agent mesh access is on by default. You can turn it off under **Settings → Integrations → Agents →
+Agent mesh access**. An existing off setting stays off when you upgrade. Browser access is a
+separate setting. Changes apply to newly started agent sessions; a running session keeps the
+tools it received when it started.
 
 Agent listings report whether each provider session has the ConvergeOS MCP server attached, did
 not request it, or is leaf-only. Leaf-only workers can still receive delegated work, but they

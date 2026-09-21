@@ -742,8 +742,10 @@ describe("ClientSettings pull request merge methods", () => {
 });
 
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
-  it("keeps agent mesh access opt-in", () => {
-    expect(DEFAULT_SERVER_SETTINGS.enableAgentMeshAccess).toBe(false);
+  it("defaults agent mesh access on while preserving an explicit opt-out", () => {
+    expect(DEFAULT_SERVER_SETTINGS.enableAgentMeshAccess).toBe(true);
+    expect(decodeServerSettings({}).enableAgentMeshAccess).toBe(true);
+    expect(decodeServerSettings({ enableAgentMeshAccess: false }).enableAgentMeshAccess).toBe(false);
     expect(DEFAULT_SERVER_SETTINGS.agentKanbanAccess).toBe("none");
     expect(DEFAULT_SERVER_SETTINGS.enableAgentUsageAccess).toBe(false);
   });
