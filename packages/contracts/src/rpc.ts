@@ -100,6 +100,15 @@ import {
 import { KeybindingsConfigError } from "./keybindings.ts";
 import { KanbanBoardInput, KanbanBoardStreamItem } from "./kanban.ts";
 import {
+  PageContentRequest,
+  PageContentSnapshot,
+  PageDetailInput,
+  PageDetailSnapshot,
+  PageListInput,
+  PageListSnapshot,
+  PagesQueryError,
+} from "./pages.ts";
+import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
@@ -121,13 +130,27 @@ import {
 } from "./provider.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
+  InstalledSkill,
+  SkillStoreDetail,
+  SkillStoreDetailInput,
+  RegistrySkillStoreError,
+  SkillStoreInstallInput,
+  SkillStoreListResult,
+  SkillStoreSearchInput,
+  SkillStoreSearchResult,
+  SkillStoreSetHarnessEnabledInput,
+  SkillStoreUninstallInput,
+} from "./skillRegistry.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestCommentInput,
   PullRequestCommentUpdateInput,
   PullRequestDetail,
+  PullRequestPreview,
   PullRequestDiffFileContentsInput,
   PullRequestDiffFileContentsResult,
+  PullRequestFilesViewedResult,
   PullRequestInvalidateInput,
   PullRequestListInput,
   PullRequestListResult,
@@ -146,6 +169,7 @@ import {
   PullRequestReviewerRequestInput,
   PullRequestLabelCandidateList,
   PullRequestLabelChangeInput,
+  PullRequestSetFilesViewedInput,
   PullRequestSubmitReviewInput,
   PullRequestThreadCommentsInput,
   PullRequestThreadCommentsResult,
@@ -411,6 +435,14 @@ export const WS_METHODS = {
   serverGetSubscriptionQuota: "server.getSubscriptionQuota",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  // Skill store methods
+  skillStoreSearch: "skillStore.search",
+  skillStoreGetDetail: "skillStore.getDetail",
+  skillStoreListInstalled: "skillStore.listInstalled",
+  skillStoreInstall: "skillStore.install",
+  skillStoreUninstall: "skillStore.uninstall",
+  skillStoreSetHarnessEnabled: "skillStore.setHarnessEnabled",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -424,9 +456,12 @@ export const WS_METHODS = {
   pullRequestsStack: "pullRequests.stack",
   pullRequestsLinkedThreads: "pullRequests.linkedThreads",
   pullRequestsDetail: "pullRequests.detail",
+  pullRequestsPreview: "pullRequests.preview",
   pullRequestsActivity: "pullRequests.activity",
   pullRequestsThreadComments: "pullRequests.threadComments",
   pullRequestsDiffFileContents: "pullRequests.diffFileContents",
+  pullRequestsFilesViewed: "pullRequests.filesViewed",
+  pullRequestsSetFilesViewed: "pullRequests.setFilesViewed",
   pullRequestsRunAction: "pullRequests.runAction",
   pullRequestsUpdate: "pullRequests.update",
   pullRequestsComment: "pullRequests.comment",
@@ -609,6 +644,42 @@ const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
 });
 
+export const WsSkillStoreSearchRpc = Rpc.make(WS_METHODS.skillStoreSearch, {
+  payload: SkillStoreSearchInput,
+  success: SkillStoreSearchResult,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreGetDetailRpc = Rpc.make(WS_METHODS.skillStoreGetDetail, {
+  payload: SkillStoreDetailInput,
+  success: SkillStoreDetail,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreListInstalledRpc = Rpc.make(WS_METHODS.skillStoreListInstalled, {
+  payload: Schema.Struct({}),
+  success: SkillStoreListResult,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreInstallRpc = Rpc.make(WS_METHODS.skillStoreInstall, {
+  payload: SkillStoreInstallInput,
+  success: InstalledSkill,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreUninstallRpc = Rpc.make(WS_METHODS.skillStoreUninstall, {
+  payload: SkillStoreUninstallInput,
+  success: SkillStoreListResult,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
+export const WsSkillStoreSetHarnessEnabledRpc = Rpc.make(WS_METHODS.skillStoreSetHarnessEnabled, {
+  payload: SkillStoreSetHarnessEnabledInput,
+  success: InstalledSkill,
+  error: Schema.Union([RegistrySkillStoreError, EnvironmentAuthorizationError]),
+});
+
 const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
   payload: Schema.Struct({}),
   success: SourceControlDiscoveryResult,
@@ -781,6 +852,12 @@ const WsPullRequestsDetailRpc = Rpc.make(WS_METHODS.pullRequestsDetail, {
   error: PullRequestRpcError,
 });
 
+const WsPullRequestsPreviewRpc = Rpc.make(WS_METHODS.pullRequestsPreview, {
+  payload: PullRequestRef,
+  success: PullRequestPreview,
+  error: PullRequestRpcError,
+});
+
 const WsPullRequestsActivityRpc = Rpc.make(WS_METHODS.pullRequestsActivity, {
   payload: PullRequestRef,
   success: PullRequestActivity,
@@ -796,6 +873,18 @@ const WsPullRequestsThreadCommentsRpc = Rpc.make(WS_METHODS.pullRequestsThreadCo
 const WsPullRequestsDiffFileContentsRpc = Rpc.make(WS_METHODS.pullRequestsDiffFileContents, {
   payload: PullRequestDiffFileContentsInput,
   success: PullRequestDiffFileContentsResult,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsFilesViewed, {
+  payload: PullRequestRef,
+  success: PullRequestFilesViewedResult,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsSetFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsSetFilesViewed, {
+  payload: PullRequestSetFilesViewedInput,
+  success: Schema.Void,
   error: PullRequestRpcError,
 });
 
@@ -1375,6 +1464,24 @@ export const WsOrchestrationListSchedulesRpc = Rpc.make(ORCHESTRATION_WS_METHODS
   error: Schema.Union([OrchestrationListSchedulesError, EnvironmentAuthorizationError]),
 });
 
+export const WsOrchestrationListPagesRpc = Rpc.make(ORCHESTRATION_WS_METHODS.listPages, {
+  payload: PageListInput,
+  success: PageListSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationGetPageRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getPage, {
+  payload: PageDetailInput,
+  success: PageDetailSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationGetPageContentRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getPageContent, {
+  payload: PageContentRequest,
+  success: PageContentSnapshot,
+  error: Schema.Union([PagesQueryError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationSubscribeShellRpc = Rpc.make(ORCHESTRATION_WS_METHODS.subscribeShell, {
   payload: OrchestrationRpcSchemas.subscribeShell.input,
   success: OrchestrationRpcSchemas.subscribeShell.output,
@@ -1510,9 +1617,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsStackRpc,
   WsPullRequestsLinkedThreadsRpc,
   WsPullRequestsDetailRpc,
+  WsPullRequestsPreviewRpc,
   WsPullRequestsActivityRpc,
   WsPullRequestsThreadCommentsRpc,
   WsPullRequestsDiffFileContentsRpc,
+  WsPullRequestsFilesViewedRpc,
+  WsPullRequestsSetFilesViewedRpc,
   WsPullRequestsRunActionRpc,
   WsPullRequestsUpdateRpc,
   WsPullRequestsCommentRpc,
@@ -1613,6 +1723,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationSearchThreadsRpc,
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationListSchedulesRpc,
+  WsOrchestrationListPagesRpc,
+  WsOrchestrationGetPageRpc,
+  WsOrchestrationGetPageContentRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsSkillStoreSearchRpc,
+  WsSkillStoreGetDetailRpc,
+  WsSkillStoreListInstalledRpc,
+  WsSkillStoreInstallRpc,
+  WsSkillStoreUninstallRpc,
+  WsSkillStoreSetHarnessEnabledRpc,
 );

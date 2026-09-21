@@ -5,10 +5,13 @@ import * as Path from "effect/Path";
 import {
   type ClientOrchestrationCommand,
   type UserInputAttachments,
-  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+  getProviderAttachmentLimitError,
   type IsoDateTime,
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
+  type PageContentInput,
+  type PageContentRef,
+  PAGE_MAX_DOCUMENT_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
 } from "@t3tools/contracts";
 
@@ -20,6 +23,7 @@ import {
   resolveAttachmentPath,
 } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
+import { makePageContentStore } from "../pages/pageContentStore.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
@@ -73,6 +77,41 @@ const removeClaimedAttachmentPaths = Effect.fn("Normalizer.removeClaimedAttachme
     );
   },
 );
+
+const stagePageContent = Effect.fn("Normalizer.stagePageContent")(function* (
+  content: PageContentInput,
+) {
+  if (content.kind === "hostedUrl") {
+    return { kind: "hostedUrl", url: content.url } satisfies PageContentRef;
+  }
+  const bytes = Buffer.from(content.html, "utf8");
+  if (bytes.byteLength === 0) {
+    return yield* new OrchestrationDispatchCommandError({
+      message: "A page document cannot be empty.",
+    });
+  }
+  // The schema bounds characters; storage limits are defined in bytes, so
+  // the authoritative check happens here on the encoded payload.
+  if (bytes.byteLength > PAGE_MAX_DOCUMENT_BYTES) {
+    return yield* new OrchestrationDispatchCommandError({
+      message: `Page document is too large: ${bytes.byteLength} bytes exceeds the ${PAGE_MAX_DOCUMENT_BYTES} byte limit.`,
+    });
+  }
+  const serverConfig = yield* ServerConfig;
+  const fileSystem = yield* FileSystem.FileSystem;
+  return yield* makePageContentStore(fileSystem, serverConfig.pagesDir)
+    .stage(content.html)
+    .pipe(
+      Effect.map(({ digest, byteSize }) => ({ kind: "html", digest, byteSize }) as PageContentRef),
+      Effect.mapError(
+        (cause) =>
+          new OrchestrationDispatchCommandError({
+            message: `Failed to store the page document: ${cause.detail}`,
+            cause,
+          }),
+      ),
+    );
+});
 
 export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
   Effect.gen(function* () {
@@ -131,6 +170,25 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       } satisfies OrchestrationCommand;
     }
 
+    // Saved pages: inline HTML must move into owned, content-addressed
+    // storage before the command is decided, so the persisted event
+    // references durable bytes instead of an invocation-scoped payload.
+    if (canonicalCommand.type === "page.create" || canonicalCommand.type === "page.publish") {
+      const content = yield* stagePageContent(canonicalCommand.content);
+      return {
+        ...canonicalCommand,
+        content,
+        author: { kind: "client" },
+      } satisfies OrchestrationCommand;
+    }
+
+    if (canonicalCommand.type === "page.restore-revision") {
+      return {
+        ...canonicalCommand,
+        author: { kind: "client" },
+      } satisfies OrchestrationCommand;
+    }
+
     if (
       canonicalCommand.type !== "thread.turn.start" &&
       canonicalCommand.type !== "thread.user-input.respond"
@@ -142,13 +200,9 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       canonicalCommand.type === "thread.turn.start"
         ? canonicalCommand.message.attachments
         : Object.values(canonicalCommand.attachmentsByQuestionId ?? {}).flat();
-    if (
-      canonicalCommand.type === "thread.user-input.respond" &&
-      attachments.length > PROVIDER_SEND_TURN_MAX_ATTACHMENTS
-    ) {
-      return yield* new OrchestrationDispatchCommandError({
-        message: `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files per question response.`,
-      });
+    const attachmentLimitError = getProviderAttachmentLimitError(attachments);
+    if (attachmentLimitError) {
+      return yield* new OrchestrationDispatchCommandError({ message: attachmentLimitError });
     }
     if (canonicalCommand.type === "thread.turn.start") {
       const clientAttachmentIds = new Set<string>();
@@ -163,11 +217,12 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
       }
     }
     const claimedAttachmentPaths: string[] = [];
+    const attachmentsWithDecodedSizes = [...attachments];
     // Context records bind to attachments by the id the client knew; they follow the rename.
     const finalAttachmentIdByClientId = new Map<string, string>();
     const normalizedAttachments = yield* Effect.forEach(
       attachments,
-      (attachment) =>
+      (attachment, index) =>
         Effect.gen(function* () {
           if (!("dataUrl" in attachment)) {
             const claim = planAttachmentClaim({
@@ -259,6 +314,11 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
             sizeBytes: bytes.byteLength,
             ...(attachment.source ? { source: attachment.source } : {}),
           };
+          attachmentsWithDecodedSizes[index] = persistedAttachment;
+          const decodedLimitError = getProviderAttachmentLimitError(attachmentsWithDecodedSizes);
+          if (decodedLimitError) {
+            return yield* new OrchestrationDispatchCommandError({ message: decodedLimitError });
+          }
 
           const attachmentPath = resolveAttachmentPath({
             attachmentsDir: serverConfig.attachmentsDir,
@@ -286,6 +346,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                 }),
             ),
           );
+          claimedAttachmentPaths.push(attachmentPath);
           if (attachment.id !== undefined) {
             finalAttachmentIdByClientId.set(attachment.id, attachmentId);
           }

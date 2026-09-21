@@ -185,7 +185,7 @@ describe("resolveThreadFeedLiveFollow", () => {
     { isAtEnd: false, userScrollSessionActive: true, expected: false },
     { isAtEnd: true, userScrollSessionActive: true, expected: false },
   ])("reconciles follow after a disclosure settles: %j", ({ expected, ...state }) => {
-    expect(resolveThreadFeedLiveFollow(!expected, { type: "disclosure-settled", ...state })).toBe(
+    expect(resolveThreadFeedLiveFollow(true, { type: "disclosure-settled", ...state })).toBe(
       expected,
     );
   });
@@ -213,6 +213,30 @@ describe("resolveThreadFeedLiveFollow", () => {
         type: "user-scroll-end",
         isAtEnd: false,
         userScrollSessionActive: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps history paused when layout or keyboard changes move the end into view", () => {
+    let following = resolveThreadFeedLiveFollow(true, { type: "user-scroll-begin" });
+    following = resolveThreadFeedLiveFollow(following, {
+      type: "user-scroll-end",
+      isAtEnd: false,
+      userScrollSessionActive: true,
+    });
+    for (const type of ["scroll", "disclosure-settled", "scroll"] as const) {
+      following = resolveThreadFeedLiveFollow(following, {
+        type,
+        isAtEnd: true,
+        userScrollSessionActive: false,
+      });
+      expect(following).toBe(false);
+    }
+    expect(
+      resolveThreadFeedLiveFollow(following, {
+        type: "user-scroll-end",
+        isAtEnd: true,
+        userScrollSessionActive: true,
       }),
     ).toBe(true);
   });

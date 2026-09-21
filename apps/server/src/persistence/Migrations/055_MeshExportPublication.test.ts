@@ -75,7 +75,7 @@ it.effect("055 pauses pre-existing export epochs without rewriting signed outbox
       yield* sql`SELECT * FROM mesh_receipt_outbox ORDER BY export_epoch, stream_sequence`;
     assert.deepEqual(after, before);
     assert.deepEqual(yield* runMigrations({ toMigrationInclusive: 55 }), []);
-  }).pipe(Effect.provide(NodeSqliteClient.layerMemory())),
+  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );
 
 it.effect("a fresh database applies all migrations with no implicit export authorization", () =>
@@ -89,5 +89,5 @@ it.effect("a fresh database applies all migrations with no implicit export autho
     assert.deepEqual(epochs, []);
     assert.deepEqual(states, []);
     assert.deepEqual(outbox, []);
-  }).pipe(Effect.provide(NodeSqliteClient.layerMemory())),
+  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );

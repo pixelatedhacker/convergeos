@@ -16,12 +16,22 @@ import {
   MessageId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
+  OrchestrationCheckpointStatus,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
   OrchestrationThreadSearchSource,
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
+  Page,
+  PageContentRef,
+  PageDetailSnapshot,
+  PageId,
+  PageRevision,
+  PageRevisionAuthor,
+  PageRevisionId,
+  PAGE_DETAIL_MAX_REVISIONS,
+  PositiveInt,
   ProjectScript,
   ProjectIconOverride,
   Schedule,
@@ -64,7 +74,6 @@ import {
   toPersistenceSqlError,
   type ProjectionRepositoryError,
 } from "../../persistence/Errors.ts";
-import { ProjectionCheckpoint } from "../../persistence/Services/ProjectionCheckpoints.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
@@ -155,6 +164,13 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   }),
 );
 const ProjectionKanbanCardDbRowSchema = KanbanCard;
+const ProjectionPageDbRowSchema = Page;
+const ProjectionPageRevisionDbRowSchema = PageRevision.mapFields(
+  Struct.assign({
+    content: Schema.fromJsonString(PageContentRef),
+    author: Schema.fromJsonString(PageRevisionAuthor),
+  }),
+);
 const ProjectionScheduleDbRowSchema = Schedule.mapFields(
   Struct.assign({
     recurrence: Schema.fromJsonString(ScheduleRecurrence),
@@ -187,11 +203,16 @@ const ProjectionThreadRuntimeContextDbRowSchema = Schema.Struct({
   title: Schema.String,
   session: Schema.NullOr(ProjectionThreadSessionDbRowSchema),
 });
-const ProjectionCheckpointDbRowSchema = ProjectionCheckpoint.mapFields(
-  Struct.assign({
-    files: Schema.fromJsonString(Schema.Array(OrchestrationCheckpointFile)),
-  }),
-);
+const ProjectionCheckpointDbRowSchema = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  checkpointTurnCount: NonNegativeInt,
+  checkpointRef: CheckpointRef,
+  status: OrchestrationCheckpointStatus,
+  files: Schema.fromJsonString(Schema.Array(OrchestrationCheckpointFile)),
+  assistantMessageId: Schema.NullOr(MessageId),
+  completedAt: IsoDateTime,
+});
 const ProjectionLatestTurnDbRowSchema = Schema.Struct({
   threadId: ProjectionThread.fields.threadId,
   turnId: TurnId,
@@ -771,6 +792,111 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listPageRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionPageDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          page_id AS "id",
+          project_id AS "projectId",
+          title,
+          kind,
+          source_thread_id AS "sourceThreadId",
+          maintainer_thread_id AS "maintainerThreadId",
+          current_revision_id AS "currentRevisionId",
+          current_revision AS "currentRevision",
+          metadata_revision AS "metadataRevision",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          archived_at AS "archivedAt"
+        FROM projection_pages
+        ORDER BY updated_at DESC, page_id DESC
+      `,
+  });
+
+  const listPageRevisionRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionPageRevisionDbRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          revision_id AS "id",
+          page_id AS "pageId",
+          predecessor_revision_id AS "predecessorRevisionId",
+          revision,
+          content_json AS "content",
+          data_at AS "dataAt",
+          author_json AS "author",
+          accepted_at AS "acceptedAt"
+        FROM projection_page_revisions
+        ORDER BY page_id ASC, revision ASC
+      `,
+  });
+
+  const listPageRevisionRowsByPage = SqlSchema.findAll({
+    Request: Schema.Struct({ pageId: PageId, limit: PositiveInt }),
+    Result: ProjectionPageRevisionDbRowSchema,
+    execute: ({ pageId, limit }) =>
+      sql`
+        SELECT
+          revision_id AS "id",
+          page_id AS "pageId",
+          predecessor_revision_id AS "predecessorRevisionId",
+          revision,
+          content_json AS "content",
+          data_at AS "dataAt",
+          author_json AS "author",
+          accepted_at AS "acceptedAt"
+        FROM projection_page_revisions
+        WHERE page_id = ${pageId}
+        ORDER BY revision DESC
+        LIMIT ${limit}
+      `,
+  });
+
+  const getPageRowById = SqlSchema.findOneOption({
+    Request: PageId,
+    Result: ProjectionPageDbRowSchema,
+    execute: (pageId) =>
+      sql`
+        SELECT
+          page_id AS "id",
+          project_id AS "projectId",
+          title,
+          kind,
+          source_thread_id AS "sourceThreadId",
+          maintainer_thread_id AS "maintainerThreadId",
+          current_revision_id AS "currentRevisionId",
+          current_revision AS "currentRevision",
+          metadata_revision AS "metadataRevision",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt",
+          archived_at AS "archivedAt"
+        FROM projection_pages
+        WHERE page_id = ${pageId}
+      `,
+  });
+
+  const getPageRevisionRowById = SqlSchema.findOneOption({
+    Request: Schema.Struct({ revisionId: PageRevisionId }),
+    Result: ProjectionPageRevisionDbRowSchema,
+    execute: ({ revisionId }) =>
+      sql`
+        SELECT
+          revision_id AS "id",
+          page_id AS "pageId",
+          predecessor_revision_id AS "predecessorRevisionId",
+          revision,
+          content_json AS "content",
+          data_at AS "dataAt",
+          author_json AS "author",
+          accepted_at AS "acceptedAt"
+        FROM projection_page_revisions
+        WHERE revision_id = ${revisionId}
+      `,
+  });
+
   const listActiveScheduleRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionScheduleDbRowSchema,
@@ -898,6 +1024,36 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ORDER BY project_id ASC, created_at ASC, thread_id ASC
       `,
   });
+
+  const listDeletedWorktreeRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: Schema.Struct({
+      id: ThreadId,
+      projectId: ProjectId,
+      branch: Schema.String,
+      worktreePath: Schema.String,
+      workspaceRoot: Schema.String,
+      deletedAt: IsoDateTime,
+    }),
+    execute: () => sql`
+      SELECT t.thread_id AS "id", t.project_id AS "projectId", t.branch,
+        t.worktree_path AS "worktreePath", p.workspace_root AS "workspaceRoot",
+        t.deleted_at AS "deletedAt"
+      FROM projection_threads t
+      JOIN projection_projects p ON p.project_id = t.project_id
+      WHERE t.deleted_at IS NOT NULL AND t.worktree_path IS NOT NULL AND t.branch IS NOT NULL
+      ORDER BY t.deleted_at DESC, t.thread_id ASC
+    `,
+  });
+  const getDeletedWorktreeThreads: ProjectionSnapshotQueryShape["getDeletedWorktreeThreads"] = () =>
+    listDeletedWorktreeRows(undefined).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getDeletedWorktreeThreads:query",
+          "ProjectionSnapshotQuery.getDeletedWorktreeThreads:decodeRows",
+        ),
+      ),
+    );
 
   const listArchivedThreadRows = SqlSchema.findAll({
     Request: Schema.Void,
@@ -1322,6 +1478,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             AND threads.archived_at IS NULL
             AND projects.deleted_at IS NULL
             AND messages.is_streaming = 0
+            -- Only these two roles are searchable, and the CASE above depends
+            -- on it: reasoning is deliberately excluded so a thinking trace
+            -- cannot surface in the command palette, and widening this filter
+            -- would label it 'assistant' rather than adding a source.
             AND (
               messages.role = 'user'
               OR (
@@ -2373,6 +2533,22 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listPageRows().pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getSnapshot:listPages:query",
+                "ProjectionSnapshotQuery.getSnapshot:listPages:decodeRows",
+              ),
+            ),
+          ),
+          listPageRevisionRows().pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getSnapshot:listPageRevisions:query",
+                "ProjectionSnapshotQuery.getSnapshot:listPageRevisions:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2396,6 +2572,8 @@ pending_approval_requests AS (
             checkpointRows,
             latestTurnRows,
             kanbanCards,
+            pageRows,
+            pageRevisionRows,
             stateRows,
           ]) =>
             Effect.gen(function* () {
@@ -2420,6 +2598,9 @@ pending_approval_requests AS (
               }
               for (const card of kanbanCards) {
                 updatedAt = maxIso(updatedAt, card.updatedAt);
+              }
+              for (const page of pageRows) {
+                updatedAt = maxIso(updatedAt, page.updatedAt);
               }
               for (const row of messageRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
@@ -2601,6 +2782,8 @@ pending_approval_requests AS (
                 projects,
                 threads,
                 kanbanCards,
+                pages: pageRows,
+                pageRevisions: pageRevisionRows,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
 
@@ -2695,6 +2878,22 @@ pending_approval_requests AS (
               ),
             ),
           ),
+          listPageRows().pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listPages:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listPages:decodeRows",
+              ),
+            ),
+          ),
+          listPageRevisionRows().pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getCommandReadModel:listPageRevisions:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listPageRevisions:decodeRows",
+              ),
+            ),
+          ),
           listProjectionStateRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
@@ -2717,6 +2916,8 @@ pending_approval_requests AS (
             kanbanCards,
             delegations,
             scheduleRows,
+            pageRows,
+            pageRevisionRows,
             stateRows,
           ]) =>
             Effect.gen(function* () {
@@ -2797,6 +2998,9 @@ pending_approval_requests AS (
               }
               for (const row of scheduleRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const page of pageRows) {
+                updatedAt = maxIso(updatedAt, page.updatedAt);
               }
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
@@ -2887,6 +3091,8 @@ pending_approval_requests AS (
                 kanbanCards,
                 delegations,
                 schedules: scheduleRows.map(mapScheduleRow),
+                pages: pageRows,
+                pageRevisions: pageRevisionRows,
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               };
             }),
@@ -4082,6 +4288,83 @@ pending_approval_requests AS (
         ),
       );
 
+  const listPages: ProjectionSnapshotQueryShape["listPages"] = (input) =>
+    listPageRows().pipe(
+      Effect.map((rows) =>
+        rows
+          .filter((page) => {
+            if (input.projectId === undefined) return true;
+            if (input.projectId === null) return page.projectId === null;
+            return page.projectId === input.projectId;
+          })
+          .filter((page) => input.includeArchived || page.archivedAt === null)
+          .slice(0, input.limit),
+      ),
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listPages:query",
+          "ProjectionSnapshotQuery.listPages:decodeRows",
+        ),
+      ),
+    );
+
+  const getPageDetail: ProjectionSnapshotQueryShape["getPageDetail"] = (pageId) =>
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const page = yield* getPageRowById(pageId);
+          if (Option.isNone(page)) {
+            return Option.none();
+          }
+          const revisions = yield* listPageRevisionRowsByPage({
+            pageId,
+            limit: PAGE_DETAIL_MAX_REVISIONS,
+          });
+          return Option.some({
+            page: page.value,
+            revisions,
+          } satisfies PageDetailSnapshot);
+        }),
+      )
+      .pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.getPageDetail:query",
+            "ProjectionSnapshotQuery.getPageDetail:decodeRows",
+          ),
+        ),
+      );
+
+  const getPageContentRef: ProjectionSnapshotQueryShape["getPageContentRef"] = (pageId) =>
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const page = yield* getPageRowById(pageId);
+          if (Option.isNone(page)) {
+            return Option.none();
+          }
+          const revision = yield* getPageRevisionRowById({
+            revisionId: page.value.currentRevisionId,
+          });
+          if (Option.isNone(revision) || revision.value.pageId !== pageId) {
+            return Option.none();
+          }
+          return Option.some({
+            pageId,
+            revisionId: revision.value.id,
+            content: revision.value.content,
+          });
+        }),
+      )
+      .pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.getPageContentRef:query",
+            "ProjectionSnapshotQuery.getPageContentRef:decodeRows",
+          ),
+        ),
+      );
+
   const listSchedules: ProjectionSnapshotQueryShape["listSchedules"] = () =>
     sql
       .withTransaction(
@@ -4144,6 +4427,9 @@ pending_approval_requests AS (
     getKanbanBoard,
     listSchedules,
     listDueSchedules,
+    listPages,
+    getPageDetail,
+    getPageContentRef,
     getDelegations,
     getOpenDelegationsForTarget,
     getCommandReadModel,
@@ -4152,6 +4438,7 @@ pending_approval_requests AS (
     getSnapshot,
     getShellSnapshot,
     getArchivedShellSnapshot,
+    getDeletedWorktreeThreads,
     searchThreads,
     getSnapshotSequence,
     getCounts,

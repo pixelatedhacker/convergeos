@@ -77,13 +77,10 @@ export function resolveThreadFeedLiveFollow(
     case "user-scroll-end":
       return event.userScrollSessionActive ? event.isAtEnd : current;
     case "disclosure-settled":
-      return !event.userScrollSessionActive && event.isAtEnd;
+      return current && !event.userScrollSessionActive && event.isAtEnd;
     case "scroll":
       if (event.userScrollSessionActive) {
         return false;
-      }
-      if (event.isAtEnd) {
-        return true;
       }
       return current;
   }

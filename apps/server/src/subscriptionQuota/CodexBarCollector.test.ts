@@ -92,6 +92,77 @@ it.effect("runs the redacted dashboard command and normalizes partial provider r
   }),
 );
 
+it.effect("keeps healthy quota when another provider reports a structured error", () =>
+  Effect.gen(function* () {
+    run.mockReturnValueOnce(
+      Effect.succeed({
+        stdout: encodeJson({
+          schemaVersion: 1,
+          generatedAt: "2026-09-05T18:00:00Z",
+          staleAfterSeconds: 180,
+          providers: [
+            {
+              id: "codex",
+              name: "Codex",
+              enabled: true,
+              source: "oauth",
+              status: null,
+              identity: null,
+              windows: [
+                {
+                  kind: "session",
+                  label: "5-hour",
+                  usedPercent: 25,
+                  resetAt: "2026-09-05T22:00:00Z",
+                },
+              ],
+              credits: null,
+              error: null,
+              updatedAt: "2026-09-05T18:00:00Z",
+            },
+            {
+              id: "claude",
+              name: "Claude",
+              enabled: true,
+              source: "oauth",
+              status: "unavailable",
+              identity: null,
+              windows: [],
+              credits: null,
+              error: { code: 1, message: "No session", kind: "provider" },
+              updatedAt: "2026-09-05T18:00:00Z",
+            },
+          ],
+        }),
+        stderr: "",
+        code: ChildProcessSpawner.ExitCode(0),
+        timedOut: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        stdoutInvalidUtf8: false,
+        stderrInvalidUtf8: false,
+      }),
+    );
+
+    const result = yield* collect;
+
+    expect(result._tag).toBe("Success");
+    if (result._tag === "Success") {
+      expect(
+        result.snapshot.subjects.map(({ provider, status }) => ({ provider, status })),
+      ).toEqual([
+        { provider: "codex", status: "fresh" },
+        { provider: "claudeAgent", status: "failed" },
+      ]);
+      expect(result.snapshot.subjects[1]?.warning).toEqual({
+        kind: "provider-collection-failed",
+        message: "CodexBar could not collect quota for this provider.",
+      });
+      expect(result.snapshot.subjects[1]?.warning?.message).not.toContain("No session");
+    }
+  }),
+);
+
 it.effect("reports invalid or unsupported JSON without returning raw output", () =>
   Effect.gen(function* () {
     run.mockReturnValueOnce(

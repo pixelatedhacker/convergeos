@@ -64,3 +64,119 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 | Attachment inventory | The ordered image records shown as thumbnails above the prose, including images with no inline references.                          |
 
 See [composer context references](./composer-context-references.md) for the contract and lifecycle.
+
+## Pages
+
+Pages are durable homes for generated websites, reports, and small tools. See [pages.md](pages.md).
+
+#### Page
+
+A saved result owned by one environment and optionally one project. A page holds a title, a kind (`htmlDocument` or `hostedUrl`), source-thread provenance, and a current content revision. Unfiled pages have no project yet. Archive is reversible and preserves content and history. See the Page contract and the decider.
+
+#### Page revision
+
+An immutable publication of a page's content. Managed HTML references content-addressed bytes stored under the environment's userdata; hosted URLs reference an external site without a durability guarantee. Restoring an older revision appends a new publication instead of rewriting history.
+
+#### Maintainer
+
+The bot thread assigned to keep a page up to date. The maintainer reference is stored on the page; maintenance dispatch and schedules are part of page maintenance and reuse the existing orchestration lifecycle.
+
+
+## Skill store
+
+The skill store surfaces the skills.sh registry inside ConvergeOS. See [skill-store.md](skill-store.md).
+
+#### Skill
+
+A third-party agent capability bundle (a `SKILL.md` plus supporting files) installed from the skills.sh registry. Identified by `<owner>/<repo>/<skillId>`. Discovery is HTTP against the registry; installation runs the vendored `skills` CLI on the target environment.
+
+#### Harness
+
+An install target for skills, named by its `skills` CLI agent slug (`claude-code`, `codex`, `cursor`, `grok`, `opencode`, `antigravity`). Provider driver kinds map onto harnesses via `SKILL_STORE_HARNESS_BY_DRIVER_KIND` in [the skill store contracts][27]; drivers without a mapping are not valid install targets.
+
+#### Skill store manifest
+
+The per-environment record of installed skills, `skill-store.json` in the environment's state directory, owned by [SkillStoreService.ts][28]. It maps each skill to its targets (global or one project, times a set of harnesses) and is plain local state, not orchestration events.
+
+### Checkpointing
+
+Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
+
+#### Checkpoint
+
+A saved snapshot of a thread workspace at a particular turn. In practice it is a hidden Git ref in [CheckpointStore.ts][19] plus a projected summary from [ProjectionCheckpoints.ts][21]. Capture and lifecycle work happen in [CheckpointReactor.ts][6].
+
+#### Checkpoint ref
+
+The durable identifier for a filesystem checkpoint, stored as a Git ref. It is typed in [the contracts][1], constructed in [Utils.ts][22], and used by [CheckpointStore.ts][19].
+
+#### Checkpoint baseline
+
+The starting checkpoint for diffing a thread timeline. This flow is surfaced through [RuntimeReceiptBus.ts][13], coordinated in [CheckpointReactor.ts][6], and supported by [Utils.ts][22].
+
+#### Checkpoint diff
+
+The patch difference between two checkpoints. Query logic lives in [CheckpointDiffQuery.ts][20], diff parsing lives in [Diffs.ts][23], and finalization is coordinated by [CheckpointReactor.ts][6].
+
+#### Turn diff
+
+The file patch and changed-file summary for one turn. It is usually computed in [CheckpointDiffQuery.ts][20], represented in [the contracts][1], and recorded into thread state by [projector.ts][4].
+
+### Appearance
+
+#### Environment theme
+
+A theme an environment's machine publishes for clients to follow, one file per theme under `themes/` in that environment's state directory; the filename is the theme id. [environmentTheme.ts][25] watches the directory and streams the set over `subscribeServerConfig`; clients render each as a library card, generating a full palette when the file carries seed colors and using the palette directly when it is a standard exported theme file. A desktop that retints its apps when the system theme changes rewrites its file, so ConvergeOS follows along without a restart. See [environment-theme.md][26].
+
+#### Default theme
+
+The environment's theme, held in its `settings.json` as `defaultTheme` (with `defaultThemeSetAt`
+as the set-generation) and set with `t3 theme set <id>`. Web and desktop clients apply each set
+once — live when connected, on the next connect otherwise — so setting it switches them, while a
+theme a user picks in Settings afterwards sticks until the next set; mobile keeps its own
+appearance settings. Naming a published [environment theme](#environment-theme) is how a desktop
+ships ConvergeOS already matching it.
+
+## Practical Shortcuts
+
+- If you see `requested`, think "intent recorded".
+- If you see `completed`, think "result applied".
+- If you see `receipt`, think "async milestone signal, for tests".
+- If you see `checkpoint`, think "workspace snapshot for diff/restore".
+- If you see `quiesced`, think "all relevant follow-up work has gone idle".
+
+## Related Docs
+
+- [Architecture overview][24]
+- [Provider architecture][16]
+- [Permission modes][18]
+- [Workspace layout][2]
+
+[1]: ../../packages/contracts/src/orchestration.ts
+[2]: ./workspace-layout.md
+[3]: ../../apps/server/src/vcs/GitVcsDriverCore.ts
+[4]: ../../apps/server/src/orchestration/projector.ts
+[5]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts
+[6]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
+[7]: ../../apps/server/src/orchestration/Layers/OrchestrationEngine.ts
+[8]: ../../apps/server/src/orchestration/decider.ts
+[9]: ../../apps/server/src/orchestration/commandInvariants.ts
+[10]: ../../apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
+[11]: ../../apps/server/src/orchestration/Layers/ProjectionPipeline.ts
+[12]: ../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts
+[13]: ../../apps/server/src/orchestration/Services/RuntimeReceiptBus.ts
+[14]: ../../apps/server/src/provider/Layers/ProviderService.ts
+[15]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
+[16]: ./providers.md
+[17]: ../../apps/server/src/provider/Layers/CodexAdapter.ts
+[18]: ../user/permission-modes.md
+[19]: ../../apps/server/src/checkpointing/CheckpointStore.ts
+[20]: ../../apps/server/src/checkpointing/CheckpointDiffQuery.ts
+[21]: ../../apps/server/src/persistence/Services/ProjectionCheckpoints.ts
+[22]: ../../apps/server/src/checkpointing/Utils.ts
+[23]: ../../apps/server/src/checkpointing/Diffs.ts
+[24]: ./overview.md
+[25]: ../../apps/server/src/environmentTheme.ts
+[26]: ../user/environment-theme.md
+[27]: ../../packages/contracts/src/skillStore.ts
+[28]: ../../apps/server/src/skillStore/SkillStoreService.ts

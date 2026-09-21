@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
   useUsage: vi.fn(),
+  useSubscriptionQuota: vi.fn(),
   metric: "cost" as "cost" | "tokens" | "limits",
   breakdown: "time" as "model" | "time",
 }));
@@ -39,6 +40,9 @@ vi.mock("react", async (importOriginal) => {
 });
 
 vi.mock("../../env", () => ({ isElectron: false }));
+vi.mock("../../state/subscriptionQuota", () => ({
+  useSubscriptionQuota: testState.useSubscriptionQuota,
+}));
 vi.mock("../../state/usage", () => ({ useUsage: testState.useUsage }));
 vi.mock("../ui/button", () => ({ Button: "button" }));
 vi.mock("../ui/scroll-area", () => ({ ScrollArea: "div" }));
@@ -142,6 +146,7 @@ const environments = [
 beforeEach(() => {
   testState.metric = "cost";
   testState.breakdown = "time";
+  testState.useSubscriptionQuota.mockReturnValue({ environments: [], refresh: vi.fn() });
   testState.useUsage.mockReturnValue({
     merged: {
       ...mergeUsage([], USAGE_CONTRACT_VERSION),

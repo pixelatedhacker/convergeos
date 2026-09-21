@@ -51,7 +51,7 @@ const runWithStore = <A, E, R>(
 
 const meshExportEnableCommand = Command.make("enable", {
   baseDir: baseDirFlag,
-  relayUrl: Argument.string("relay-url").pipe(
+  relayUrl: Argument.String("relay-url").pipe(
     Argument.withDescription("WebSocket URL of the private Nostr relay (wss://...)"),
   ),
 }).pipe(
@@ -142,7 +142,7 @@ const meshExportStatusCommand = Command.make("status", { baseDir: baseDirFlag })
 
 const meshExportResumeCommand = Command.make("resume", {
   baseDir: baseDirFlag,
-  epoch: Argument.string("epoch"),
+  epoch: Argument.String("epoch"),
 }).pipe(
   Command.withDescription(
     "Authorize publication of a paused epoch to its original configured relay.",
@@ -189,7 +189,7 @@ const meshExportResumeCommand = Command.make("resume", {
 
 const meshExportDiscardCommand = Command.make("discard", {
   baseDir: baseDirFlag,
-  epoch: Argument.string("epoch"),
+  epoch: Argument.String("epoch"),
 }).pipe(
   Command.withDescription(
     "Permanently remove publication permission from a paused epoch; retain its stored receipts.",

@@ -6,7 +6,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 export const TrimmedString = Schema.String.pipe(
   Schema.decodeTo(
     Schema.String,
-    SchemaTransformation.transformOrFail({
+    SchemaTransformation.transformEffect({
       decode: (value) => Effect.succeed(value.trim()),
       encode: (value) => Effect.succeed(value.trim()),
     }),
@@ -174,3 +174,13 @@ export const ApprovalRequestId = makeEntityId("ApprovalRequestId");
 export type ApprovalRequestId = typeof ApprovalRequestId.Type;
 export const CheckpointRef = makeEntityId("CheckpointRef");
 export type CheckpointRef = typeof CheckpointRef.Type;
+export const PageId = makeEntityId("PageId");
+export type PageId = typeof PageId.Type;
+export const PageRevisionId = makeEntityId("PageRevisionId");
+export type PageRevisionId = typeof PageRevisionId.Type;
+/** Lowercase hex sha-256 of one managed page document. */
+export const PageContentDigest = Schema.String.check(
+  Schema.isPattern(/^[0-9a-f]{64}$/),
+  Schema.isLengthBetween(64, 64),
+).pipe(Schema.brand("PageContentDigest"));
+export type PageContentDigest = typeof PageContentDigest.Type;

@@ -3,6 +3,7 @@ import type {
   OrchestrationProject,
   OrchestrationReadModel,
   OrchestrationThread,
+  Page,
   ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -37,6 +38,20 @@ export function listThreadsByProjectId(
   projectId: ProjectId,
 ): ReadonlyArray<OrchestrationThread> {
   return readModel.threads.filter((thread) => thread.projectId === projectId);
+}
+
+export function findPageById(
+  readModel: OrchestrationReadModel,
+  pageId: Page["id"],
+): Page | undefined {
+  return readModel.pages?.find((page) => page.id === pageId);
+}
+
+export function listPagesByProjectId(
+  readModel: OrchestrationReadModel,
+  projectId: ProjectId,
+): ReadonlyArray<Page> {
+  return (readModel.pages ?? []).filter((page) => page.projectId === projectId);
 }
 
 export function requireProject(input: {

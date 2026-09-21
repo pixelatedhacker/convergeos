@@ -22,6 +22,19 @@ results appear as each one responds.
 If recent work is missing or a new model shows no cost, refresh to rescan session history and
 update model pricing.
 
+The **Subscription limits** section appears above historical activity. Each provider window shows
+the percentage remaining, a remaining-allowance meter, and its reset time. Connected environments
+stay in separate groups so subscriptions from different machines are never combined. Stale or
+partially failed snapshots remain visible with their status, while an unavailable percentage is
+shown as unknown rather than zero. The page-level refresh updates both subscription limits and the
+selected activity window.
+
+Connected clients can read the environment-wide quota snapshot. Agents with an active ConvergeOS MCP
+session can use `usage_snapshot` to read only quota that can be safely associated with their own
+provider instance. Account labels are omitted from the agent-facing result. If several configured
+instances use the same provider subscription and the account cannot be proven, the quota remains
+visible at environment scope but is withheld from the instance-scoped MCP tool.
+
 ## Set custom model prices
 
 On web or desktop, open the environment dropdown on **Usage**, then choose **Model prices** to add,
@@ -60,12 +73,26 @@ the bar show each account's quota, countdown, and credits. Tap a row to open its
 The same account signed in on more than one environment, or reported by a hub as well, counts once.
 Filter with the environment dropdown to see what a single machine has.
 
-If a window looks stale, refresh Limits to re-check every provider and hub.
+Opening Limits checks the selected connected environments automatically. Each client waits at
+least five minutes between automatic checks of an environment, including after a failed check.
+If a window still looks stale, refresh Limits to re-check every provider and hub.
 
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and
 closes when you dismiss it or send your next message. It uses the same snapshot as **Usage → Limits**, so it does not run the agent or refresh
 anything. The command is offered only for providers that appear under **Usage → Limits**.
+
+OpenCode Go reports its session, weekly, and monthly allowance when OpenCode runs locally in
+the environment. T3 cannot report limits for external OpenCode servers because their credentials
+belong to the remote server. Cursor reports
+its monthly allowance, including separate Auto and API usage, using a file-based CLI login or
+`CURSOR_AUTH_TOKEN`. Cursor's default macOS keychain login does not currently report limits.
+On macOS, use `AGENT_CLI_CREDENTIAL_STORE=file` when signing in and in the provider's environment
+to use a file-based login.
+
+Grok reports the remaining subscription allowance and reset time for its current billing period
+after signing in with `grok login`. Explicit `XAI_API_KEY` connections and custom authentication
+or endpoint configurations do not report subscription limits.
 
 API-key accounts may not report subscription limits. This also applies to Claude connections
 using a proxy through `ANTHROPIC_AUTH_TOKEN`.

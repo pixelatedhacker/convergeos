@@ -17,6 +17,8 @@ import {
   KanbanCardId,
   MessageId,
   NonNegativeInt,
+  PageId,
+  PageRevisionId,
   PositiveInt,
   ProjectId,
   ProviderItemId,
@@ -35,6 +37,14 @@ import {
   PullRequestReviewDecision,
   PullRequestState,
 } from "./pullRequest.ts";
+import {
+  Page,
+  PageContentInput,
+  PageContentRef,
+  PageRevision,
+  PageRevisionAuthor,
+  PageTitle,
+} from "./pages.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -44,6 +54,9 @@ export const ORCHESTRATION_WS_METHODS = {
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   listSchedules: "orchestration.listSchedules",
+  listPages: "orchestration.listPages",
+  getPage: "orchestration.getPage",
+  getPageContent: "orchestration.getPageContent",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
@@ -97,7 +110,7 @@ const ModelSelectionSource = Schema.Struct({
 export const ModelSelection = ModelSelectionSource.pipe(
   Schema.decodeTo(
     ModelSelectionWire,
-    SchemaTransformation.transformOrFail({
+    SchemaTransformation.transformEffect({
       decode: (raw) => {
         // Resolve the routing key: prefer an explicit `instanceId`; fall
         // back to promoting the legacy `provider` slug (the canonical
@@ -146,6 +159,7 @@ export const ProviderRequestKind = Schema.Literals([
   "file-read",
   "file-change",
   "mcp-elicitation",
+  "permission",
 ]);
 export type ProviderRequestKind = typeof ProviderRequestKind.Type;
 export const ProviderApprovalDecision = Schema.Literals([
@@ -167,8 +181,9 @@ export const ProviderUserInputAnswers = Schema.Record(Schema.String, Schema.Unkn
 export type ProviderUserInputAnswers = typeof ProviderUserInputAnswers.Type;
 
 export const PROVIDER_SEND_TURN_MAX_INPUT_CHARS = 120_000;
-export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 8;
+export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 100;
 export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const PROVIDER_SEND_TURN_MAX_TOTAL_IMAGE_BYTES = 80 * 1024 * 1024;
 export const PROVIDER_SEND_TURN_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES = [
   "image/gif",
@@ -375,6 +390,25 @@ export const ChatAttachment = Schema.Union([
 ]);
 export type ChatAttachment = typeof ChatAttachment.Type;
 
+export function getProviderAttachmentLimitError(
+  attachments: ReadonlyArray<Pick<ChatAttachment, "type" | "mimeType" | "sizeBytes">>,
+): string | undefined {
+  if (attachments.length > PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
+    return `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files per message or question response.`;
+  }
+  const imageBytes = attachments.reduce(
+    (total, attachment) =>
+      total +
+      (attachment.type === "image" || isProviderSendTurnSupportedImageMimeType(attachment.mimeType)
+        ? attachment.sizeBytes
+        : 0),
+    0,
+  );
+  if (imageBytes > PROVIDER_SEND_TURN_MAX_TOTAL_IMAGE_BYTES) {
+    return "Images can total up to 80 MiB per message or question response. Use smaller images or send fewer at once.";
+  }
+}
+
 export const UserInputAttachments = Schema.Record(
   Schema.String,
   Schema.Array(Schema.Union([ChatImageAttachment, ChatFileAttachment])).pipe(
@@ -464,26 +498,62 @@ const ProjectLucideIconName = TrimmedNonEmptyString.check(
 
 const ProjectEmoji = TrimmedNonEmptyString.check(Schema.isMaxLength(32));
 
-const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+// Grapheme-count validation belongs to the server command boundary, not snapshot decoding.
 export const ProjectMonogramText = TrimmedNonEmptyString.check(
   Schema.isMaxLength(32),
   Schema.isPattern(/^[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d]*$/u),
-  Schema.makeFilter((text) => Array.from(monogramSegmenter.segment(text)).length <= 2),
 );
 
+const ProjectLucideIcon = Schema.Struct({
+  kind: Schema.Literal("lucide"),
+  name: ProjectLucideIconName,
+  color: ProjectIconColor,
+});
+const ProjectEmojiIcon = Schema.Struct({
+  kind: Schema.Literal("emoji"),
+  emoji: ProjectEmoji,
+});
+const ProjectMonogramIcon = Schema.Struct({
+  kind: Schema.Literal("monogram"),
+  text: ProjectMonogramText,
+  color: ProjectIconColor,
+});
+const ProjectIcon = Schema.Union([ProjectLucideIcon, ProjectEmojiIcon, ProjectMonogramIcon]);
+const ProjectLucideIconWire = Schema.Struct({
+  ...ProjectLucideIcon.fields,
+  monogramText: Schema.optional(ProjectMonogramText),
+  monogram: Schema.optional(ProjectMonogramText),
+});
+
+// Older peers only know lucide/emoji. Keep monograms out of their validated
+// `monogram` field too: old grapheme counters can reject otherwise valid text.
 export const ProjectIconOverride = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("lucide"),
-    name: ProjectLucideIconName,
-    color: ProjectIconColor,
-    // Older clients ignore this field and render the named Lucide icon instead.
-    monogram: Schema.optional(ProjectMonogramText),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("emoji"),
-    emoji: ProjectEmoji,
-  }),
-]);
+  ProjectLucideIconWire,
+  ProjectEmojiIcon,
+  ProjectMonogramIcon,
+]).pipe(
+  Schema.decodeTo(
+    ProjectIcon,
+    SchemaTransformation.transform({
+      decode: (icon): typeof ProjectIcon.Type => {
+        if (icon.kind !== "lucide") return icon;
+        const text = icon.monogramText ?? icon.monogram;
+        return text === undefined
+          ? { kind: "lucide", name: icon.name, color: icon.color }
+          : { kind: "monogram", text, color: icon.color };
+      },
+      encode: (icon) =>
+        icon.kind === "monogram"
+          ? {
+              kind: "lucide" as const,
+              name: "folder-code",
+              color: icon.color,
+              monogramText: icon.text,
+            }
+          : icon,
+    }),
+  ),
+);
 export type ProjectIconOverride = typeof ProjectIconOverride.Type;
 
 export const OrchestrationProject = Schema.Struct({
@@ -508,7 +578,15 @@ export const OrchestrationProject = Schema.Struct({
 });
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
-export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
+/** `reasoning` carries a provider's thinking trace: a reasoning summary, or
+ *  the raw chain of thought when the model exposes one. It is a sibling of the
+ *  assistant text it precedes, not a replacement for it. */
+export const OrchestrationMessageRole = Schema.Literals([
+  "user",
+  "assistant",
+  "system",
+  "reasoning",
+]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
 export const OrchestrationMessage = Schema.Struct({
@@ -890,6 +968,8 @@ export const OrchestrationReadModel = Schema.Struct({
   threads: Schema.Array(OrchestrationThread),
   kanbanCards: Schema.optional(Schema.Array(KanbanCard)),
   schedules: Schema.optional(Schema.Array(Schedule)),
+  pages: Schema.optional(Schema.Array(Page)),
+  pageRevisions: Schema.optional(Schema.Array(PageRevision)),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
@@ -1037,6 +1117,8 @@ export type OrchestrationSubscribeShellInput = typeof OrchestrationSubscribeShel
 
 export const OrchestrationSubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
+  /** Opt in to reasoning roles; older clients receive system messages instead. */
+  reasoningMessages: Schema.optionalKey(Schema.Boolean),
   /**
    * When provided, the server skips the initial snapshot frame and instead
    * replays events after this sequence before streaming live events. Clients
@@ -1439,6 +1521,126 @@ const ThreadPullRequestUnlinkCommand = Schema.Struct({
   ...ThreadPullRequestKey.fields,
 });
 
+/**
+ * Client-facing page content arrives inline (or as a hosted URL); the
+ * server stages inline HTML into owned storage and swaps in the digest
+ * reference before the command is decided, so persisted events only ever
+ * reference durable bytes.
+ */
+const ClientPageCreateCommand = Schema.Struct({
+  type: Schema.Literal("page.create"),
+  commandId: CommandId,
+  pageId: PageId,
+  projectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  title: PageTitle,
+  sourceThreadId: Schema.NullOr(ThreadId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  content: PageContentInput,
+  dataAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  createdAt: IsoDateTime,
+});
+
+const PageCreateCommand = Schema.Struct({
+  type: Schema.Literal("page.create"),
+  commandId: CommandId,
+  pageId: PageId,
+  projectId: Schema.NullOr(ProjectId),
+  title: PageTitle,
+  sourceThreadId: Schema.NullOr(ThreadId),
+  content: PageContentRef,
+  dataAt: Schema.NullOr(IsoDateTime),
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+const PageRenameCommand = Schema.Struct({
+  type: Schema.Literal("page.rename"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  title: PageTitle,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Client-facing publication: inline HTML (staged server-side) or a hosted
+ * URL. `baseRevisionId` is the current revision the caller observed — two
+ * writers against the same base cannot overwrite each other.
+ */
+const ClientPagePublishCommand = Schema.Struct({
+  type: Schema.Literal("page.publish"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  content: PageContentInput,
+  dataAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  createdAt: IsoDateTime,
+});
+
+const PagePublishCommand = Schema.Struct({
+  type: Schema.Literal("page.publish"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  content: PageContentRef,
+  dataAt: Schema.NullOr(IsoDateTime),
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Re-publish the retained content of an older revision as a new current
+ * revision. History is immutable: returning to an older revision appends a
+ * publication instead of rewriting the past.
+ */
+const ClientPageRestoreRevisionCommand = Schema.Struct({
+  type: Schema.Literal("page.restore-revision"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  sourceRevisionId: PageRevisionId,
+  createdAt: IsoDateTime,
+});
+
+const PageRestoreRevisionCommand = Schema.Struct({
+  type: Schema.Literal("page.restore-revision"),
+  commandId: CommandId,
+  pageId: PageId,
+  baseRevisionId: PageRevisionId,
+  sourceRevisionId: PageRevisionId,
+  author: PageRevisionAuthor,
+  createdAt: IsoDateTime,
+});
+
+const PageArchiveCommand = Schema.Struct({
+  type: Schema.Literal("page.archive"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+const PageRestoreCommand = Schema.Struct({
+  type: Schema.Literal("page.restore"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Move a page between projects, or unfile it with null. Moving clears the
+ * maintainer (maintenance schedule disabling arrives with page maintenance),
+ * so a bot never keeps a page outside its own project.
+ */
+const PageAssignProjectCommand = Schema.Struct({
+  type: Schema.Literal("page.assign-project"),
+  commandId: CommandId,
+  pageId: PageId,
+  expectedMetadataRevision: PositiveInt,
+  projectId: Schema.NullOr(ProjectId),
+  createdAt: IsoDateTime,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1471,6 +1673,7 @@ const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
   baseBranch: TrimmedNonEmptyString,
   branch: Schema.optional(TrimmedNonEmptyString),
   startFromOrigin: Schema.optional(Schema.Boolean),
+  requireWorktree: Schema.optional(Schema.Boolean),
 });
 
 const ThreadTurnStartBootstrap = Schema.Struct({
@@ -1767,6 +1970,13 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   KanbanCardRetryCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
+  PageCreateCommand,
+  PageRenameCommand,
+  PagePublishCommand,
+  PageRestoreRevisionCommand,
+  PageArchiveCommand,
+  PageRestoreCommand,
+  PageAssignProjectCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1810,6 +2020,13 @@ export const ClientOrchestrationCommand = Schema.Union([
   KanbanCardRetryCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
+  ClientPageCreateCommand,
+  PageRenameCommand,
+  ClientPagePublishCommand,
+  ClientPageRestoreRevisionCommand,
+  PageArchiveCommand,
+  PageRestoreCommand,
+  PageAssignProjectCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1843,6 +2060,25 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
 
 const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   type: Schema.Literal("thread.message.assistant.complete"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  turnId: Schema.optional(TurnId),
+  createdAt: IsoDateTime,
+});
+
+const ThreadMessageReasoningDeltaCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.reasoning.delta"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  delta: Schema.String,
+  turnId: Schema.optional(TurnId),
+  createdAt: IsoDateTime,
+});
+
+const ThreadMessageReasoningCompleteCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.reasoning.complete"),
   commandId: CommandId,
   threadId: ThreadId,
   messageId: MessageId,
@@ -1990,6 +2226,8 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
+  ThreadMessageReasoningDeltaCommand,
+  ThreadMessageReasoningCompleteCommand,
   ThreadHistoryImportCommand,
   ThreadMessageUserAppendCommand,
   ThreadProposedPlanUpsertCommand,
@@ -2057,6 +2295,12 @@ export const OrchestrationEventType = Schema.Literals([
   "kanban.card-delegation-linked",
   "kanban.card-delegation-started",
   "kanban.card-delegation-completed",
+  "page.created",
+  "page.published",
+  "page.renamed",
+  "page.project-assigned",
+  "page.archived",
+  "page.restored",
   "delegation.requested",
   "delegation.provision-started",
   "delegation.target-bound",
@@ -2074,6 +2318,7 @@ export const OrchestrationAggregateKind = Schema.Literals([
   "kanban-card",
   "delegation",
   "schedule",
+  "page",
 ]);
 export type OrchestrationAggregateKind = typeof OrchestrationAggregateKind.Type;
 export const OrchestrationActorKind = Schema.Literals(["client", "server", "provider"]);
@@ -2239,6 +2484,14 @@ export const KanbanCardRetriedPayload = Schema.Struct({ card: KanbanCard });
 export const KanbanCardDelegationLinkedPayload = Schema.Struct({ card: KanbanCard });
 export const KanbanCardDelegationStartedPayload = Schema.Struct({ card: KanbanCard });
 export const KanbanCardDelegationCompletedPayload = Schema.Struct({ card: KanbanCard });
+
+/** `page` is the post-publication state; `revision` is the newly accepted revision. */
+export const PageCreatedPayload = Schema.Struct({ page: Page, revision: PageRevision });
+export const PagePublishedPayload = Schema.Struct({ page: Page, revision: PageRevision });
+export const PageRenamedPayload = Schema.Struct({ page: Page });
+export const PageProjectAssignedPayload = Schema.Struct({ page: Page });
+export const PageArchivedPayload = Schema.Struct({ page: Page });
+export const PageRestoredPayload = Schema.Struct({ page: Page });
 
 export const ScheduleCreatedPayload = Schema.Struct({ schedule: Schedule });
 export const ScheduleUpdatedPayload = Schema.Struct({ schedule: Schedule });
@@ -2418,7 +2671,14 @@ const EventBaseFields = {
   sequence: NonNegativeInt,
   eventId: EventId,
   aggregateKind: OrchestrationAggregateKind,
-  aggregateId: Schema.Union([ProjectId, ThreadId, KanbanCardId, DelegationId, ScheduleId]),
+  aggregateId: Schema.Union([
+    ProjectId,
+    ThreadId,
+    KanbanCardId,
+    DelegationId,
+    ScheduleId,
+    PageId,
+  ]),
   occurredAt: IsoDateTime,
   commandId: Schema.NullOr(CommandId),
   causationEventId: Schema.NullOr(EventId),
@@ -2639,6 +2899,36 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("page.created"),
+    payload: PageCreatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.published"),
+    payload: PagePublishedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.renamed"),
+    payload: PageRenamedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.project-assigned"),
+    payload: PageProjectAssignedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.archived"),
+    payload: PageArchivedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("page.restored"),
+    payload: PageRestoredPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("schedule.created"),
     payload: ScheduleCreatedPayload,
   }),
@@ -2747,26 +3037,6 @@ export const ProviderSessionRuntimeStatus = Schema.Literals([
   "error",
 ]);
 export type ProviderSessionRuntimeStatus = typeof ProviderSessionRuntimeStatus.Type;
-
-const ProjectionThreadTurnStatus = Schema.Literals([
-  "running",
-  "completed",
-  "interrupted",
-  "error",
-]);
-export type ProjectionThreadTurnStatus = typeof ProjectionThreadTurnStatus.Type;
-
-const ProjectionCheckpointRow = Schema.Struct({
-  threadId: ThreadId,
-  turnId: TurnId,
-  checkpointTurnCount: NonNegativeInt,
-  checkpointRef: CheckpointRef,
-  status: OrchestrationCheckpointStatus,
-  files: Schema.Array(OrchestrationCheckpointFile),
-  assistantMessageId: Schema.NullOr(MessageId),
-  completedAt: IsoDateTime,
-});
-export type ProjectionCheckpointRow = typeof ProjectionCheckpointRow.Type;
 
 export const ProjectionPendingApprovalStatus = Schema.Literals(["pending", "resolved"]);
 export type ProjectionPendingApprovalStatus = typeof ProjectionPendingApprovalStatus.Type;
@@ -2934,7 +3204,7 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedError<Orches
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
-    bootstrapThreadDisposition: Schema.optional(Schema.Literal("deleted")),
+    bootstrapThreadDisposition: Schema.optional(Schema.Literals(["deleted", "not-created"])),
   },
 ) {}
 
