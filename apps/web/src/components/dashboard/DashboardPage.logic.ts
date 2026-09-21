@@ -14,6 +14,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 
 import {
   parseTimestampMs,
@@ -37,12 +38,6 @@ export interface DashboardThreadRow {
   readonly attentionReason: "approval" | "input" | "plan" | "failed" | null;
   /** Turn start for running rows; recency anchor for attention rows. */
   readonly sortAt: string;
-}
-
-function isSnoozed(thread: EnvironmentThreadShell, nowMs: number): boolean {
-  if (thread.snoozedUntil == null) return false;
-  const until = Date.parse(thread.snoozedUntil);
-  return !Number.isNaN(until) && until > nowMs;
 }
 
 function attentionReason(
@@ -71,7 +66,7 @@ export function partitionDashboardThreads(
   threads: readonly EnvironmentThreadShell[],
   now: Date,
 ): DashboardThreads {
-  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
   const running: DashboardThreadRow[] = [];
   const attention: DashboardThreadRow[] = [];
   for (const thread of threads) {
@@ -89,7 +84,7 @@ export function partitionDashboardThreads(
       });
       continue;
     }
-    if (isSnoozed(thread, nowMs)) continue;
+    if (effectiveSnoozed(thread, { now: nowIso })) continue;
     const reason = attentionReason(thread, status);
     if (reason === null) continue;
     attention.push({

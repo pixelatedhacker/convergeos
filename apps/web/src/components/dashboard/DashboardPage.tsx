@@ -1,4 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
+import { summarizeEnvironmentWork } from "@t3tools/client-runtime/state/command-center";
+import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import {
   ArrowUpRightIcon,
   BellRingIcon,
@@ -11,6 +13,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { isElectron } from "../../env";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { useDashboardQuota } from "../../state/dashboard";
+import { useEnvironments } from "../../state/environments";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { useSchedules } from "../../state/schedulesView";
 import { Badge } from "../ui/badge";
@@ -19,6 +22,7 @@ import { SidebarInset } from "../ui/sidebar";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { formatWorkingDurationLabel, parseTimestampMs } from "../Sidebar.logic";
 import { formatScheduleInstant } from "../schedules/SchedulesPage.logic";
 import {
@@ -103,6 +107,7 @@ export function DashboardPage() {
   const now = useNow();
   const threads = useThreadShells();
   const projects = useProjects();
+  const { environments, isReady: environmentsReady, networkStatus } = useEnvironments();
   const { schedules, runs, isPending: schedulesPending } = useSchedules();
   const quota = useDashboardQuota();
 
@@ -117,6 +122,19 @@ export function DashboardPage() {
   const { running, attention } = useMemo(
     () => partitionDashboardThreads(threads, now),
     [threads, now],
+  );
+  const environmentWork = useMemo(
+    () =>
+      summarizeEnvironmentWork(
+        environments.map((environment) => environment.environmentId),
+        threads,
+        now,
+      ),
+    [environments, threads, now],
+  );
+  const workByEnvironmentId = useMemo(
+    () => new Map(environmentWork.map((summary) => [summary.environmentId, summary] as const)),
+    [environmentWork],
   );
   const upcoming = useMemo(() => upcomingSchedules(schedules), [schedules]);
   const recentRuns = useMemo(() => recentRunRows(runs, schedules), [runs, schedules]);
@@ -147,14 +165,113 @@ export function DashboardPage() {
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <WorkspaceBreadcrumb ariaLabel="Dashboard breadcrumb">
-            <WorkspaceBreadcrumbItem current>Dashboard</WorkspaceBreadcrumbItem>
+          <WorkspaceBreadcrumb ariaLabel="Command center breadcrumb">
+            <WorkspaceBreadcrumbItem current>Command center</WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
         </WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="expanded" title="Dashboard">
+          <WorkspacePageContainer width="expanded" title="Command center">
             <div className="flex flex-col gap-10">
+              <section className="flex min-w-0 flex-col gap-3" aria-label="Machines">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="text-sm font-medium text-foreground">Machines</h2>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => void navigate({ to: "/settings/connections" })}
+                    type="button"
+                  >
+                    Manage connections
+                  </button>
+                </div>
+                {!environmentsReady ? (
+                  <p className="text-sm text-muted-foreground">Loading machines…</p>
+                ) : environments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Connect a machine to see its work here.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {environments.map((environment) => {
+                      const summary = workByEnvironmentId.get(environment.environmentId);
+                      const nextThread = summary?.nextThread ?? null;
+                      const connected =
+                        environment.entry.enabled &&
+                        networkStatus !== "offline" &&
+                        environment.connection.phase === "connected";
+                      const status = !environment.entry.enabled
+                        ? "Paused"
+                        : networkStatus === "offline" || environment.connection.phase === "offline"
+                          ? "Offline"
+                          : environment.connection.phase === "connected"
+                            ? "Connected"
+                            : environment.connection.phase === "connecting" ||
+                                environment.connection.phase === "reconnecting"
+                              ? "Connecting"
+                              : environment.connection.phase === "error"
+                                ? "Connection failed"
+                                : "Available";
+                      const nextLabel =
+                        summary?.nextKind === "attention"
+                          ? "Needs you"
+                          : summary?.nextKind === "working"
+                            ? "Working now"
+                            : "Resume";
+                      return (
+                        <button
+                          aria-label={
+                            nextThread
+                              ? `${nextLabel}: ${nextThread.title} on ${environment.label}`
+                              : `${environment.label}: ${status}; manage connection`
+                          }
+                          className="group flex min-h-36 min-w-0 flex-col rounded-xl border border-border/70 bg-card p-4 text-left shadow-xs transition-colors hover:border-border hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          key={environment.environmentId}
+                          onClick={() =>
+                            nextThread
+                              ? openThread({
+                                  environmentId: nextThread.environmentId,
+                                  threadId: nextThread.id,
+                                })
+                              : void navigate({ to: "/settings/connections" })
+                          }
+                          type="button"
+                        >
+                          <span className="flex w-full min-w-0 items-center gap-2.5">
+                            <EnvironmentMachineIcon
+                              aria-hidden
+                              className="size-4 shrink-0 text-muted-foreground"
+                              kind={resolveEnvironmentMachineKind(environment.serverConfig)}
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                              {environment.label}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                              <span
+                                className={`size-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground/50"}`}
+                              />
+                              {status}
+                            </span>
+                          </span>
+                          <span className="mt-4 flex gap-2 text-xs text-muted-foreground">
+                            {connected ? null : <span>Last known ·</span>}
+                            <span>Needs you {summary?.attentionCount ?? 0}</span>
+                            <span aria-hidden>·</span>
+                            <span>Working {summary?.workingCount ?? 0}</span>
+                          </span>
+                          <span className="mt-auto block min-w-0 pt-3">
+                            <span className="block text-[11px] font-medium text-muted-foreground">
+                              {connected ? nextLabel : "Last known work"}
+                            </span>
+                            <span className="mt-0.5 block truncate text-sm text-foreground">
+                              {nextThread?.title ?? "No open threads"}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
               <DashboardSection
                 count={attention.length}
                 icon={<BellRingIcon />}

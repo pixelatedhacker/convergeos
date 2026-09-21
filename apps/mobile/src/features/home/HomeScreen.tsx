@@ -9,6 +9,7 @@ import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import { summarizeEnvironmentWork } from "@t3tools/client-runtime/state/command-center";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
@@ -84,6 +85,7 @@ import {
 } from "./homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useMaterialFabScroll } from "./MaterialFabScrollContext";
+import { EnvironmentCommandStrip } from "./EnvironmentCommandStrip";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
@@ -579,14 +581,25 @@ export function HomeScreen(props: HomeScreenProps) {
   // next wake boundary re-runs the partition with a fresh clock so a woken
   // thread reappears immediately instead of on the next minute tick.
   const [snoozeWakeTick, bumpSnoozeWakeTick] = useState(0);
+  const environmentWork = useMemo(
+    () =>
+      props.environments.length < 2
+        ? []
+        : summarizeEnvironmentWork(
+            props.environments.map((environment) => environment.environmentId),
+            props.threads,
+            new Date(),
+          ),
+    [nowMinute, props.environments, props.threads, snoozeWakeTick],
+  );
   useFocusEffect(
     useCallback(() => {
-      if (!threadListV2Enabled) return;
+      if (!threadListV2Enabled && props.environments.length < 2) return;
       // Refresh immediately on enable or focus because the previous value can be hours old.
       setNowMinute(new Date().toISOString().slice(0, 16));
       const id = setInterval(() => setNowMinute(new Date().toISOString().slice(0, 16)), 60_000);
       return () => clearInterval(id);
-    }, [threadListV2Enabled]),
+    }, [threadListV2Enabled, props.environments.length]),
   );
   // Threads on servers without the settlement capability never classify as
   // settled (the user could neither un-settle nor pin them).
@@ -1147,10 +1160,24 @@ export function HomeScreen(props: HomeScreenProps) {
     );
   }
 
-  const listHeader = Platform.OS === "ios" ? null : <HomeTopContentSpacer />;
+  const showMachineStrip = props.environments.length >= 2 && props.searchQuery.trim() === "";
+  const listHeader = showMachineStrip ? (
+    <>
+      {Platform.OS === "ios" ? null : <HomeTopContentSpacer />}
+      <EnvironmentCommandStrip
+        environments={props.environments}
+        summaries={environmentWork}
+        selectedEnvironmentId={props.selectedEnvironmentId}
+        onEnvironmentChange={props.onEnvironmentChange}
+        onSelectThread={props.onSelectThread}
+      />
+    </>
+  ) : Platform.OS === "ios" ? null : (
+    <HomeTopContentSpacer />
+  );
 
-  // Project scoping lives in the header filter menu (no inline chip row on
-  // mobile — the menu is the one filter surface).
+  // Project scoping stays in the header filter menu; the machine strip is a
+  // direct route to each environment and its next thread.
   const v2ListHeader = listHeader;
 
   const listEmpty = !hasResults ? (

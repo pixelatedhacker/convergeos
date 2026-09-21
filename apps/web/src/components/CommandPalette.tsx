@@ -1827,8 +1827,17 @@ function OpenCommandPaletteDialog(props: {
   actionItems.push({
     kind: "action",
     value: "action:dashboard",
-    searchTerms: ["dashboard", "overview", "running", "attention", "quota", "status"],
-    title: "Open dashboard",
+    searchTerms: [
+      "dashboard",
+      "command center",
+      "machines",
+      "overview",
+      "running",
+      "attention",
+      "quota",
+      "status",
+    ],
+    title: "Open command center",
     icon: <LayoutDashboardIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/dashboard" });

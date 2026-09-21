@@ -124,8 +124,9 @@ describe("partitionDashboardThreads", () => {
       hasPendingApprovals: true,
       archivedAt: "2026-09-05T00:00:00.000Z",
     });
-    const snoozedApproval = makeThread({
-      hasPendingApprovals: true,
+    const snoozedPlan = makeThread({
+      hasActionableProposedPlan: true,
+      snoozedAt: "2026-09-06T14:00:00.000Z",
       snoozedUntil: "2026-09-06T16:00:00.000Z",
     });
     const snoozedWorking = makeThread({
@@ -139,14 +140,19 @@ describe("partitionDashboardThreads", () => {
       hasPendingUserInput: true,
       snoozedUntil: "2026-09-06T14:00:00.000Z",
     });
+    const raisedHand = makeThread({
+      hasPendingUserInput: true,
+      snoozedAt: "2026-09-06T14:00:00.000Z",
+      snoozedUntil: "2026-09-06T16:00:00.000Z",
+    });
 
     const { running, attention } = partitionDashboardThreads(
-      [archived, snoozedApproval, snoozedWorking, expiredSnooze],
+      [archived, snoozedPlan, snoozedWorking, expiredSnooze, raisedHand],
       NOW,
     );
 
     expect(running.map((row) => row.threadId)).toEqual([snoozedWorking.id]);
-    expect(attention.map((row) => row.threadId)).toEqual([expiredSnooze.id]);
+    expect(attention.map((row) => row.threadId)).toEqual([expiredSnooze.id, raisedHand.id]);
   });
 });
 
