@@ -9,6 +9,7 @@ import {
   subscriptionQuotaRemainingPercent,
   type EnvironmentId,
   type ProjectId,
+  type SubscriptionQuotaSubject,
   type Schedule,
   type SubscriptionQuotaReport,
   type ThreadId,
@@ -109,7 +110,7 @@ export interface DashboardQuotaRow {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
   readonly subjectId: string;
-  readonly provider: string;
+  readonly provider: SubscriptionQuotaSubject["provider"];
   readonly plan: string | null;
   readonly accountLabel: string | null;
   readonly status: "fresh" | "stale" | "unavailable" | "failed";
@@ -128,6 +129,7 @@ export interface DashboardQuotaRow {
 export function summarizeQuotaReport(
   report: SubscriptionQuotaReport,
   environmentLabel: string,
+  now: number = Date.now(),
 ): readonly DashboardQuotaRow[] {
   return report.subjects.map((subject) => {
     let worst: {
@@ -135,7 +137,9 @@ export function summarizeQuotaReport(
       readonly remainingPercent: number;
       readonly resetsAt: string | null;
     } | null = null;
-    for (const window of subject.windows) {
+    for (const window of subject.status === "failed" || subject.status === "unavailable"
+      ? []
+      : subject.windows) {
       const remainingPercent = subscriptionQuotaRemainingPercent(window.usedPercent);
       if (remainingPercent === null) continue;
       if (worst === null || remainingPercent < worst.remainingPercent) {
@@ -149,7 +153,10 @@ export function summarizeQuotaReport(
       provider: subject.provider,
       plan: subject.plan,
       accountLabel: subject.accountLabel,
-      status: subject.status,
+      status:
+        subject.status === "fresh" && subject.staleAt !== null && Date.parse(subject.staleAt) <= now
+          ? "stale"
+          : subject.status,
       worstWindowLabel: worst?.label ?? null,
       worstWindowRemainingPercent: worst?.remainingPercent ?? null,
       worstWindowResetsAt: worst?.resetsAt ?? null,
@@ -236,4 +243,15 @@ export function recentRunRows<
     firedAt: run.firedAt,
     scheduleTitle: titles.get(`${run.environmentId}:${run.scheduleId}`) ?? null,
   }));
+}
+
+export function quotaResetLabel(resetsAt: string, now: number): string {
+  const reset = Date.parse(resetsAt);
+  if (!Number.isFinite(reset)) return "Reset time unavailable";
+  if (reset <= now) return "Reset due; refresh limits";
+  const minutes = Math.ceil((reset - now) / 60_000);
+  if (minutes < 60) return `Resets in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Resets in ${hours}h ${minutes % 60}m`;
+  return `Resets in ${Math.floor(hours / 24)}d ${hours % 24}h`;
 }

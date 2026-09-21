@@ -126,7 +126,15 @@ export function normalizeCodexBarDashboardSnapshot(
     observedAt,
     staleAfterSeconds: snapshot.staleAfterSeconds,
     subjects: snapshot.providers.map((provider, providerIndex) => {
-      const windows = provider.windows.map(normalizeWindow);
+      const offline = provider.source?.trim().toLowerCase() === "offline";
+      const unavailable = !provider.enabled || offline || provider.status === "unavailable";
+      const windows = offline ? [] : provider.windows.map(normalizeWindow);
+      const reportedPlan = provider.identity?.plan?.trim() || null;
+      // Claude CLI status text can be scraped into CodexBar's plan field.
+      const plan =
+        reportedPlan !== null && /^(?:completes?\s*tasks?|offline\b)/i.test(reportedPlan)
+          ? null
+          : reportedPlan;
       const failed = provider.error !== null && provider.error !== undefined;
       return {
         subjectId: `codexbar:${provider.id}:${providerIndex}`,
@@ -137,8 +145,14 @@ export function normalizeCodexBarDashboardSnapshot(
           transport: "cli",
           reportedSource: provider.source?.trim() || null,
         },
-        status: !provider.enabled ? "unavailable" : failed ? "failed" : "fresh",
-        plan: provider.identity?.plan?.trim() || null,
+        status: failed
+          ? "failed"
+          : unavailable
+            ? "unavailable"
+            : provider.status === "stale"
+              ? "stale"
+              : "fresh",
+        plan,
         accountLabel: provider.identity?.accountEmail?.trim() || null,
         observedAt: isoOrNull(provider.updatedAt) ?? observedAt,
         staleAt: expiresAt,

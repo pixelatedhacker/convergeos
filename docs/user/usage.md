@@ -114,3 +114,11 @@ settings section when you no longer need it.
 Add **Subscription usage** from your iOS or Android widget gallery to see remaining Codex and
 Claude quotas. Tap it to open **Usage → Limits**. On iOS, use **Edit Widget** to choose Session,
 Weekly, or both for each provider. Reopen T3 to refresh expired readings.
+
+## Subscription limits
+
+Command center shows reported subscription allowance separately from usage cost estimates.
+Percentages are rounded to one decimal place. Reset labels count down to the reported reset time.
+A reset that is due asks you to refresh rather than claiming the allowance has already returned.
+Stale, failed, and unavailable readings are labeled. An unavailable reading is not zero usage or
+unlimited allowance. Offline conversation counts are not treated as quota.
