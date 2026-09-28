@@ -336,17 +336,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     selectedProviderStatus,
     currentRuntimeMode,
   );
-  const cliAttachmentBlockReason =
-    selectedProviderStatus?.driver === "antigravityCli" &&
-    props.draftAttachments.some((attachment) => attachment.type === "image")
-      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
-      : null;
-  const cliBusyBlockReason =
-    selectedProviderStatus?.driver === "antigravityCli" &&
-    (props.selectedThread.session?.status === "running" ||
-      props.selectedThread.session?.status === "starting")
-      ? "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft."
-      : null;
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     Keyboard.dismiss();
     navigation.navigate("ThreadAttachment", {
@@ -434,9 +423,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     props.sendBlockedReason ??
     (pendingPastedTextAttachmentCount > 0 ? "Attaching pasted text" : null) ??
     attachmentBlockReason ??
-    providerModeBlockReason ??
-    cliAttachmentBlockReason ??
-    cliBusyBlockReason;
+    providerModeBlockReason;
   const canSend =
     hasContent &&
     !contextImports[composerOwnerKey] &&
@@ -693,11 +680,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           </Pressable>
         ) : null}
 
-        {providerModeBlockReason || cliAttachmentBlockReason || cliBusyBlockReason ? (
+        {providerModeBlockReason ? (
           <Pressable accessibilityRole="button" className="px-3 py-2" onPress={openSettings}>
-            <Text className="text-xs text-foreground">
-              {providerModeBlockReason ?? cliAttachmentBlockReason ?? cliBusyBlockReason}
-            </Text>
+            <Text className="text-xs text-foreground">{providerModeBlockReason}</Text>
           </Pressable>
         ) : null}
 

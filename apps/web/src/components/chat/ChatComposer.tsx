@@ -1968,12 +1968,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const providerSendBlockReason =
     runtimeModeBlockReason ??
-    (selectedProvider === "antigravityCli" && composerImages.length > 0
-      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
-      : null) ??
-    (selectedProvider === "antigravityCli" && phase === "running"
-      ? "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft."
-      : null) ??
     getAntigravitySendBlockReason(selectedProviderEntry?.snapshot, selectedModel);
   const sendDisabledReason =
     externalSendDisabledReason ??

@@ -6,7 +6,6 @@ import {
   MessageId,
   ProjectId,
   ProviderInstanceId,
-  ProviderDriverKind,
   ThreadId,
 } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -140,7 +139,6 @@ import {
   pendingThreadCreationOutcomesAtom,
 } from "./pending-thread-creation";
 import type { QueuedThreadMessage } from "./thread-outbox-model";
-import { queuedProviderInputBlockReason } from "./thread-outbox-model";
 import * as composerDrafts from "./use-composer-drafts";
 import { recoverFailedThreadDraft } from "./recover-failed-thread-draft";
 import { editingQueuedMessageIdsAtom } from "./use-thread-outbox";
@@ -594,65 +592,6 @@ describe("thread outbox delivered creation recovery", () => {
 });
 
 describe("thread outbox recovery rollback", () => {
-  it.each([false, true])(
-    "preserves rejected CLI images and text in an editable draft (creation: %s)",
-    async (creation) => {
-      const projectId = ProjectId.make("project-cli");
-      const message: QueuedThreadMessage = {
-        ...queuedMessage({ messageId: "cli-image-rejected", text: "Read this screenshot" }),
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("antigravityCli"),
-          model: "gemini-3.8-flash-high",
-        },
-        runtimeMode: "full-access",
-        attachments: [
-          {
-            id: "cli-image",
-            type: "image",
-            name: "screenshot.png",
-            mimeType: "image/png",
-            sizeBytes: 1,
-            dataUrl: "data:image/png;base64,AA==",
-            previewUri: "file:///documents/screenshot.png",
-          },
-        ],
-        ...(creation
-          ? {
-              creation: {
-                projectId,
-                workspaceMode: "local" as const,
-                branch: null,
-                worktreePath: null,
-              },
-            }
-          : {}),
-      };
-      await harness.manager.enqueue(message);
-      const reason = queuedProviderInputBlockReason({
-        provider: {
-          driver: ProviderDriverKind.make("antigravityCli"),
-          supportedRuntimeModes: ["full-access"],
-        },
-        runtimeMode: "full-access",
-        attachments: message.attachments,
-        threadBusy: false,
-      });
-      if (!reason) throw new Error("Expected native CLI image rejection");
-      await expect(restoreRejectedQueuedMessage(message, reason)).resolves.toBe("restored");
-      const draftKey = creation
-        ? `new-task:restored-${message.messageId}`
-        : `${message.environmentId}:${message.threadId}`;
-      expect(composerDrafts.getComposerDraftSnapshot(draftKey)).toMatchObject({
-        text: message.text,
-        attachments: message.attachments,
-        modelSelection: message.modelSelection,
-        runtimeMode: message.runtimeMode,
-      });
-      expect(remainingMessages()).toEqual([]);
-      expect(harness.prepareTurnAttachments).not.toHaveBeenCalled();
-      expect(harness.removePersistedFile).not.toHaveBeenCalled();
-    },
-  );
   it("preserves inline context from setup edits when reopening a failed task", async () => {
     const message = queuedMessage({ messageId: "failed-context", text: "Original prompt" });
     const sourceKey = `${message.environmentId}:${message.threadId}`;

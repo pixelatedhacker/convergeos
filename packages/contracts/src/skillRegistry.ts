@@ -38,7 +38,7 @@ export type SkillStoreHarness = typeof SkillStoreHarness.Type;
 
 /**
  * Provider driver kind -> skills CLI agent slug. Drivers without a mapping
- * (ohMyPi, antigravityCli) are not valid install targets and stay hidden in
+ * (ohMyPi) are not valid install targets and stay hidden in
  * the store UI.
  */
 export const SKILL_STORE_HARNESS_BY_DRIVER_KIND: Readonly<

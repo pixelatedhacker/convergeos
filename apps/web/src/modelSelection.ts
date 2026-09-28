@@ -58,8 +58,7 @@ function readInstanceCustomModels(
   instanceId: ProviderInstanceId,
   driverKind: ProviderDriverKind,
 ): ReadonlyArray<CustomModelDefinition> {
-  if (driverKind === "antigravity" || driverKind === "ohMyPi" || driverKind === "antigravityCli")
-    return [];
+  if (driverKind === "antigravity" || driverKind === "ohMyPi") return [];
   const instance = settings.providerInstances?.[instanceId];
   const config = instance?.config;
   if (config !== null && typeof config === "object") {
@@ -101,12 +100,7 @@ function appendUnavailableDynamicModelSelection(
   selectedModel: string | null | undefined,
   hiddenModels: ReadonlyArray<string>,
 ): AppModelOption[] {
-  if (
-    provider !== "opencode" &&
-    provider !== "antigravity" &&
-    provider !== "ohMyPi" &&
-    provider !== "antigravityCli"
-  ) {
+  if (provider !== "opencode" && provider !== "antigravity" && provider !== "ohMyPi") {
     return options;
   }
   const slug = normalizeCustomModelSlug(selectedModel);
@@ -320,8 +314,7 @@ export function resolveAppModelSelectionForInstance(
     resolutionOptions?.preserveUnavailableSelection &&
     (entry.driverKind === "opencode" ||
       entry.driverKind === "antigravity" ||
-      entry.driverKind === "ohMyPi" ||
-      entry.driverKind === "antigravityCli")
+      entry.driverKind === "ohMyPi")
   ) {
     const unavailableSelection = normalizeCustomModelSlug(selectedModel);
     const hiddenModels = readInstanceModelPreferences(settings, entry.instanceId).hiddenModels;

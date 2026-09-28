@@ -7454,13 +7454,6 @@ export default function ChatView(props: ChatViewProps) {
       directAnnotation?.image && annotationImageAppended
         ? [...sendContextImages, directAnnotation.image]
         : sendContextImages;
-    if (ctxSelectedProvider === "antigravityCli" && composerImages.length > 0) {
-      setThreadError(
-        activeThread.id,
-        "Antigravity CLI accepts text only. Remove image attachments to continue.",
-      );
-      return;
-    }
     const composerPreviewAnnotations =
       directAnnotation &&
       !sendContextPreviewAnnotations.some(

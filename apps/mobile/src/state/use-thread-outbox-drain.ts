@@ -3,6 +3,7 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import {
   CommandId,
@@ -51,7 +52,6 @@ import {
   resolveThreadOutboxDispatchStep,
   resolveThreadOutboxFailureAction,
   resolveQueuedThreadSettings,
-  queuedProviderInputBlockReason,
   shouldRetryThreadOutboxDelivery,
   threadOutboxRetryDelayMs,
   type QueuedThreadCreation,
@@ -781,14 +781,12 @@ export function useThreadOutboxDrain(): void {
       );
       if (!serverConfig) return false;
       const settings = resolveQueuedThreadSettings(queuedMessage, thread, serverConfig.providers);
-      const inputError = queuedProviderInputBlockReason({
-        provider: serverConfig.providers.find(
+      const inputError = getProviderRuntimeModeBlockReason(
+        serverConfig.providers.find(
           (entry) => entry.instanceId === settings.modelSelection.instanceId,
         ),
-        runtimeMode: settings.runtimeMode,
-        attachments: queuedMessage.attachments,
-        threadBusy: thread.session?.status === "running" || thread.session?.status === "starting",
-      });
+        settings.runtimeMode,
+      );
       if (inputError) return restoreQueuedMessage(queuedMessage, inputError);
       if (isModelSelectionUnavailable(serverConfig, settings.modelSelection)) {
         return restoreQueuedMessage(
@@ -894,20 +892,12 @@ export function useThreadOutboxDrain(): void {
         settings,
         currentConfig.providers,
       );
-      const currentThread = findThread(
-        appAtomRegistry.get(environmentThreadShells.threadShellsAtom),
-        persistedMessage,
-      );
-      const currentInputError = queuedProviderInputBlockReason({
-        provider: currentConfig.providers.find(
+      const currentInputError = getProviderRuntimeModeBlockReason(
+        currentConfig.providers.find(
           (entry) => entry.instanceId === sendSettings.modelSelection.instanceId,
         ),
-        runtimeMode: sendSettings.runtimeMode,
-        attachments: persistedMessage.attachments,
-        threadBusy:
-          currentThread?.session?.status === "running" ||
-          currentThread?.session?.status === "starting",
-      });
+        sendSettings.runtimeMode,
+      );
       if (currentInputError) return restoreQueuedMessage(persistedMessage, currentInputError);
       const deliveryResult = await startTurn({
         environmentId: queuedMessage.environmentId,
@@ -982,14 +972,12 @@ export function useThreadOutboxDrain(): void {
         },
         serverConfig.providers,
       );
-      const inputError = queuedProviderInputBlockReason({
-        provider: serverConfig.providers.find(
+      const inputError = getProviderRuntimeModeBlockReason(
+        serverConfig.providers.find(
           (entry) => entry.instanceId === settings.modelSelection.instanceId,
         ),
-        runtimeMode: settings.runtimeMode,
-        attachments: queuedMessage.attachments,
-        threadBusy: false,
-      });
+        settings.runtimeMode,
+      );
       if (inputError) return restoreQueuedMessage(queuedMessage, inputError);
       if (isModelSelectionUnavailable(serverConfig, settings.modelSelection)) {
         return restoreQueuedMessage(
@@ -1046,14 +1034,12 @@ export function useThreadOutboxDrain(): void {
         settings,
         currentConfig.providers,
       );
-      const currentInputError = queuedProviderInputBlockReason({
-        provider: currentConfig.providers.find(
+      const currentInputError = getProviderRuntimeModeBlockReason(
+        currentConfig.providers.find(
           (entry) => entry.instanceId === sendSettings.modelSelection.instanceId,
         ),
-        runtimeMode: sendSettings.runtimeMode,
-        attachments: persistedMessage.attachments,
-        threadBusy: false,
-      });
+        sendSettings.runtimeMode,
+      );
       if (currentInputError) return restoreQueuedMessage(persistedMessage, currentInputError);
       const deliveryResult = await startTurn({
         environmentId: queuedMessage.environmentId,

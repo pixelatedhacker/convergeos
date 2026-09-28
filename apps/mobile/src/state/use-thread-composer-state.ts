@@ -396,26 +396,6 @@ export function useThreadComposerState() {
       Alert.alert("Access mode unavailable", modeError);
       return null;
     }
-    if (
-      provider?.driver === "antigravityCli" &&
-      (thread.session?.status === "running" || thread.session?.status === "starting")
-    ) {
-      Alert.alert(
-        "Turn in progress",
-        "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft.",
-      );
-      return null;
-    }
-    if (
-      provider?.driver === "antigravityCli" &&
-      attachments.some((attachment) => attachment.type === "image")
-    ) {
-      Alert.alert(
-        "Images unavailable",
-        "Antigravity CLI accepts text only. Remove image attachments to continue.",
-      );
-      return null;
-    }
     const feedbackCommand =
       attachments.length === 0 &&
       (provider?.driver === "codex" || thread.session?.providerName === "codex")

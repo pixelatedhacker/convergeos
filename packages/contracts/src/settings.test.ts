@@ -9,7 +9,6 @@ import {
   DEFAULT_SERVER_SETTINGS,
   defaultEnabledForDriver,
   OhMyPiSettings,
-  AntigravityCliSettings,
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
@@ -23,32 +22,6 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 const decodeOhMyPiSettings = Schema.decodeUnknownSync(OhMyPiSettings);
-const decodeAntigravityCliSettings = Schema.decodeUnknownSync(AntigravityCliSettings);
-
-describe("AntigravityCliSettings", () => {
-  it("starts disabled with native agy, independently of the ACP provider", () => {
-    expect(decodeAntigravityCliSettings({})).toEqual({
-      enabled: false,
-      binaryPath: "agy",
-    });
-    expect(DEFAULT_SERVER_SETTINGS.providers.antigravityCli).toEqual({
-      enabled: false,
-      binaryPath: "agy",
-    });
-    expect(defaultEnabledForDriver(ProviderDriverKind.make("antigravityCli"))).toBe(false);
-  });
-
-  it("round-trips a native CLI configuration and trims patch paths", () => {
-    const patch = decodeServerSettingsPatch({
-      providers: { antigravityCli: { enabled: true, binaryPath: " /opt/bin/agy " } },
-    });
-    expect(patch.providers?.antigravityCli).toEqual({ enabled: true, binaryPath: "/opt/bin/agy" });
-    const settings = decodeServerSettings({ providers: patch.providers });
-    expect(decodeServerSettings(encodeServerSettings(settings)).providers.antigravityCli).toEqual(
-      settings.providers.antigravityCli,
-    );
-  });
-});
 
 describe("OhMyPiSettings", () => {
   it("defaults to a disabled omp binary", () => {
@@ -69,6 +42,23 @@ describe("OhMyPiSettings", () => {
         providers: { ohMyPi: { enabled: true, binaryPath: "  /opt/bin/omp  " } },
       }).providers?.ohMyPi,
     ).toEqual({ enabled: true, binaryPath: "/opt/bin/omp" });
+  });
+});
+
+describe("removed antigravityCli provider", () => {
+  it("still decodes settings persisted while the driver existed", () => {
+    const settings = decodeServerSettings({
+      providers: { antigravityCli: { enabled: true, binaryPath: "/opt/bin/agy" } },
+      providerInstances: {
+        agyNative: { driver: "antigravityCli", enabled: true, config: { binaryPath: "agy" } },
+      },
+    });
+    expect(settings.providers).not.toHaveProperty("antigravityCli");
+    const instance = settings.providerInstances[ProviderInstanceId.make("agyNative")];
+    expect(instance).toMatchObject({ driver: "antigravityCli", config: { binaryPath: "agy" } });
+    expect(decodeServerSettings(encodeServerSettings(settings)).providerInstances).toEqual(
+      settings.providerInstances,
+    );
   });
 });
 

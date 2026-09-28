@@ -13,40 +13,40 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
-  it.each([
-    { driver: "ohMyPi", label: "Oh My Pi", defaultModel: "default" },
-    { driver: "antigravityCli", label: "Antigravity CLI", defaultModel: "antigravity-cli-default" },
-  ])("labels the built-in $label instance and default model", ({ driver, label, defaultModel }) => {
-    const config = {
-      providers: [
-        {
-          instanceId: driver,
-          driver,
-          enabled: true,
-          installed: true,
-          auth: { status: "unknown" },
-          models: [
-            {
-              slug: defaultModel,
-              name: defaultModel,
-              isCustom: false,
-              isDefault: true,
-              capabilities: null,
-            },
-          ],
-        },
-      ],
-    } as unknown as ServerConfig;
+  it.each([{ driver: "ohMyPi", label: "Oh My Pi", defaultModel: "default" }])(
+    "labels the built-in $label instance and default model",
+    ({ driver, label, defaultModel }) => {
+      const config = {
+        providers: [
+          {
+            instanceId: driver,
+            driver,
+            enabled: true,
+            installed: true,
+            auth: { status: "unknown" },
+            models: [
+              {
+                slug: defaultModel,
+                name: defaultModel,
+                isCustom: false,
+                isDefault: true,
+                capabilities: null,
+              },
+            ],
+          },
+        ],
+      } as unknown as ServerConfig;
 
-    expect(buildModelOptions(config, null)).toMatchObject([
-      {
-        label: "Default",
-        providerLabel: label,
-        providerDriver: driver,
-        isDefault: true,
-      },
-    ]);
-  });
+      expect(buildModelOptions(config, null)).toMatchObject([
+        {
+          label: "Default",
+          providerLabel: label,
+          providerDriver: driver,
+          isDefault: true,
+        },
+      ]);
+    },
+  );
 
   it("groups models by provider and flags legacy entries", () => {
     const config = {

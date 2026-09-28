@@ -1,6 +1,5 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
-  ANTIGRAVITY_CLI_DEFAULT_MODEL,
   OH_MY_PI_DEFAULT_MODEL,
   type ProviderInstanceId,
   type ProviderDriverKind,
@@ -83,17 +82,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     }) ??
     (activeEntry?.driverKind === "opencode" ||
     activeEntry?.driverKind === "antigravity" ||
-    activeEntry?.driverKind === "ohMyPi" ||
-    activeEntry?.driverKind === "antigravityCli"
+    activeEntry?.driverKind === "ohMyPi"
       ? undefined
       : selectedInstanceOptions[0]);
   const triggerTitle = selectedModel
     ? getTriggerDisplayModelName(selectedModel)
     : props.model === ANTIGRAVITY_DEFAULT_MODEL
       ? "Choose model"
-      : (activeEntry?.driverKind === "ohMyPi" && props.model === OH_MY_PI_DEFAULT_MODEL) ||
-          (activeEntry?.driverKind === "antigravityCli" &&
-            props.model === ANTIGRAVITY_CLI_DEFAULT_MODEL)
+      : activeEntry?.driverKind === "ohMyPi" && props.model === OH_MY_PI_DEFAULT_MODEL
         ? "Default"
         : props.model || "Choose model";
   const triggerLabel = selectedModel

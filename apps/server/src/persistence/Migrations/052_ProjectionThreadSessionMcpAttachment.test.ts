@@ -34,7 +34,7 @@ layer("052_ProjectionThreadSessionMcpAttachment", (it) => {
         ) VALUES (
           'thread-leaf-only',
           'ready',
-          'antigravityCli',
+          'antigravity',
           'leafOnly',
           'full-access',
           NULL,
