@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   type AuthSessionId,
@@ -50,7 +50,7 @@ export const make = (options?: { readonly nowMs?: () => number }) => {
       targets.delete(oldest);
     }
     const expiresAt = DateTime.makeUnsafe(now + VIEWER_ACCESS_TTL_MS);
-    const token = randomBytes(32).toString("base64url");
+    const token = NodeCrypto.randomBytes(32).toString("base64url");
     targets.set(token, { ...input, expiresAtMs: expiresAt.epochMilliseconds });
     const websocketPath = `${BOT_COMPUTER_VIEWER_ROUTE_PREFIX}/${token}/websockify`;
     const query = new URLSearchParams({

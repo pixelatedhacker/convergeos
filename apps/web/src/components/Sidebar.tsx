@@ -4769,7 +4769,6 @@ export default function Sidebar() {
             />
             <SidebarMenuButton
               aria-current={isBotsRoute ? "page" : undefined}
-              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
               isActive={isBotsRoute}
               onClick={handleBotsClick}
             >
@@ -4778,7 +4777,6 @@ export default function Sidebar() {
             </SidebarMenuButton>
             <SidebarMenuButton
               aria-current={isDashboardRoute ? "page" : undefined}
-              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
               isActive={isDashboardRoute}
               onClick={handleDashboardClick}
             >
@@ -4787,7 +4785,6 @@ export default function Sidebar() {
             </SidebarMenuButton>
             <SidebarMenuButton
               aria-current={isSchedulesRoute ? "page" : undefined}
-              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
               isActive={isSchedulesRoute}
               onClick={handleSchedulesClick}
             >
@@ -4796,7 +4793,6 @@ export default function Sidebar() {
             </SidebarMenuButton>
             <SidebarMenuButton
               aria-current={isSkillsRoute ? "page" : undefined}
-              className="ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
               isActive={isSkillsRoute}
               onClick={handleSkillsClick}
             >

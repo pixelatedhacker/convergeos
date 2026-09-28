@@ -266,7 +266,7 @@ export function BotsPage() {
   };
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Bots breadcrumb">
@@ -376,9 +376,7 @@ function EmptyFleet({
         <span className="mb-6 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
           <BotIcon className="size-7" />
         </span>
-        <h2 className="text-balance font-heading text-3xl font-semibold tracking-tight">
-          Create a bot
-        </h2>
+        <h2 className="text-balance text-3xl font-semibold tracking-tight">Create a bot</h2>
         <p className="mt-3 max-w-lg text-balance text-base leading-relaxed text-muted-foreground">
           Save instructions for an agent you reuse. Send it tasks here or assign work from your
           project board.
@@ -481,7 +479,7 @@ function BotWorkspace({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate font-heading text-2xl font-semibold tracking-tight">
+              <h2 className="truncate text-2xl font-semibold tracking-tight">
                 {thread.botProfile?.displayName ?? thread.title}
               </h2>
               <Badge variant={status.variant}>
@@ -507,10 +505,11 @@ function BotWorkspace({
               Open conversation <ArrowUpRightIcon />
             </Button>
           </div>
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs focus-within:ring-2 focus-within:ring-ring/25">
+          <div className="overflow-hidden rounded-xl border border-border bg-card px-1 py-1.5 shadow-xs focus-within:ring-2 focus-within:ring-ring/25">
             <Textarea
+              unstyled
               aria-label={`Message ${thread.botProfile?.displayName ?? thread.title}`}
-              className="min-h-28 resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0"
+              className="min-h-28"
               disabled={busy || !canDispatch}
               placeholder={
                 busy
@@ -593,7 +592,7 @@ function BotFact({
 }) {
   return (
     <div className="min-w-0 py-5 sm:px-5 sm:first:ps-0 sm:last:pe-0">
-      <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
       <p className="mt-2 truncate text-sm font-medium">{value}</p>
@@ -652,81 +651,83 @@ function CreateBotDialog({
             Save instructions and choose a provider. Tasks run in the bot's own worktree.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4">
-          {project ? (
-            <>
-              <label className="flex flex-col gap-1.5 text-sm">
-                Project
-                <select
-                  disabled={creating}
-                  className="h-9 rounded-md border bg-background px-2"
-                  value={`${project.environmentId}:${project.id}`}
-                  onChange={(event) => setProjectKey(event.target.value)}
-                >
-                  {projects.map((entry) => (
-                    <option
-                      key={`${entry.environmentId}:${entry.id}`}
-                      value={`${entry.environmentId}:${entry.id}`}
-                    >
-                      {entry.name}
-                      {entry.environmentLabel ? ` · ${entry.environmentLabel}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <NewBotForm
-                key={`${project.environmentId}:${project.id}`}
-                project={project}
-                onBusyChange={setCreating}
-                onCreated={onCreated}
-              />
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              <p>Add a project on a connected environment that supports bots.</p>
-              <Button
-                className="mt-3"
-                onClick={() => {
-                  onOpenChange(false);
-                  openCommandPalette({ open: "add-project" });
-                }}
-              >
-                Add project
-              </Button>
-            </div>
-          )}
-          {candidates.length > 0 && !creating ? (
-            <details className="border-t pt-3">
-              <summary className="cursor-pointer text-sm">Use an existing thread</summary>
-              <div className="mt-3 flex flex-col gap-2">
-                {candidates.map((thread) => (
-                  <div
-                    key={threadKey(thread)}
-                    className="flex items-center gap-3 rounded-md border p-3"
+        <DialogPanel>
+          <div className="flex flex-col gap-4">
+            {project ? (
+              <>
+                <label className="flex flex-col gap-1.5 text-sm">
+                  Project
+                  <select
+                    disabled={creating}
+                    className="h-9 rounded-md border bg-background px-2"
+                    value={`${project.environmentId}:${project.id}`}
+                    onChange={(event) => setProjectKey(event.target.value)}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{thread.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {projectNameByRef.get(`${thread.environmentId}:${thread.projectId}`) ??
-                          "Unknown project"}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      disabled={busyThreadKeys.has(threadKey(thread))}
-                      onClick={() =>
-                        void onSave(thread, thread.title, "").then((saved) => {
-                          if (saved) onOpenChange(false);
-                        })
-                      }
-                    >
-                      Use thread
-                    </Button>
-                  </div>
-                ))}
+                    {projects.map((entry) => (
+                      <option
+                        key={`${entry.environmentId}:${entry.id}`}
+                        value={`${entry.environmentId}:${entry.id}`}
+                      >
+                        {entry.name}
+                        {entry.environmentLabel ? ` · ${entry.environmentLabel}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <NewBotForm
+                  key={`${project.environmentId}:${project.id}`}
+                  project={project}
+                  onBusyChange={setCreating}
+                  onCreated={onCreated}
+                />
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                <p>Add a project on a connected environment that supports bots.</p>
+                <Button
+                  className="mt-3"
+                  onClick={() => {
+                    onOpenChange(false);
+                    openCommandPalette({ open: "add-project" });
+                  }}
+                >
+                  Add project
+                </Button>
               </div>
-            </details>
-          ) : null}
+            )}
+            {candidates.length > 0 && !creating ? (
+              <details className="border-t pt-3">
+                <summary className="cursor-pointer text-sm">Use an existing thread</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {candidates.map((thread) => (
+                    <div
+                      key={threadKey(thread)}
+                      className="flex items-center gap-3 rounded-md border p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{thread.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {projectNameByRef.get(`${thread.environmentId}:${thread.projectId}`) ??
+                            "Unknown project"}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={busyThreadKeys.has(threadKey(thread))}
+                        onClick={() =>
+                          void onSave(thread, thread.title, "").then((saved) => {
+                            if (saved) onOpenChange(false);
+                          })
+                        }
+                      >
+                        Use thread
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
         </DialogPanel>
       </DialogPopup>
     </Dialog>
@@ -901,21 +902,23 @@ function EditBotDialog({
             Name this bot and write the instructions it follows on every task.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-3">
-          <Input
-            aria-label="Bot name"
-            maxLength={80}
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-          <Textarea
-            aria-label="Bot instructions"
-            maxLength={2000}
-            placeholder="Standing instructions sent ahead of every task, such as the role, the test command, and the commit rule."
-            rows={6}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
+        <DialogPanel>
+          <div className="flex flex-col gap-3">
+            <Input
+              aria-label="Bot name"
+              maxLength={80}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+            <Textarea
+              aria-label="Bot instructions"
+              maxLength={2000}
+              placeholder="Standing instructions sent ahead of every task, such as the role, the test command, and the commit rule."
+              rows={6}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </div>
         </DialogPanel>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

@@ -165,7 +165,7 @@ export function DashboardPage() {
     projectNames.get(`${row.environmentId}:${row.projectId}`) ?? "Project";
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Command center breadcrumb">
@@ -287,7 +287,7 @@ export function DashboardPage() {
                             <span>Working {summary?.workingCount ?? 0}</span>
                           </span>
                           <span className="mt-auto block min-w-0 pt-3">
-                            <span className="block text-[11px] font-medium text-muted-foreground">
+                            <span className="block text-2xs font-medium text-muted-foreground">
                               {connected ? nextLabel : "Last known work"}
                             </span>
                             <span className="mt-0.5 block truncate text-sm text-foreground">

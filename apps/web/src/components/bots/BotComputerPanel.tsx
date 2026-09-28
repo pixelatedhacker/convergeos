@@ -302,7 +302,7 @@ export function BotComputerPanel({
         </div>
       </div>
 
-      <div className="relative flex aspect-[16/10] min-h-72 items-center justify-center bg-[#111318]">
+      <div className="relative flex aspect-[16/10] min-h-72 items-center justify-center bg-black">
         {capability === undefined ? (
           <ComputerEmptyState
             icon={<ServerOffIcon />}
@@ -436,10 +436,12 @@ export function BotComputerPanel({
               sessions. Files in the Bot worktree are not deleted.
             </DialogDescription>
           </DialogHeader>
-          <DialogPanel className="text-sm text-muted-foreground">
-            {confirming === "reset"
-              ? "A clean computer will start immediately with outbound network access."
-              : "You can create a clean computer again later."}
+          <DialogPanel>
+            <div className="text-sm text-muted-foreground">
+              {confirming === "reset"
+                ? "A clean computer will start immediately with outbound network access."
+                : "You can create a clean computer again later."}
+            </div>
           </DialogPanel>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(null)}>

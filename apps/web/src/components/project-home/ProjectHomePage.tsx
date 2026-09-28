@@ -254,7 +254,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
   }, [handleNewThread, representative]);
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Project home breadcrumb">
@@ -502,7 +502,7 @@ function ActivityStrip({ activity }: { readonly activity: ReturnType<typeof acti
   return (
     <div className="px-2">
       <div
-        className="flex h-10 items-end gap-[3px]"
+        className="flex h-10 items-end gap-0.75"
         role="img"
         aria-label={`${total} threads touched over the last ${activity.length} days`}
       >
@@ -512,7 +512,7 @@ function ActivityStrip({ activity }: { readonly activity: ReturnType<typeof acti
               render={
                 <div
                   className={cn(
-                    "min-w-0 flex-1 rounded-[2px]",
+                    "min-w-0 flex-1 rounded-xs",
                     index === activity.length - 1
                       ? "bg-foreground/55"
                       : day.count > 0
@@ -529,7 +529,7 @@ function ActivityStrip({ activity }: { readonly activity: ReturnType<typeof acti
           </Tooltip>
         ))}
       </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">
+      <p className="mt-1.5 text-2xs text-muted-foreground">
         Threads touched per day, last {activity.length} days
       </p>
     </div>
@@ -740,10 +740,10 @@ function BoardColumn(props: {
             aria-hidden="true"
           />
         )}
-        <h3 className="text-[11px] font-medium text-muted-foreground">
+        <h3 className="text-2xs font-medium text-muted-foreground">
           {BOARD_STATUS_LABEL[props.column.status]}
         </h3>
-        <span className="ms-auto text-[10px] tabular-nums text-muted-foreground/70">
+        <span className="ms-auto text-3xs tabular-nums text-muted-foreground/70">
           {props.column.cards.length + props.column.overflow}
         </span>
       </header>
@@ -760,7 +760,7 @@ function BoardColumn(props: {
       ))}
       {props.column.overflow > 0 ? (
         <button
-          className="rounded px-1 py-0.5 text-start text-[11px] text-muted-foreground hover:text-foreground"
+          className="rounded px-1 py-0.5 text-start text-2xs text-muted-foreground hover:text-foreground"
           onClick={props.onOpenBoard}
           type="button"
         >
@@ -804,7 +804,7 @@ function BoardCard(props: {
     >
       <h4 className="line-clamp-2 text-xs font-medium leading-4">{props.card.title}</h4>
       {assignee !== null || executionStatus !== null ? (
-        <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="mt-1 flex items-center gap-1 text-3xs text-muted-foreground">
           {assignee !== null ? (
             <span className="flex min-w-0 items-center gap-0.5">
               <BotIcon className="size-2.5 shrink-0" />
