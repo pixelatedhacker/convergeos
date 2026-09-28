@@ -729,7 +729,9 @@ export function HomeScreen(props: HomeScreenProps) {
   useThreadJumpShortcuts(threadListV2Items, props.onSelectThread);
   // Read through a ref so a list rebuild never hands every row a new renderItem.
   const threadListV2ItemsRef = useRef(threadListV2Items);
-  threadListV2ItemsRef.current = threadListV2Items;
+  useEffect(() => {
+    threadListV2ItemsRef.current = threadListV2Items;
+  }, [threadListV2Items]);
   const handleToggleWorkerGroup = useCallback(
     (coordinatorKey: string) =>
       toggleWorkerGroup(

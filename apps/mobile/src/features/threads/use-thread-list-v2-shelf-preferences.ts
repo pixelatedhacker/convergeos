@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 
@@ -31,7 +31,9 @@ export function useThreadListV2ShelfPreferences() {
     [expandedWorkerGroupList],
   );
   const expandedWorkerGroupListRef = useRef(expandedWorkerGroupList);
-  expandedWorkerGroupListRef.current = expandedWorkerGroupList;
+  useEffect(() => {
+    expandedWorkerGroupListRef.current = expandedWorkerGroupList;
+  }, [expandedWorkerGroupList]);
 
   const toggleSnoozedShelf = useCallback(() => {
     if (!loaded) return;

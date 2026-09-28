@@ -676,7 +676,9 @@ function ThreadNavigationSidebarPane(
   useThreadJumpShortcuts(listItems, handleSelectThread);
   // Read through a ref so a list rebuild never hands every row a new renderItem.
   const listItemsRef = useRef(listItems);
-  listItemsRef.current = listItems;
+  useEffect(() => {
+    listItemsRef.current = listItems;
+  }, [listItems]);
   const handleToggleWorkerGroup = useCallback(
     (coordinatorKey: string) =>
       toggleWorkerGroup(

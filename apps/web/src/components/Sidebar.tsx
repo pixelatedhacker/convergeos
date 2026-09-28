@@ -81,8 +81,10 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  createContext,
   memo,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -1052,8 +1054,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   nested?: boolean | undefined;
   /** A collapsed coordinator's highest worker status; surfaces when it outranks the row's own. */
   workerRollupStatus?: SidebarThreadStatus | null | undefined;
-  /** The coordinator's worker summary and, when expanded, its worker rows. */
-  workerGroup?: ReactNode;
+  /** Coordinator rows: the worker summary line. Primitive props keep the row memoised. */
+  workerSummaryText?: string | undefined;
+  workerGroupExpanded?: boolean | undefined;
+  /** Scoped keys of the worker rows to show, joined by NUL; rendered via context. */
+  visibleWorkerKeys?: string | undefined;
+  onToggleWorkerGroup?: ((coordinatorKey: string) => void) | undefined;
 }) {
   const {
     isRenaming,
@@ -2049,7 +2055,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
-      {props.workerGroup}
+      {props.workerSummaryText !== undefined && props.onToggleWorkerGroup !== undefined ? (
+        <SidebarWorkerGroup
+          coordinatorKey={threadKey}
+          summaryText={props.workerSummaryText}
+          expanded={props.workerGroupExpanded === true}
+          visibleWorkerKeys={props.visibleWorkerKeys ?? ""}
+          onToggle={props.onToggleWorkerGroup}
+        />
+      ) : null}
     </li>
   );
 });
@@ -2064,16 +2078,25 @@ function stopHandledWorkerFileDrag(event: ReactDragEvent) {
   if (event.defaultPrevented) event.stopPropagation();
 }
 
+// Worker rows need the sidebar's full row wiring. It reaches the group through
+// context, so the memoised coordinator row only takes primitive props: a shell
+// update elsewhere re-renders this small group, never the coordinator row.
+const SidebarWorkerRowRendererContext = createContext<(workerKey: string) => ReactNode>(() => null);
+
 // Mesh workers nest one level under the coordinator row that spawned them:
 // a summary line with a chevron, and the worker rows when expanded. They
 // render inside the coordinator's list item so they move with it and are
 // never sortable items or drop targets of their own.
 function SidebarWorkerGroup(props: {
+  coordinatorKey: string;
   summaryText: string;
   expanded: boolean;
-  onToggle: () => void;
-  children: ReactNode;
+  visibleWorkerKeys: string;
+  onToggle: (coordinatorKey: string) => void;
 }) {
+  const renderWorkerRow = useContext(SidebarWorkerRowRendererContext);
+  const { coordinatorKey, onToggle } = props;
+  const handleToggle = useCallback(() => onToggle(coordinatorKey), [coordinatorKey, onToggle]);
   return (
     <ul
       role="presentation"
@@ -2087,7 +2110,7 @@ function SidebarWorkerGroup(props: {
       <li className="list-none">
         <button
           type="button"
-          onClick={props.onToggle}
+          onClick={handleToggle}
           aria-expanded={props.expanded}
           data-testid="sidebar-worker-group-toggle"
           className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md pl-(--sidebar-row-content-inset) text-left text-xs text-secondary-label outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2099,7 +2122,9 @@ function SidebarWorkerGroup(props: {
           <span className="min-w-0 truncate">{props.summaryText}</span>
         </button>
       </li>
-      {props.children}
+      {props.visibleWorkerKeys.length === 0
+        ? null
+        : props.visibleWorkerKeys.split("\0").map(renderWorkerRow)}
     </ul>
   );
 }
@@ -2974,7 +2999,9 @@ export default function Sidebar() {
     [expandedWorkerGroupList],
   );
   const workerCoordinatorsRef = useRef(workerNesting.childrenByCoordinator);
-  workerCoordinatorsRef.current = workerNesting.childrenByCoordinator;
+  useEffect(() => {
+    workerCoordinatorsRef.current = workerNesting.childrenByCoordinator;
+  }, [workerNesting]);
   const toggleWorkerGroup = useCallback(
     (coordinatorKey: string) =>
       setExpandedWorkerGroupList((current) => {
@@ -5073,7 +5100,9 @@ export default function Sidebar() {
                         workers?: {
                           readonly nested?: boolean;
                           readonly rollupStatus?: SidebarThreadStatus | null;
-                          readonly group?: ReactNode;
+                          readonly summaryText?: string;
+                          readonly expanded?: boolean;
+                          readonly visibleWorkerKeys?: string;
                         },
                       ) => {
                         const threadKey = scopedThreadKey(
@@ -5180,7 +5209,12 @@ export default function Sidebar() {
                             onFileDropThreads={handleThreadFileDrop}
                             nested={workers?.nested}
                             workerRollupStatus={workers?.rollupStatus}
-                            workerGroup={workers?.group}
+                            workerSummaryText={workers?.summaryText}
+                            workerGroupExpanded={workers?.expanded}
+                            visibleWorkerKeys={workers?.visibleWorkerKeys}
+                            onToggleWorkerGroup={
+                              workers?.summaryText === undefined ? undefined : toggleWorkerGroup
+                            }
                           />
                         );
                       };
@@ -5192,18 +5226,20 @@ export default function Sidebar() {
                         const expanded = expandedWorkerGroups.has(threadKey);
                         return {
                           rollupStatus: expanded ? null : summary.rollupStatus,
-                          group: (
-                            <SidebarWorkerGroup
-                              summaryText={summary.text}
-                              expanded={expanded}
-                              onToggle={() => toggleWorkerGroup(threadKey)}
-                            >
-                              {(visibleWorkersByCoordinator.get(threadKey) ?? []).map((worker) =>
-                                renderThreadRowInner(worker, "active", undefined, { nested: true }),
-                              )}
-                            </SidebarWorkerGroup>
-                          ),
+                          summaryText: summary.text,
+                          expanded,
+                          visibleWorkerKeys: (visibleWorkersByCoordinator.get(threadKey) ?? [])
+                            .map((worker) =>
+                              scopedThreadKey(scopeThreadRef(worker.environmentId, worker.id)),
+                            )
+                            .join("\0"),
                         };
+                      };
+                      const renderWorkerRow = (workerKey: string) => {
+                        const worker = threadByKey.get(workerKey);
+                        return worker === undefined
+                          ? null
+                          : renderThreadRowInner(worker, "active", undefined, { nested: true });
                       };
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
@@ -5348,7 +5384,11 @@ export default function Sidebar() {
                             break;
                         }
                       }
-                      return items;
+                      return (
+                        <SidebarWorkerRowRendererContext.Provider value={renderWorkerRow}>
+                          {items}
+                        </SidebarWorkerRowRendererContext.Provider>
+                      );
                     })()}
                     {settledShelfExpanded && hiddenSettledCount > 0 ? (
                       <li className="list-none">
