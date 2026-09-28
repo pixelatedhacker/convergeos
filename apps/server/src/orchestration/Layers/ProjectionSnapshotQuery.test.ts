@@ -674,6 +674,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               planId: "plan-1",
             },
           },
+          latestTurnDiffStat: { additions: 2, deletions: 1, files: 1 },
           createdAt: "2026-02-24T00:00:02.000Z",
           updatedAt: "2026-02-24T00:00:03.000Z",
           archivedAt: null,
@@ -3873,4 +3874,69 @@ projectionSnapshotLayer("ProjectionSnapshotQuery activities by kind", (it) => {
       assert.deepEqual(yield* query.listActivitiesByKind("nope"), []);
     }),
   );
+});
+
+it.effect("carries the latest ready checkpoint's diff stat on thread shells", () => {
+  const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
+    Layer.provide(ThreadBackgroundLiveness.layer),
+    Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(
+      Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
+        resolve: () => Effect.succeed(null),
+      }),
+    ),
+    Layer.provideMerge(SqlitePersistenceMemory),
+  );
+  return Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const query = yield* ProjectionSnapshotQuery;
+    yield* sql`INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at)
+      VALUES ('p1', 'One', '/one', '[]', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`;
+    yield* sql`INSERT INTO projection_threads (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, latest_turn_id, created_at, updated_at, archived_at)
+      VALUES
+        ('t-changed', 'p1', 'Changed', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', 'turn-3', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', NULL),
+        ('t-running', 'p1', 'Running', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', 'turn-r', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', NULL),
+        ('t-unchanged', 'p1', 'Unchanged', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', 'turn-u', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', NULL),
+        ('t-archived', 'p1', 'Archived', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', 'turn-a', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z')`;
+    // t-changed: turn 2 is the latest ready checkpoint; turn 3 is a running
+    // placeholder whose files must not count.
+    yield* sql`INSERT INTO projection_turns (thread_id, turn_id, state, requested_at, checkpoint_turn_count, checkpoint_ref, checkpoint_status, checkpoint_files_json)
+      VALUES
+        ('t-changed', 'turn-1', 'completed', '2026-09-01T00:00:01Z', 1, 'ref-1', 'ready',
+          '[{"path":"a.ts","kind":"modified","additions":40,"deletions":40}]'),
+        ('t-changed', 'turn-2', 'completed', '2026-09-01T00:00:02Z', 2, 'ref-2', 'ready',
+          '[{"path":"a.ts","kind":"modified","additions":10,"deletions":2},{"path":"b.ts","kind":"added","additions":2,"deletions":1}]'),
+        ('t-changed', 'turn-3', 'running', '2026-09-01T00:00:03Z', 3, 'ref-3', 'missing',
+          '[{"path":"c.ts","kind":"added","additions":99,"deletions":0}]'),
+        ('t-running', 'turn-r', 'running', '2026-09-01T00:00:01Z', NULL, NULL, NULL, '[]'),
+        ('t-unchanged', 'turn-u', 'completed', '2026-09-01T00:00:01Z', 1, 'ref-u', 'ready', '[]'),
+        ('t-archived', 'turn-a', 'completed', '2026-09-01T00:00:01Z', 1, 'ref-a', 'ready',
+          '[{"path":"a.ts","kind":"modified","additions":3,"deletions":0}]')`;
+
+    const expected = { additions: 12, deletions: 3, files: 2 };
+    const shells = new Map(
+      (yield* query.getShellSnapshot()).threads.map((thread) => [thread.id, thread] as const),
+    );
+    assert.deepStrictEqual(shells.get(ThreadId.make("t-changed"))?.latestTurnDiffStat, expected);
+    for (const threadId of ["t-running", "t-unchanged"]) {
+      const shell = shells.get(ThreadId.make(threadId));
+      assert.isDefined(shell);
+      assert.isFalse("latestTurnDiffStat" in (shell ?? {}), threadId);
+    }
+
+    const byId = yield* query.getThreadShellById(ThreadId.make("t-changed"));
+    assert.deepStrictEqual(Option.getOrUndefined(byId)?.latestTurnDiffStat, expected);
+    const runningById = Option.getOrUndefined(
+      yield* query.getThreadShellById(ThreadId.make("t-running")),
+    );
+    assert.isDefined(runningById);
+    assert.isFalse("latestTurnDiffStat" in (runningById ?? {}));
+
+    const archived = (yield* query.getArchivedShellSnapshot()).threads;
+    assert.deepStrictEqual(archived[0]?.latestTurnDiffStat, {
+      additions: 3,
+      deletions: 0,
+      files: 1,
+    });
+  }).pipe(Effect.provide(layer));
 });
