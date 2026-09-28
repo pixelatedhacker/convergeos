@@ -10570,6 +10570,86 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("subscribeShell re-emits a mesh worker shell when its spawn binds", () =>
+    Effect.gen(function* () {
+      const coordinatorId = ThreadId.make("thread-coordinator");
+      const workerId = ThreadId.make("thread-worker");
+      const botId = ThreadId.make("thread-bot");
+      const now = "2026-01-01T00:00:00.000Z";
+      const shellFetches: Array<string> = [];
+
+      const boundEvent = (
+        sequence: number,
+        target: { readonly kind: "newThread" } | { readonly kind: "existingThread" },
+        targetThreadId: ThreadId,
+      ): OrchestrationEvent =>
+        ({
+          sequence,
+          eventId: EventId.make(`event-${sequence}`),
+          aggregateKind: "delegation",
+          aggregateId: `delegation-${sequence}`,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "delegation.target-bound",
+          payload: {
+            delegation: {
+              requester: { kind: "thread", threadId: coordinatorId },
+              target,
+              targetThreadId,
+            },
+          },
+        }) as unknown as OrchestrationEvent;
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            readEvents: () =>
+              Stream.fromIterable([
+                boundEvent(1, { kind: "newThread" }, workerId),
+                boundEvent(2, { kind: "existingThread" }, botId),
+              ]),
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: (threadId) =>
+              Effect.sync(() => {
+                shellFetches.push(threadId);
+                return Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    parentThreadId: coordinatorId,
+                  }),
+                );
+              }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+            afterSequence: 0,
+            requestCompletionMarker: true,
+          }).pipe(Stream.take(2), Stream.runCollect),
+        ),
+      );
+
+      const [first, second] = Array.from(items);
+      assert.equal(first?.kind, "thread-upserted");
+      if (first?.kind === "thread-upserted") {
+        assert.equal(first.thread.id, workerId);
+        assert.equal(first.thread.parentThreadId, coordinatorId);
+      }
+      assert.equal(second?.kind, "synchronized");
+      // A send to an existing bot is not a spawn and refetches nothing.
+      assert.deepEqual(shellFetches, [workerId]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("subscribeShell coalesces live bursts after the synchronization marker", () =>
     Effect.gen(function* () {
       const busyThreadId = ThreadId.make("thread-live-busy");

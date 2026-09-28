@@ -1180,6 +1180,111 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     }),
   );
 
+  it.effect("derives parentThreadId on shells for mesh spawns only", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_delegations`;
+
+      const insertThread = (threadId: string) => sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          branch, worktree_path, latest_turn_id, latest_user_message_at,
+          pending_approval_count, pending_user_input_count, has_actionable_proposed_plan,
+          created_at, updated_at, archived_at, deleted_at
+        ) VALUES (
+          ${threadId}, 'project-mesh', ${threadId}, '{"provider":"codex","model":"gpt-5-codex"}',
+          'full-access', 'default', NULL, NULL, NULL, NULL, 0, 0, 0,
+          '2026-04-06T00:00:00.000Z', '2026-04-06T00:00:00.000Z', NULL, NULL
+        )
+      `;
+      const insertDelegation = (input: {
+        readonly id: string;
+        readonly requester: string;
+        readonly target: string;
+        readonly targetThreadId: string;
+      }) => sql`
+        INSERT INTO projection_delegations (
+          delegation_id, project_id, requester_json, target_json, title, task, state,
+          target_thread_id, turn_id, assistant_message_id, failure_json, revision,
+          created_at, updated_at
+        ) VALUES (
+          ${input.id}, 'project-mesh', ${input.requester}, ${input.target}, 'Task', 'Task',
+          'provisioning', ${input.targetThreadId}, NULL, NULL, NULL, 2,
+          '2026-04-06T00:00:00.000Z', '2026-04-06T00:00:00.000Z'
+        )
+      `;
+      const fromCoordinator = '{"kind":"thread","threadId":"coordinator","requestId":"request-1"}';
+      const newThread =
+        '{"kind":"newThread","modelSelection":{"provider":"codex","model":"gpt-5-codex"}}';
+
+      yield* insertThread("coordinator");
+      // Bound before the worker thread exists.
+      yield* insertDelegation({
+        id: "delegation-spawn-early",
+        requester: fromCoordinator,
+        target: newThread,
+        targetThreadId: "worker-early",
+      });
+      yield* insertThread("worker-early");
+      // Bound after the worker thread exists.
+      yield* insertThread("worker-late");
+      yield* insertDelegation({
+        id: "delegation-spawn-late",
+        requester: fromCoordinator,
+        target: newThread,
+        targetThreadId: "worker-late",
+      });
+      // A mesh send to an existing bot never makes it a worker.
+      yield* insertThread("bot");
+      yield* insertDelegation({
+        id: "delegation-send",
+        requester: fromCoordinator,
+        target: '{"kind":"existingThread","threadId":"bot"}',
+        targetThreadId: "bot",
+      });
+      // A Kanban-requested worker stays top-level.
+      yield* insertThread("kanban-worker");
+      yield* insertDelegation({
+        id: "delegation-kanban",
+        requester: '{"kind":"kanban","cardId":"card-1","cardRevision":1}',
+        target: newThread,
+        targetThreadId: "kanban-worker",
+      });
+
+      const expected: Record<string, string | undefined> = {
+        coordinator: undefined,
+        "worker-early": "coordinator",
+        "worker-late": "coordinator",
+        bot: undefined,
+        "kanban-worker": undefined,
+      };
+      const snapshot = yield* snapshotQuery.getShellSnapshot();
+      assert.deepEqual(
+        Object.fromEntries(
+          snapshot.threads.map((thread): [string, string | undefined] => [
+            thread.id,
+            thread.parentThreadId ?? undefined,
+          ]),
+        ),
+        expected,
+      );
+      for (const [threadId, parentThreadId] of Object.entries(expected)) {
+        const shell = yield* snapshotQuery.getThreadShellById(ThreadId.make(threadId));
+        assert.equal(Option.getOrThrow(shell).parentThreadId, parentThreadId);
+      }
+
+      yield* sql`
+        UPDATE projection_threads SET archived_at = '2026-04-06T00:00:01.000Z'
+        WHERE thread_id = 'worker-late'
+      `;
+      const archived = yield* snapshotQuery.getArchivedShellSnapshot();
+      assert.equal(archived.threads[0]?.parentThreadId, "coordinator");
+    }),
+  );
+
   it.effect("keeps settled threads in the shell snapshot with non-null settlement fields", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;

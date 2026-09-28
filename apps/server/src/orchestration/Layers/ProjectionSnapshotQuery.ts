@@ -163,6 +163,10 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
+// Shell reads also derive the mesh coordinator that spawned the thread.
+const ProjectionThreadShellDbRowSchema = ProjectionThreadDbRowSchema.mapFields(
+  Struct.assign({ parentThreadId: Schema.NullOr(ThreadId) }),
+);
 const ProjectionKanbanCardDbRowSchema = KanbanCard;
 const ProjectionPageDbRowSchema = Page;
 const ProjectionPageRevisionDbRowSchema = PageRevision.mapFields(
@@ -988,9 +992,25 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       ? sql`AND threads.settled_at IS NULL AND threads.settled_override IS NOT 'settled'`
       : sql``;
 
+  // The mesh coordinator of a spawned worker: a delegation from a thread
+  // requester that provisioned a new thread. Sends to existing threads and
+  // Kanban-requested workers never link a parent. Served by
+  // idx_projection_delegations_target_state.
+  const parentThreadIdColumn = sql`
+    (
+      SELECT json_extract(delegations.requester_json, '$.threadId')
+      FROM projection_delegations delegations
+      WHERE delegations.target_thread_id = threads.thread_id
+        AND json_extract(delegations.requester_json, '$.kind') = 'thread'
+        AND json_extract(delegations.target_json, '$.kind') = 'newThread'
+      ORDER BY delegations.created_at ASC, delegations.delegation_id ASC
+      LIMIT 1
+    ) AS "parentThreadId"
+  `;
+
   const listActiveThreadRows = SqlSchema.findAll({
     Request: ActiveThreadRowsRequest,
-    Result: ProjectionThreadDbRowSchema,
+    Result: ProjectionThreadShellDbRowSchema,
     execute: (request) =>
       sql`
         SELECT
@@ -1025,7 +1045,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
+          deleted_at AS "deletedAt",
+          ${parentThreadIdColumn}
         FROM projection_threads threads
         WHERE deleted_at IS NULL
           AND archived_at IS NULL
@@ -1066,7 +1087,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const listArchivedThreadRows = SqlSchema.findAll({
     Request: Schema.Void,
-    Result: ProjectionThreadDbRowSchema,
+    Result: ProjectionThreadShellDbRowSchema,
     execute: () =>
       sql`
         SELECT
@@ -1101,8 +1122,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
-        FROM projection_threads
+          deleted_at AS "deletedAt",
+          ${parentThreadIdColumn}
+        FROM projection_threads threads
         WHERE deleted_at IS NULL
           AND archived_at IS NOT NULL
         ORDER BY project_id ASC, archived_at DESC, thread_id DESC
@@ -1674,7 +1696,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const getActiveThreadRowById = SqlSchema.findOneOption({
     Request: ThreadIdLookupInput,
-    Result: ProjectionThreadDbRowSchema,
+    Result: ProjectionThreadShellDbRowSchema,
     execute: ({ threadId }) =>
       sql`
         SELECT
@@ -1709,8 +1731,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt"
-        FROM projection_threads
+          deleted_at AS "deletedAt",
+          ${parentThreadIdColumn}
+        FROM projection_threads threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
           AND archived_at IS NULL
@@ -3302,6 +3325,9 @@ pending_approval_requests AS (
                           row.threadId,
                         ),
                         planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
+                        ...(row.parentThreadId === null
+                          ? {}
+                          : { parentThreadId: row.parentThreadId }),
                       } satisfies OrchestrationThreadShell)
                     : Result.failVoid,
                 ),
@@ -3489,6 +3515,7 @@ pending_approval_requests AS (
                     row.threadId,
                   ),
                   planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
+                  ...(row.parentThreadId === null ? {} : { parentThreadId: row.parentThreadId }),
                 })),
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
               } satisfies OrchestrationShellSnapshot;
@@ -3839,6 +3866,9 @@ pending_approval_requests AS (
           threadRow.value.threadId,
         ),
         planProgress: threadPlanProgress.getThreadPlanProgress(threadRow.value.threadId),
+        ...(threadRow.value.parentThreadId === null
+          ? {}
+          : { parentThreadId: threadRow.value.parentThreadId }),
       } satisfies OrchestrationThreadShell);
     });
 

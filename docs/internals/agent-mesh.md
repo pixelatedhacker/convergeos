@@ -110,6 +110,20 @@ Kanban cards may name bot inboxes as assignees. A Ready assignment creates the s
 aggregate and starts through the same thread path, preserving the authorization, exclusivity, and
 workspace invariants above.
 
+## Worker nesting
+
+A spawned worker's thread shell carries `parentThreadId`, the coordinator thread that spawned it.
+It is not stored on the thread: the shell queries in `ProjectionSnapshotQuery` derive it from
+`projection_delegations` with a correlated subquery on `target_thread_id`, covered by
+`idx_projection_delegations_target_state`. Only a delegation with a `thread` requester and a
+`newThread` target links a parent, so peer sends to existing bots and Kanban-requested workers stay
+top-level. The field is omitted when there is no parent, so ordinary shells gain no bytes.
+
+`delegation.provision.start` records the worker thread ID before the worker thread is created, so
+the worker's first `thread.created` shell already carries its parent. The shell stream also maps
+`delegation.target-bound` for a spawn to a refetch of the worker's shell, so either order of bind
+and thread creation converges on the same shell.
+
 For signed, verifiable export of delegation history to a private Nostr relay, see
 `docs/internals/agent-mesh-receipts.md`.
 
