@@ -20,7 +20,12 @@ import {
   formatSubagentModelLabel,
   formatSubagentTokenCount,
 } from "@t3tools/client-runtime/state/subagentRuntime";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import {
+  resolveSidebarThreadStatus,
+  type SidebarThreadStatus,
+} from "@t3tools/client-runtime/state/thread-nesting";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { Bot, Braces, Check, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -521,23 +526,85 @@ function WorkflowSection({
   );
 }
 
+const WORKER_STATUS_VISUALS: Record<SidebarThreadStatus, { dotClass: string; label: string }> = {
+  approval: { dotClass: "bg-warning", label: "Needs approval" },
+  input: { dotClass: "bg-indigo-500 dark:bg-indigo-300", label: "Needs input" },
+  working: { dotClass: "bg-info", label: "Working" },
+  monitoring: { dotClass: "bg-info", label: "Monitoring" },
+  failed: { dotClass: "bg-destructive", label: "Failed" },
+  ready: { dotClass: "bg-muted-foreground/50", label: "Ready" },
+};
+
+/** Agent-mesh workers this thread spawned: real threads, listed from shell data. */
+function MeshWorkersSection({
+  workers,
+  onOpenWorker,
+}: {
+  workers: ReadonlyArray<EnvironmentThreadShell>;
+  onOpenWorker: (ref: ScopedThreadRef) => void;
+}) {
+  return (
+    <section>
+      <div className="px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
+        Workers
+      </div>
+      {workers.map((worker) => {
+        const visuals = WORKER_STATUS_VISUALS[resolveSidebarThreadStatus(worker)];
+        return (
+          <button
+            key={worker.id}
+            type="button"
+            onClick={() =>
+              onOpenWorker({ environmentId: worker.environmentId, threadId: worker.id })
+            }
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent/40"
+          >
+            <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", visuals.dotClass)} />
+            <span className="min-w-0 flex-1 truncate text-sm">{worker.title}</span>
+            <span className="shrink-0 text-2xs text-muted-foreground">
+              {worker.settledOverride === "settled" ? "Settled" : visuals.label}
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+const EMPTY_WORKERS: ReadonlyArray<EnvironmentThreadShell> = [];
+
 export function AgentsPanel({
   model,
   environmentId = null,
   threadId = null,
+  workers = EMPTY_WORKERS,
+  onOpenWorker,
 }: {
   model: AgentPanelModel;
   environmentId?: EnvironmentId | null;
   threadId?: ThreadId | null;
+  workers?: ReadonlyArray<EnvironmentThreadShell>;
+  onOpenWorker?: (ref: ScopedThreadRef) => void;
 }) {
+  const workersSection =
+    workers.length > 0 && onOpenWorker !== undefined ? (
+      <MeshWorkersSection workers={workers} onOpenWorker={onOpenWorker} />
+    ) : null;
+  if (!model.hasAgents && workersSection !== null) {
+    return (
+      <ScrollArea className="h-full">
+        <div className="flex flex-col gap-2 p-2">{workersSection}</div>
+      </ScrollArea>
+    );
+  }
   if (!model.hasAgents) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <Bot aria-hidden className="size-6 text-muted-foreground/60" />
         <p className="text-sm font-medium">No agents yet</p>
         <p className="max-w-56 text-xs text-muted-foreground">
-          When this thread spawns subagents or runs a workflow, they show up here with live status,
-          activity, and token usage.
+          When this thread spawns subagents, mesh workers, or runs a workflow, they show up here
+          with live status.
         </p>
       </div>
     );
@@ -547,6 +614,7 @@ export function AgentsPanel({
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-2">
+          {workersSection}
           {model.workflows.map((group) => (
             <WorkflowSection
               key={group.workflow.id}

@@ -43,6 +43,8 @@ export interface Preferences {
   /** Fresh keys reset both shelves to collapsed when users update. */
   readonly threadListSettledShelfExpanded?: boolean;
   readonly threadListSnoozedShelfExpanded?: boolean;
+  /** Scoped keys of coordinators whose mesh workers are expanded. Collapsed by default. */
+  readonly threadListExpandedWorkerGroups?: readonly string[];
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -103,6 +105,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     modelFavorites?: Preferences["modelFavorites"];
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
+    threadListExpandedWorkerGroups?: readonly string[];
   } = {};
 
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
@@ -186,6 +189,11 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.threadListSnoozedShelfExpanded === "boolean") {
     preferences.threadListSnoozedShelfExpanded = parsed.threadListSnoozedShelfExpanded;
+  }
+  if (Array.isArray(parsed.threadListExpandedWorkerGroups)) {
+    preferences.threadListExpandedWorkerGroups = parsed.threadListExpandedWorkerGroups.filter(
+      (key): key is string => typeof key === "string",
+    );
   }
   return preferences;
 }

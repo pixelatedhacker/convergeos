@@ -60,6 +60,7 @@ import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
+  ThreadListV2WorkersRow,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
 } from "./thread-list-v2-items";
@@ -290,10 +291,12 @@ function ThreadNavigationSidebarPane(
   );
   const {
     loaded: shelfPreferencesLoaded,
+    expandedWorkerGroups,
     settledShelfExpanded,
     snoozedShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
+    toggleWorkerGroup,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the pane stays open.
   const [nowMinute, setNowMinute] = useState(() => new Date().toISOString().slice(0, 16));
@@ -442,8 +445,10 @@ function ThreadNavigationSidebarPane(
       snoozedShelfExpanded,
       settledShelfExpanded,
       selectedThreadKey: props.selectedThreadKey ?? null,
+      expandedWorkerGroupKeys: expandedWorkerGroups,
     });
   }, [
+    expandedWorkerGroups,
     pendingOrder,
     queuedThreadKeys,
     nowMinute,
@@ -669,6 +674,21 @@ function ThreadNavigationSidebarPane(
     ],
   );
   useThreadJumpShortcuts(listItems, handleSelectThread);
+  // Read through a ref so a list rebuild never hands every row a new renderItem.
+  const listItemsRef = useRef(listItems);
+  listItemsRef.current = listItems;
+  const handleToggleWorkerGroup = useCallback(
+    (coordinatorKey: string) =>
+      toggleWorkerGroup(
+        coordinatorKey,
+        new Set(
+          listItemsRef.current.flatMap((item) =>
+            item.type === "v2-workers" ? [item.coordinatorKey] : [],
+          ),
+        ),
+      ),
+    [toggleWorkerGroup],
+  );
   const sidebarItemsAreEqual = useCallback(
     (previous: SidebarListItem, item: SidebarListItem): boolean => {
       if (isThreadListV2ListItem(previous) && isThreadListV2ListItem(item)) {
@@ -738,6 +758,8 @@ function ThreadNavigationSidebarPane(
           // which re-renders identically.
           return (
             <ThreadListV2Row
+              nested={item.item.nested}
+              statusOverride={item.item.statusOverride}
               onNewThreadOnBranch={props.onNewThreadOnBranch}
               thread={thread}
               variant={item.item.variant}
@@ -819,6 +841,16 @@ function ThreadNavigationSidebarPane(
               pane="sidebar"
             />
           );
+        case "v2-workers":
+          return (
+            <ThreadListV2WorkersRow
+              coordinatorKey={item.coordinatorKey}
+              summaryText={item.summaryText}
+              expanded={item.expanded}
+              onToggle={handleToggleWorkerGroup}
+              pane="sidebar"
+            />
+          );
         case "v2-show-more":
           return (
             <ThreadListV2ShowMoreRow
@@ -837,6 +869,7 @@ function ThreadNavigationSidebarPane(
       handleSelectThread,
       handleSwipeableClose,
       handleSwipeableWillOpen,
+      handleToggleWorkerGroup,
       machineByEnvironmentId,
       moveThread,
       openPendingTask,

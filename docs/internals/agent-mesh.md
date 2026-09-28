@@ -124,6 +124,15 @@ the worker's first `thread.created` shell already carries its parent. The shell 
 `delegation.target-bound` for a spawn to a refetch of the worker's shell, so either order of bind
 and thread creation converges on the same shell.
 
+Clients nest workers with `groupWorkersByCoordinator` and summarize them with `workerSummary` in
+`packages/client-runtime/src/state/threadNesting.ts`. The caller passes its already-partitioned
+pinned and active blocks, so lifecycle rules follow from the partition: only active workers nest,
+pin wins, shelves stay flat, and a coordinator outside those blocks leaves its workers top-level.
+Nesting is one level. Web renders workers inside the coordinator's sortable row, so they are never
+sortable items or drop targets and drop orders only see top-level rows. Mobile adds a `v2-workers`
+list item and indented rows. Expansion is client-local (web local storage, mobile preferences) and
+defaults to collapsed. Search and the command palette stay flat.
+
 For signed, verifiable export of delegation history to a private Nostr relay, see
 `docs/internals/agent-mesh-receipts.md`.
 

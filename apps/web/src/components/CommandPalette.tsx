@@ -1336,6 +1336,11 @@ function OpenCommandPaletteDialog(props: {
     ],
   );
 
+  // Mesh workers stay flat and searchable here; the caption names their coordinator.
+  const threadTitleByKey = useMemo(
+    () => new Map(threads.map((thread) => [`${thread.environmentId}:${thread.id}`, thread.title])),
+    [threads],
+  );
   const allThreadItems = useMemo(
     () =>
       buildThreadActionItems({
@@ -1353,7 +1358,11 @@ function OpenCommandPaletteDialog(props: {
             providerEntryByEnvironmentAndInstanceId.get(
               `${thread.environmentId}:${modelInstanceId}`,
             ) ?? null;
-          return (
+          const coordinatorTitle =
+            thread.parentThreadId == null
+              ? undefined
+              : threadTitleByKey.get(`${thread.environmentId}:${thread.parentThreadId}`);
+          const subtitle = (
             <ThreadCommandSubtitle
               project={projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null}
               projectTitle={projectTitle ?? null}
@@ -1368,6 +1377,16 @@ function OpenCommandPaletteDialog(props: {
                 thread.session?.providerName ?? providerEntry?.displayName ?? modelInstanceId
               }
             />
+          );
+          return coordinatorTitle === undefined ? (
+            subtitle
+          ) : (
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+              <span className="min-w-0 max-w-[40%] shrink-0 truncate text-xs text-muted-foreground/70">
+                ↳ {coordinatorTitle}
+              </span>
+              {subtitle}
+            </span>
           );
         },
         getContentMatch: (thread) => {
@@ -1402,6 +1421,7 @@ function OpenCommandPaletteDialog(props: {
       providerEntryByEnvironmentAndInstanceId,
       threadContentMatchByKey,
       threadSearchQuery,
+      threadTitleByKey,
       threads,
     ],
   );

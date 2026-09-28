@@ -26,6 +26,12 @@ import {
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
 import {
+  groupWorkersByCoordinator,
+  resolveCoordinatorStatus,
+  workerSummary,
+  type SidebarThreadStatus,
+} from "@t3tools/client-runtime/state/thread-nesting";
+import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
@@ -53,6 +59,7 @@ import {
   PackageIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
@@ -82,8 +89,10 @@ import {
   useReducer,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useLocation, useParams, useRouter } from "@tanstack/react-router";
@@ -264,6 +273,11 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 // Fresh keys deliberately reset both shelves to collapsed for existing users.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
+// Scoped keys of coordinators whose mesh workers are expanded. Client-local:
+// collapsed is the default and the choice never syncs between devices.
+const WORKER_GROUPS_EXPANDED_KEY = "t3code:sidebar:worker-groups-expanded";
+const EMPTY_EXPANDED_WORKER_GROUPS: readonly string[] = [];
+const ExpandedWorkerGroupsSchema = Schema.Array(Schema.String);
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -1034,6 +1048,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
    * composer. Absent when the sidebar cannot open server threads.
    */
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
+  /** Mesh worker row nested under its coordinator: indented, shows its status. */
+  nested?: boolean | undefined;
+  /** A collapsed coordinator's highest worker status; surfaces when it outranks the row's own. */
+  workerRollupStatus?: SidebarThreadStatus | null | undefined;
+  /** The coordinator's worker summary and, when expanded, its worker rows. */
+  workerGroup?: ReactNode;
 }) {
   const {
     isRenaming,
@@ -1116,7 +1136,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  const ownStatus = resolveSidebarThreadStatus(thread);
+  const status = resolveCoordinatorStatus({
+    own: ownStatus,
+    rollup: props.workerRollupStatus ?? null,
+    expanded: false,
+  });
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1610,6 +1635,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          props.nested && "pl-5",
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1667,7 +1693,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     !isWoke && "group-hover/sidebar-row:opacity-0",
                   )}
                 >
-                  {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
+                  {props.nested && topStatus !== null && status !== "ready" ? (
+                    // Nested workers are slim rows, but their status is the
+                    // reason they are listed under the coordinator.
+                    <span className={cn("text-xs font-medium", topStatus.className)}>
+                      {topStatus.label}
+                    </span>
+                  ) : variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
                     // Snoozed rows show when they come BACK, not when they were
                     // last touched — the return ticket is the row's whole story.
                     <span className="text-xs text-info-foreground tabular-nums">
@@ -1873,7 +1905,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
                           <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
+                          {status === "working" && ownStatus === "working" ? (
                             <span aria-hidden>
                               <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
                             </span>
@@ -2017,9 +2049,60 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
+      {props.workerGroup}
     </li>
   );
 });
+
+function stopWorkerPointerDown(event: ReactPointerEvent) {
+  // Workers ride inside the coordinator's sortable row but never lift it.
+  event.stopPropagation();
+}
+
+function stopHandledWorkerFileDrag(event: ReactDragEvent) {
+  // A worker row that took the file drag keeps it from its coordinator.
+  if (event.defaultPrevented) event.stopPropagation();
+}
+
+// Mesh workers nest one level under the coordinator row that spawned them:
+// a summary line with a chevron, and the worker rows when expanded. They
+// render inside the coordinator's list item so they move with it and are
+// never sortable items or drop targets of their own.
+function SidebarWorkerGroup(props: {
+  summaryText: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <ul
+      role="presentation"
+      className="flex flex-col gap-px"
+      onPointerDown={stopWorkerPointerDown}
+      onDragEnter={stopHandledWorkerFileDrag}
+      onDragOver={stopHandledWorkerFileDrag}
+      onDragLeave={stopHandledWorkerFileDrag}
+      onDrop={stopHandledWorkerFileDrag}
+    >
+      <li className="list-none">
+        <button
+          type="button"
+          onClick={props.onToggle}
+          aria-expanded={props.expanded}
+          data-testid="sidebar-worker-group-toggle"
+          className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md pl-(--sidebar-row-content-inset) text-left text-xs text-secondary-label outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <ChevronRightIcon
+            aria-hidden
+            className={cn("size-3 shrink-0 transition-transform", props.expanded && "rotate-90")}
+          />
+          <span className="min-w-0 truncate">{props.summaryText}</span>
+        </button>
+      </li>
+      {props.children}
+    </ul>
+  );
+}
 
 function latestTurnDiff(
   thread: SidebarThreadSummary,
@@ -2862,10 +2945,89 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
-  const orderedThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads, ...renderedSettledThreads],
-    [pinnedThreads, activeThreads, visibleSnoozedThreads, renderedSettledThreads],
+  // Mesh workers nest one level under a coordinator in the pinned or active
+  // block. Nested workers leave the top-level active order (and so every
+  // drag order), and render inside their coordinator's row.
+  const workerNesting = useMemo(
+    () => groupWorkersByCoordinator({ pinned: pinnedThreads, active: activeThreads }),
+    [activeThreads, pinnedThreads],
   );
+  const topLevelActiveThreads = useMemo(
+    () =>
+      workerNesting.nestedKeys.size === 0
+        ? activeThreads
+        : activeThreads.filter(
+            (thread) =>
+              !workerNesting.nestedKeys.has(
+                scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+              ),
+          ),
+    [activeThreads, workerNesting],
+  );
+  const [expandedWorkerGroupList, setExpandedWorkerGroupList] = useLocalStorage(
+    WORKER_GROUPS_EXPANDED_KEY,
+    EMPTY_EXPANDED_WORKER_GROUPS,
+    ExpandedWorkerGroupsSchema,
+  );
+  const expandedWorkerGroups = useMemo(
+    () => new Set(expandedWorkerGroupList),
+    [expandedWorkerGroupList],
+  );
+  const workerCoordinatorsRef = useRef(workerNesting.childrenByCoordinator);
+  workerCoordinatorsRef.current = workerNesting.childrenByCoordinator;
+  const toggleWorkerGroup = useCallback(
+    (coordinatorKey: string) =>
+      setExpandedWorkerGroupList((current) => {
+        // Drop keys of coordinators that no longer have workers on the way.
+        const kept = current.filter(
+          (key) => key !== coordinatorKey && workerCoordinatorsRef.current.has(key),
+        );
+        return current.includes(coordinatorKey) ? kept : [...kept, coordinatorKey];
+      }),
+    [setExpandedWorkerGroupList],
+  );
+  const visibleWorkersByCoordinator = useMemo(() => {
+    const visible = new Map<string, ReadonlyArray<EnvironmentThreadShell>>();
+    for (const [coordinatorKey, workers] of workerNesting.childrenByCoordinator) {
+      if (expandedWorkerGroups.has(coordinatorKey)) {
+        visible.set(coordinatorKey, workers);
+        continue;
+      }
+      // Like the shelves, a collapsed group never hides the open thread.
+      const routeWorker =
+        routeThreadKey === null
+          ? undefined
+          : workers.find(
+              (worker) =>
+                scopedThreadKey(scopeThreadRef(worker.environmentId, worker.id)) === routeThreadKey,
+            );
+      if (routeWorker !== undefined) visible.set(coordinatorKey, [routeWorker]);
+    }
+    return visible;
+  }, [expandedWorkerGroups, routeThreadKey, workerNesting]);
+  const orderedThreads = useMemo(() => {
+    const withVisibleWorkers = (list: ReadonlyArray<EnvironmentThreadShell>) =>
+      visibleWorkersByCoordinator.size === 0
+        ? list
+        : list.flatMap((thread) => [
+            thread,
+            ...(visibleWorkersByCoordinator.get(
+              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+            ) ?? []),
+          ]);
+    return [
+      ...withVisibleWorkers(pinnedThreads),
+      ...withVisibleWorkers(topLevelActiveThreads),
+      ...visibleSnoozedThreads,
+      ...renderedSettledThreads,
+    ];
+  }, [
+    pinnedThreads,
+    renderedSettledThreads,
+    topLevelActiveThreads,
+    visibleSnoozedThreads,
+    visibleWorkersByCoordinator,
+  ]);
   const orderedThreadKeys = useMemo(
     () =>
       orderedThreads.map((thread) =>
@@ -3300,10 +3462,10 @@ export default function Sidebar() {
   );
   const activeKeys = useMemo(
     () =>
-      activeThreads.map((thread) =>
+      topLevelActiveThreads.map((thread) =>
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       ),
-    [activeThreads],
+    [topLevelActiveThreads],
   );
   useEffect(() => {
     if (optimisticDrop === null) return;
@@ -3456,7 +3618,7 @@ export default function Sidebar() {
       });
     if (
       pinnedThreads.length +
-        activeThreads.length +
+        topLevelActiveThreads.length +
         snoozedThreads.length +
         settledThreads.length ===
       0
@@ -3467,7 +3629,7 @@ export default function Sidebar() {
     const pinnedRows = rowsOf(pinnedThreads, "pinned");
     items.push(...pinnedRows);
     items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(activeThreads, "active");
+    const activeRows = rowsOf(topLevelActiveThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
     if (snoozedThreads.length > 0) {
@@ -3480,11 +3642,11 @@ export default function Sidebar() {
     items.push(...settledRows);
     return items;
   }, [
-    activeThreads,
     pinnedThreads,
     renderedSettledThreads,
     settledThreads.length,
     snoozedThreads.length,
+    topLevelActiveThreads,
     visibleSnoozedThreads,
   ]);
   useEffect(() => {
@@ -4908,6 +5070,11 @@ export default function Sidebar() {
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
+                        workers?: {
+                          readonly nested?: boolean;
+                          readonly rollupStatus?: SidebarThreadStatus | null;
+                          readonly group?: ReactNode;
+                        },
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -4916,7 +5083,9 @@ export default function Sidebar() {
                         // row: every other thread is a full card. Density comes
                         // from users (or the auto rules) actually parking work,
                         // not from the sidebar second-guessing what still matters.
-                        const isCard = section === "active" || section === "pinned";
+                        const isCard =
+                          workers?.nested !== true &&
+                          (section === "active" || section === "pinned");
                         const rowVariant = isCard ? "card" : "slim";
                         return (
                           <SidebarThreadRow
@@ -5009,8 +5178,32 @@ export default function Sidebar() {
                             onUnpin={attemptUnpin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
+                            nested={workers?.nested}
+                            workerRollupStatus={workers?.rollupStatus}
+                            workerGroup={workers?.group}
                           />
                         );
+                      };
+                      const renderWorkerGroup = (threadKey: string, section: SidebarSection) => {
+                        const workers = workerNesting.childrenByCoordinator.get(threadKey);
+                        if (workers === undefined || (section !== "active" && section !== "pinned"))
+                          return undefined;
+                        const summary = workerSummary(workers);
+                        const expanded = expandedWorkerGroups.has(threadKey);
+                        return {
+                          rollupStatus: expanded ? null : summary.rollupStatus,
+                          group: (
+                            <SidebarWorkerGroup
+                              summaryText={summary.text}
+                              expanded={expanded}
+                              onToggle={() => toggleWorkerGroup(threadKey)}
+                            >
+                              {(visibleWorkersByCoordinator.get(threadKey) ?? []).map((worker) =>
+                                renderThreadRowInner(worker, "active", undefined, { nested: true }),
+                              )}
+                            </SidebarWorkerGroup>
+                          ),
+                        };
                       };
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
@@ -5029,7 +5222,14 @@ export default function Sidebar() {
                               optimisticDrop !== null
                             }
                           >
-                            {(bag) => renderThreadRowInner(thread, section, bag)}
+                            {(bag) =>
+                              renderThreadRowInner(
+                                thread,
+                                section,
+                                bag,
+                                renderWorkerGroup(threadKey, section),
+                              )
+                            }
                           </SortableThreadRow>
                         );
                       };
@@ -5080,9 +5280,9 @@ export default function Sidebar() {
                                 label="Active"
                                 showHint={
                                   from !== null &&
-                                  (activeThreads.length === 0 ||
+                                  (topLevelActiveThreads.length === 0 ||
                                     (from === "active" &&
-                                      activeThreads.length === 1 &&
+                                      topLevelActiveThreads.length === 1 &&
                                       dragTargetSection !== null &&
                                       dragTargetSection !== "active"))
                                 }

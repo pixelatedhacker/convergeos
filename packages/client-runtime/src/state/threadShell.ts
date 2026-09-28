@@ -171,6 +171,27 @@ export function createEnvironmentThreadShellAtoms(input: {
     }).pipe(Atom.withLabel(`environment-thread-shells-for-projects:${key}`));
   });
 
+  // Mesh workers a coordinator spawned, in shell order. Stable identity while
+  // the worker shells are unchanged, so a coordinator view re-renders only
+  // when one of its own workers moves.
+  const workerShellsAtomFamily = Atom.family((key: string) => {
+    const ref = parseThreadKey(key);
+    let previous: ReadonlyArray<EnvironmentThreadShell> = [];
+    return Atom.make((get) => {
+      const next: EnvironmentThreadShell[] = [];
+      for (const thread of get(environmentThreadsAtom(ref.environmentId))) {
+        if (thread.parentThreadId === ref.threadId) {
+          next.push(scopedThread(ref.environmentId, thread));
+        }
+      }
+      if (arrayElementsEqual(previous, next)) {
+        return previous;
+      }
+      previous = next;
+      return previous;
+    }).pipe(Atom.withLabel(`environment-thread-workers:${key}`));
+  });
+
   let previousThreadRefs: ReadonlyArray<ScopedThreadRef> = [];
   const threadRefsAtom = Atom.make((get) => {
     const refs: ScopedThreadRef[] = [];
@@ -209,5 +230,6 @@ export function createEnvironmentThreadShellAtoms(input: {
     threadShellsForProjectRefsAtom: (refs: ReadonlyArray<ScopedProjectRef>) =>
       threadShellsForProjectRefsAtomFamily(projectRefCollectionKey(refs)),
     threadShellAtom: (ref: ScopedThreadRef) => threadShellAtomFamily(threadKey(ref)),
+    workerShellsAtom: (ref: ScopedThreadRef) => workerShellsAtomFamily(threadKey(ref)),
   };
 }

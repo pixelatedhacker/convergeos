@@ -50,6 +50,7 @@ import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
+  ThreadListV2WorkersRow,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
 } from "../threads/thread-list-v2-items";
@@ -473,10 +474,12 @@ export function HomeScreen(props: HomeScreenProps) {
   );
   const {
     loaded: shelfPreferencesLoaded,
+    expandedWorkerGroups,
     settledShelfExpanded,
     snoozedShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
+    toggleWorkerGroup,
   } = useThreadListV2ShelfPreferences();
   // The queued-start and snooze helpers need a clock while the list stays open.
   const [nowMinute, setNowMinute] = useState(() => new Date().toISOString().slice(0, 16));
@@ -640,8 +643,10 @@ export function HomeScreen(props: HomeScreenProps) {
       snoozedShelfExpanded,
       settledShelfExpanded,
       selectedThreadKey: null,
+      expandedWorkerGroupKeys: expandedWorkerGroups,
     });
   }, [
+    expandedWorkerGroups,
     pendingOrder,
     queuedThreadKeys,
     nowMinute,
@@ -722,6 +727,21 @@ export function HomeScreen(props: HomeScreenProps) {
   );
 
   useThreadJumpShortcuts(threadListV2Items, props.onSelectThread);
+  // Read through a ref so a list rebuild never hands every row a new renderItem.
+  const threadListV2ItemsRef = useRef(threadListV2Items);
+  threadListV2ItemsRef.current = threadListV2Items;
+  const handleToggleWorkerGroup = useCallback(
+    (coordinatorKey: string) =>
+      toggleWorkerGroup(
+        coordinatorKey,
+        new Set(
+          threadListV2ItemsRef.current.flatMap((item) =>
+            item.type === "v2-workers" ? [item.coordinatorKey] : [],
+          ),
+        ),
+      ),
+    [toggleWorkerGroup],
+  );
   useEffect(() => {
     if (swipeEnabled) activateVisibleRows(threadListV2Items);
   }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
@@ -772,9 +792,21 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         );
       }
+      if (item.type === "v2-workers") {
+        return (
+          <ThreadListV2WorkersRow
+            coordinatorKey={item.coordinatorKey}
+            summaryText={item.summaryText}
+            expanded={item.expanded}
+            onToggle={handleToggleWorkerGroup}
+          />
+        );
+      }
       const thread = item.item.thread;
       return (
         <ThreadListV2Row
+          nested={item.item.nested}
+          statusOverride={item.item.statusOverride}
           onNewThreadOnBranch={props.onNewThreadOnBranch}
           thread={thread}
           variant={item.item.variant}
@@ -838,6 +870,7 @@ export function HomeScreen(props: HomeScreenProps) {
     },
     [
       handleDeleteThread,
+      handleToggleWorkerGroup,
       activeReorderEnvironmentIds,
       handleMoveThread,
       handlePinThread,

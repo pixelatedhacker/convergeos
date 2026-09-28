@@ -2010,3 +2010,81 @@ describe("buildThreadListV2ListItems row-state stamps", () => {
     expect(threadListV2ListItemsAreEqual(shelfLoading, shelfLoaded)).toBe(false);
   });
 });
+
+describe("mesh worker nesting", () => {
+  const coordinator = makeThread({
+    id: ThreadId.make("coordinator"),
+    title: "Coordinator",
+    createdAt: "2026-06-01T00:00:00.000Z",
+  });
+  const worker = makeThread({
+    id: ThreadId.make("worker"),
+    title: "Worker",
+    createdAt: "2026-06-01T01:00:00.000Z",
+    parentThreadId: ThreadId.make("coordinator"),
+    hasPendingApprovals: true,
+  });
+  const coordinatorKey = `${environmentId}:coordinator`;
+  const layoutFor = (input: {
+    readonly expanded?: boolean;
+    readonly searchQuery?: string;
+    readonly threads?: ReadonlyArray<EnvironmentThreadShell>;
+  }) =>
+    buildThreadListV2Items({
+      threads: input.threads ?? [coordinator, worker],
+      environmentId: null,
+      searchQuery: input.searchQuery ?? "",
+      now: NOW,
+      expandedWorkerGroupKeys: new Set(input.expanded === true ? [coordinatorKey] : []),
+    });
+
+  it("collapses workers under the coordinator and surfaces their attention status", () => {
+    const layout = layoutFor({});
+    expect(layout.items.map((item) => item.thread.id)).toEqual(["coordinator"]);
+    expect(layout.items[0]?.workers).toEqual({
+      coordinatorKey,
+      summaryText: "1 worker · 1 needs you",
+      expanded: false,
+    });
+    expect(layout.items[0]?.statusOverride).toBe("approval");
+    const listItems = buildThreadListV2ListItems({ items: layout.items, pendingTasks: [] });
+    expect(listItems.map((item) => item.type)).toEqual(["v2-thread", "v2-workers"]);
+  });
+
+  it("lists nested worker rows when expanded", () => {
+    const layout = layoutFor({ expanded: true });
+    expect(layout.items.map((item) => [item.thread.id, item.nested === true])).toEqual([
+      ["coordinator", false],
+      ["worker", true],
+    ]);
+    expect(layout.items[0]?.statusOverride).toBeUndefined();
+    const listItems = buildThreadListV2ListItems({ items: layout.items, pendingTasks: [] });
+    expect(listItems.map((item) => item.type)).toEqual(["v2-thread", "v2-workers", "v2-thread"]);
+  });
+
+  it("keeps search results flat", () => {
+    const layout = layoutFor({ searchQuery: "o" });
+    expect(layout.items.map((item) => item.thread.id).toSorted()).toEqual([
+      "coordinator",
+      "worker",
+    ]);
+    expect(layout.items.some((item) => item.workers !== undefined)).toBe(false);
+  });
+
+  it("re-flattens workers once the coordinator settles", () => {
+    const layout = layoutFor({
+      threads: [{ ...coordinator, settledOverride: "settled" }, worker],
+    });
+    expect(layout.items.find((item) => item.thread.id === "worker")?.nested).toBeUndefined();
+  });
+
+  it("leaves nested workers out of the reorderable active section", () => {
+    expect(
+      getThreadListV2OrderedSection({
+        threads: [coordinator, worker],
+        section: "active",
+        now: NOW,
+      }).map((thread) => thread.id),
+    ).toEqual(["coordinator"]);
+  });
+});
