@@ -23,6 +23,10 @@ import {
   workerSummary,
   type SidebarThreadStatus,
 } from "@t3tools/client-runtime/state/thread-nesting";
+import {
+  groupThreadsByStatus,
+  type ThreadStatusGroupId,
+} from "@t3tools/client-runtime/state/thread-status-groups";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import type { ThreadMoveAvailability } from "./threadOrder";
@@ -241,8 +245,18 @@ export interface ThreadListV2WorkerGroup {
   readonly expanded: boolean;
 }
 
+/** A status group header, placed before `items[index]`. */
+export interface ThreadListV2StatusGroupHeader {
+  readonly index: number;
+  readonly id: ThreadStatusGroupId;
+  readonly label: string;
+  readonly count: number;
+}
+
 export interface ThreadListV2Layout {
   readonly items: ThreadListV2Item[];
+  /** Status group headers inside the active block; empty in manual order. */
+  readonly statusGroupHeaders: ReadonlyArray<ThreadListV2StatusGroupHeader>;
   /** Settled threads beyond the render limit (behind "Show more"). */
   readonly hiddenSettledCount: number;
   /** Snoozed threads matching the current filters. */
@@ -321,6 +335,13 @@ export interface ThreadListV2WorkersListItem {
   readonly expanded: boolean;
 }
 
+export interface ThreadListV2StatusGroupListItem {
+  readonly type: "v2-status-group";
+  readonly key: string;
+  readonly label: string;
+  readonly count: number;
+}
+
 export interface ThreadListV2SettledShelfListItem {
   readonly type: "v2-settled-shelf";
   readonly key: "v2-settled-shelf";
@@ -335,7 +356,8 @@ export type ThreadListV2ListItem =
   | ThreadListV2PendingListItem
   | ThreadListV2SnoozedShelfListItem
   | ThreadListV2SettledShelfListItem
-  | ThreadListV2WorkersListItem;
+  | ThreadListV2WorkersListItem
+  | ThreadListV2StatusGroupListItem;
 
 /** Narrows a wider list-item union (e.g. the sidebar's legacy + v2 mix) to
     the v2 item kinds the shared equality understands. */
@@ -347,7 +369,8 @@ export function isThreadListV2ListItem(value: {
     value.type === "v2-pending" ||
     value.type === "v2-snoozed-shelf" ||
     value.type === "v2-settled-shelf" ||
-    value.type === "v2-workers"
+    value.type === "v2-workers" ||
+    value.type === "v2-status-group"
   );
 }
 
@@ -410,6 +433,12 @@ export function threadListV2ListItemsAreEqual(
         previous.summaryText === item.summaryText &&
         previous.expanded === item.expanded
       );
+    case "v2-status-group":
+      return (
+        previous.type === "v2-status-group" &&
+        previous.key === item.key &&
+        previous.count === item.count
+      );
   }
 }
 
@@ -463,8 +492,14 @@ export function buildThreadListV2ListItems(input: {
   /** True while the shelf expansion preferences are still loading; stamped
       onto both shelf headers so the disabled state reaches recycled cells. */
   readonly shelfPreferencesLoading?: boolean;
+  /** Headers from a status-grouped layout. Grouping owns the active order,
+      so active cards lose Move up/down while any are present. */
+  readonly statusGroupHeaders?: ReadonlyArray<ThreadListV2StatusGroupHeader>;
 }): ThreadListV2ListItem[] {
-  const threadItemGroups = input.items.map((item): ThreadListV2ListItem[] => {
+  const statusGroupHeaders = input.statusGroupHeaders ?? [];
+  const activeMovesDisabled = statusGroupHeaders.length > 0;
+  const headerByIndex = new Map(statusGroupHeaders.map((header) => [header.index, header]));
+  const threadItemGroups = input.items.map((item, index): ThreadListV2ListItem[] => {
     const snoozeWakeLabelText =
       item.snoozed && item.thread.snoozedUntil != null && input.snoozeLabelNow !== undefined
         ? snoozeWakeLabel(item.thread.snoozedUntil, { now: input.snoozeLabelNow })
@@ -482,7 +517,7 @@ export function buildThreadListV2ListItems(input: {
         ? input.snoozeLabelNow
         : undefined;
     const move =
-      item.variant === "card" && item.nested !== true
+      item.variant === "card" && item.nested !== true && !(activeMovesDisabled && !item.pinned)
         ? input.moveAvailability?.get(`${item.thread.environmentId}:${item.thread.id}`)
         : undefined;
     const threadItem: ThreadListV2ListItem = {
@@ -498,10 +533,23 @@ export function buildThreadListV2ListItems(input: {
       canMoveUp: move?.canMoveUp === true,
       canMoveDown: move?.canMoveDown === true,
     };
+    const header = headerByIndex.get(index);
+    const leading: ThreadListV2ListItem[] =
+      header === undefined
+        ? []
+        : [
+            {
+              type: "v2-status-group",
+              key: `v2-status-group:${header.id}`,
+              label: header.label,
+              count: header.count,
+            },
+          ];
     // The worker summary sits between a coordinator card and its workers.
     return item.workers === undefined
-      ? [threadItem]
+      ? [...leading, threadItem]
       : [
+          ...leading,
           threadItem,
           {
             type: "v2-workers",
@@ -601,6 +649,9 @@ export function buildThreadListV2Items(input: {
   readonly queuedThreadKeys?: ReadonlySet<string>;
   /** Coordinator keys whose mesh workers are expanded. Collapsed is the default. */
   readonly expandedWorkerGroupKeys?: ReadonlySet<string>;
+  /** Group the active block by status instead of the saved order. Mobile has
+      no unread tracking, so finished threads fold into one Ready group. */
+  readonly groupByStatus?: boolean;
 }): ThreadListV2Layout {
   const now = input.now;
   const pending =
@@ -749,7 +800,27 @@ export function buildThreadListV2Items(input: {
     }
   };
   for (const thread of orderedPinned) pushCard(thread, true);
-  for (const thread of orderedActive) pushCard(thread, false);
+  const statusGroupHeaders: ThreadListV2StatusGroupHeader[] = [];
+  if (input.groupByStatus === true) {
+    const groups = groupThreadsByStatus({
+      threads: orderedActive.filter(
+        (thread) => nesting?.nestedKeys.has(`${thread.environmentId}:${thread.id}`) !== true,
+      ),
+      childrenByCoordinator: nesting?.childrenByCoordinator,
+      readiness: "folded",
+    });
+    for (const group of groups) {
+      statusGroupHeaders.push({
+        index: items.length,
+        id: group.id,
+        label: group.label,
+        count: group.threads.length,
+      });
+      for (const thread of group.threads) pushCard(thread, false);
+    }
+  } else {
+    for (const thread of orderedActive) pushCard(thread, false);
+  }
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
   for (const thread of visibleSnoozed) {
     items.push({
@@ -776,6 +847,7 @@ export function buildThreadListV2Items(input: {
   }
   return {
     items,
+    statusGroupHeaders,
     hiddenSettledCount: orderedSettled.length - pagedSettled.length,
     snoozedCount: orderedSnoozed.length,
     snoozedShelfHeaderIndex,

@@ -223,6 +223,15 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   return <ThreadListV2ShelfHeader {...props} kind="settled" />;
 });
 
+/** A status group's label and count while the list is grouped by status. */
+export const ThreadListV2StatusGroupHeader = memo(function ThreadListV2StatusGroupHeader(props: {
+  readonly label: string;
+  readonly count: number;
+  readonly pane?: "screen" | "sidebar";
+}) {
+  return <ThreadListV2Section label={`${props.label} (${props.count})`} pane={props.pane} />;
+});
+
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
   readonly hiddenCount: number;

@@ -2088,3 +2088,163 @@ describe("mesh worker nesting", () => {
     ).toEqual(["coordinator"]);
   });
 });
+
+describe("buildThreadListV2Items grouped by status", () => {
+  const running = { status: "running" } as EnvironmentThreadShell["session"];
+  const threads = [
+    makeThread({
+      id: ThreadId.make("pinned"),
+      title: "Pinned",
+      pinnedAt: NOW,
+      activeOrderKey: "a",
+    }),
+    makeThread({
+      id: ThreadId.make("ready-old"),
+      title: "Ready old",
+      activeOrderKey: "b",
+      latestUserMessageAt: "2026-06-01T01:00:00.000Z",
+    }),
+    makeThread({
+      id: ThreadId.make("approval"),
+      title: "Approval",
+      activeOrderKey: "c",
+      hasPendingApprovals: true,
+    }),
+    makeThread({
+      id: ThreadId.make("ready-new"),
+      title: "Ready new",
+      activeOrderKey: "d",
+      latestUserMessageAt: "2026-06-01T05:00:00.000Z",
+    }),
+    makeThread({ id: ThreadId.make("working"), title: "Working", session: running }),
+    makeThread({
+      id: ThreadId.make("snoozed"),
+      title: "Snoozed",
+      snoozedUntil: "2026-06-03T00:00:00.000Z",
+    }),
+    makeThread({ id: ThreadId.make("settled"), title: "Settled", settledOverride: "settled" }),
+  ];
+  const build = (groupByStatus: boolean) =>
+    buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      snoozedShelfExpanded: true,
+      groupByStatus,
+    });
+
+  it("groups only the active block and folds finished threads into Ready", () => {
+    const layout = build(true);
+    expect(layout.items.map((item) => item.thread.id)).toEqual([
+      "pinned",
+      "approval",
+      "working",
+      "ready-new",
+      "ready-old",
+      "snoozed",
+      "settled",
+    ]);
+    expect(layout.statusGroupHeaders).toEqual([
+      { index: 1, id: "needs-you", label: "Needs you", count: 1 },
+      { index: 2, id: "working", label: "Working", count: 1 },
+      { index: 3, id: "ready", label: "Ready", count: 2 },
+    ]);
+    expect(layout.snoozedShelfHeaderIndex).toBe(5);
+    expect(layout.settledShelfHeaderIndex).toBe(6);
+  });
+
+  it("keeps the saved order, untouched, in manual mode", () => {
+    const layout = build(false);
+    expect(layout.statusGroupHeaders).toEqual([]);
+    expect(layout.items.slice(0, 5).map((item) => item.thread.id)).toEqual([
+      "pinned",
+      "working",
+      "ready-old",
+      "approval",
+      "ready-new",
+    ]);
+  });
+
+  it("keeps workers under their coordinator, grouped by the rolled-up status", () => {
+    const layout = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("coordinator"), title: "Coordinator" }),
+        makeThread({
+          id: ThreadId.make("worker"),
+          title: "Worker",
+          parentThreadId: ThreadId.make("coordinator"),
+          hasPendingUserInput: true,
+        }),
+        makeThread({ id: ThreadId.make("quiet"), title: "Quiet" }),
+      ],
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      expandedWorkerGroupKeys: new Set([`${environmentId}:coordinator`]),
+      groupByStatus: true,
+    });
+    expect(layout.items.map((item) => [item.thread.id, item.nested === true])).toEqual([
+      ["coordinator", false],
+      ["worker", true],
+      ["quiet", false],
+    ]);
+    expect(layout.statusGroupHeaders.map((header) => [header.id, header.index])).toEqual([
+      ["needs-you", 0],
+      ["ready", 2],
+    ]);
+  });
+
+  it("inserts headers into the list and turns off active Move up/down", () => {
+    const layout = build(true);
+    const permissive = new Map(
+      threads.map((thread) => [
+        `${thread.environmentId}:${thread.id}`,
+        { canMoveUp: true, canMoveDown: true },
+      ]),
+    );
+    const listItems = buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks: [],
+      snoozedCount: layout.snoozedCount,
+      snoozedShelfExpanded: true,
+      snoozedShelfHeaderIndex: layout.snoozedShelfHeaderIndex,
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+      moveAvailability: permissive,
+      statusGroupHeaders: layout.statusGroupHeaders,
+    });
+    expect(listItems.map((item) => item.key)).toEqual([
+      `v2-thread:${environmentId}:pinned`,
+      "v2-status-group:needs-you",
+      `v2-thread:${environmentId}:approval`,
+      "v2-status-group:working",
+      `v2-thread:${environmentId}:working`,
+      "v2-status-group:ready",
+      `v2-thread:${environmentId}:ready-new`,
+      `v2-thread:${environmentId}:ready-old`,
+      "v2-snoozed-shelf",
+      `v2-thread:${environmentId}:snoozed`,
+      "v2-settled-shelf",
+      `v2-thread:${environmentId}:settled`,
+    ]);
+    const moves = listItems.flatMap((item) =>
+      item.type === "v2-thread" && item.item.variant === "card"
+        ? [[item.item.thread.id, item.canMoveUp || item.canMoveDown] as const]
+        : [],
+    );
+    expect(moves).toEqual([
+      ["pinned", true],
+      ["approval", false],
+      ["working", false],
+      ["ready-new", false],
+      ["ready-old", false],
+    ]);
+    // A thread before a group header draws no trailing hairline.
+    const approval = listItems.find(
+      (item) => item.type === "v2-thread" && item.item.thread.id === "approval",
+    );
+    expect(approval?.type === "v2-thread" && approval.showTrailingDivider).toBe(false);
+    expect(isThreadListV2ListItem(listItems[1]!)).toBe(true);
+  });
+});

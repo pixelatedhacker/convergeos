@@ -1,6 +1,7 @@
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
 import { verticalListSortingStrategy, type SortingStrategy } from "@dnd-kit/sortable";
 import {
+  isSidebarStatusGroupMarker,
   resolveSidebarDropTarget,
   sidebarListItemId,
   sidebarMarkerId,
@@ -127,8 +128,12 @@ export function createSidebarSortingStrategy(input: {
     let cardHeight = input.cardHeight;
     let slimHeight = input.slimHeight;
     let headerScale: number | undefined;
+    // Status group headers keep their place among the active rows: grouping
+    // owns that order, so the preview only opens or closes the lifted row.
+    const groupedActive: SidebarListItem[] = [];
     for (const [index, item] of items.entries()) {
       if (item.kind === "marker") {
+        if (isSidebarStatusGroupMarker(item.marker)) groupedActive.push(item);
         if (item.marker === "settled-header" || item.marker === "snoozed-header") {
           const height = rects[index]?.height;
           if (height) headerScale ??= height / 32;
@@ -138,7 +143,10 @@ export function createSidebarSortingStrategy(input: {
       if (item.section === "pinned" || item.section === "active")
         cardHeight ??= rects[index]?.height;
       else slimHeight ??= rects[index]?.height;
-      if (item.key !== active.key) groups[item.section].push(item);
+      if (item.key !== active.key) {
+        groups[item.section].push(item);
+        if (item.section === "active") groupedActive.push(item);
+      }
     }
     // Cards are 4.875rem + 0.25rem padding; slim rows/placeholders are h-9.
     const scale =
@@ -159,6 +167,17 @@ export function createSidebarSortingStrategy(input: {
       (item) => (ranks.get(item.key) ?? Number.POSITIVE_INFINITY) > rank,
     );
     group.splice(index < 0 ? group.length : index, 0, { ...active, section: target.section });
+    const isGrouped = groupedActive.some((item) => item.kind === "marker");
+    if (isGrouped && target.section === "active") {
+      const groupedIndex = groupedActive.findIndex(
+        (item) =>
+          item.kind === "thread" && (ranks.get(item.key) ?? Number.POSITIVE_INFINITY) > rank,
+      );
+      groupedActive.splice(groupedIndex < 0 ? groupedActive.length : groupedIndex, 0, {
+        ...active,
+        section: "active",
+      });
+    }
     const settledOrder = (
       input.settledOrder.length > 0 ? input.settledOrder : groups.settled.map((item) => item.key)
     ).filter((key) => key !== active.key || target.section === "settled");
@@ -173,8 +192,9 @@ export function createSidebarSortingStrategy(input: {
     const projected: SidebarListItem[] = [];
     const marker = (name: SidebarListMarker) => projected.push({ kind: "marker", marker: name });
     const section = (name: "active" | "settled") => {
-      if (groups[name].length > 0) projected.push(...groups[name]);
-      else marker(`${name}-placeholder`);
+      if (groups[name].length === 0) marker(`${name}-placeholder`);
+      else if (name === "active" && isGrouped) projected.push(...groupedActive);
+      else projected.push(...groups[name]);
     };
     marker("pinned-header");
     projected.push(...groups.pinned);

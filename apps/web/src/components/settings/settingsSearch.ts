@@ -441,6 +441,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["base directory folder browser path home"],
   },
   {
+    id: "group-threads-by-status",
+    title: "Group threads by status",
+    to: "/settings/general",
+    searchTerms: ["sidebar thread list order needs you working review done manual"],
+  },
+  {
     id: "unpin-confirmation",
     title: "Unpin confirmation",
     to: "/settings/general",

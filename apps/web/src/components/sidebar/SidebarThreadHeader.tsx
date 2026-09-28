@@ -10,7 +10,8 @@
  * of the sidebar's scope logic. `searchFieldRef` lands on the search field so
  * the picker's popup can anchor to that width rather than to its 28px trigger.
  */
-import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
+import type { SidebarThreadGrouping } from "@t3tools/contracts/settings";
+import { ArrowUpDownIcon, FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -21,6 +22,15 @@ import {
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -47,7 +57,14 @@ export interface SidebarThreadHeaderProps {
   searchResultCount: number;
   activeSearchResultIndex: number;
   onClearSearch: () => void;
+  threadGrouping: SidebarThreadGrouping;
+  onThreadGroupingChange: (grouping: SidebarThreadGrouping) => void;
 }
+
+const THREAD_GROUPING_LABELS: Record<SidebarThreadGrouping, string> = {
+  manual: "Manual order",
+  status: "Group by status",
+};
 
 export function SidebarThreadHeader({
   searchFieldRef,
@@ -67,6 +84,8 @@ export function SidebarThreadHeader({
   searchResultCount,
   activeSearchResultIndex,
   onClearSearch,
+  threadGrouping,
+  onThreadGroupingChange,
 }: SidebarThreadHeaderProps) {
   const resultsVisible = isSearching && searchResultCount > 0;
   // Results shrink as the query narrows, so the active index can outrun the
@@ -132,6 +151,28 @@ export function SidebarThreadHeader({
             </SidebarHeaderIconButton>
           </>
         ) : null}
+        <Menu>
+          <MenuTrigger render={<SidebarHeaderIconButton label="Thread list options" />}>
+            <ArrowUpDownIcon />
+          </MenuTrigger>
+          <MenuPopup align="end" side="bottom">
+            <MenuGroup>
+              <MenuGroupLabel>Arrange threads</MenuGroupLabel>
+              <MenuRadioGroup
+                value={threadGrouping}
+                onValueChange={(value) => {
+                  if (value === "manual" || value === "status") onThreadGroupingChange(value);
+                }}
+              >
+                {(["manual", "status"] as const).map((value) => (
+                  <MenuRadioItem key={value} value={value}>
+                    {THREAD_GROUPING_LABELS[value]}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuGroup>
+          </MenuPopup>
+        </Menu>
         <SidebarHeaderIconButton
           label="New thread"
           tooltip={

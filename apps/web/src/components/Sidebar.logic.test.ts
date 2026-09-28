@@ -9,6 +9,7 @@ import {
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
+  buildSidebarListItems,
   createThreadJumpHintVisibilityController,
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
@@ -2558,4 +2559,154 @@ describe("navigation after parking a thread", () => {
       ).toBe(expected);
     },
   );
+});
+
+describe("buildSidebarListItems", () => {
+  const row = (key: string) => ({ key });
+  const ids = (items: readonly SidebarListItem[]) => items.map(sidebarListItemId);
+
+  it("keeps the manual active order without group headers", () => {
+    expect(
+      ids(
+        buildSidebarListItems({
+          pinned: [row("p1")],
+          active: [row("a1"), row("a2")],
+          snoozed: [],
+          snoozedCount: 0,
+          settled: [row("s1")],
+          settledCount: 1,
+        }),
+      ),
+    ).toEqual([
+      sidebarMarkerId("pinned-header"),
+      "p1",
+      sidebarMarkerId("pinned-divider"),
+      sidebarMarkerId("active-placeholder"),
+      "a1",
+      "a2",
+      sidebarMarkerId("settled-header"),
+      sidebarMarkerId("settled-placeholder"),
+      "s1",
+    ]);
+  });
+
+  it("groups only the active rows; pinned and both shelves keep their places", () => {
+    const items = buildSidebarListItems({
+      pinned: [row("p1")],
+      active: [row("a1"), row("a2"), row("a3")],
+      activeGroups: [
+        { id: "needs-you", label: "Needs you", threads: [row("a3")] },
+        { id: "done", label: "Done", threads: [row("a1"), row("a2")] },
+      ],
+      snoozed: [row("z1")],
+      snoozedCount: 1,
+      settled: [row("s1")],
+      settledCount: 1,
+    });
+    expect(ids(items)).toEqual([
+      sidebarMarkerId("pinned-header"),
+      "p1",
+      sidebarMarkerId("pinned-divider"),
+      sidebarMarkerId("active-placeholder"),
+      sidebarMarkerId("status-group-needs-you"),
+      "a3",
+      sidebarMarkerId("status-group-done"),
+      "a1",
+      "a2",
+      sidebarMarkerId("snoozed-header"),
+      "z1",
+      sidebarMarkerId("settled-header"),
+      sidebarMarkerId("settled-placeholder"),
+      "s1",
+    ]);
+    // Group headers sit inside the active section, so drops still resolve there.
+    expect(
+      items
+        .filter((item) => item.kind === "thread")
+        .map((item) => [item.key, item.section] as const),
+    ).toEqual([
+      ["p1", "pinned"],
+      ["a3", "active"],
+      ["a1", "active"],
+      ["a2", "active"],
+      ["z1", "snoozed"],
+      ["s1", "settled"],
+    ]);
+    expect(resolveSidebarDropTarget(items, "p1", "a1")?.section).toBe("active");
+  });
+
+  it("returns nothing when every section is empty", () => {
+    expect(
+      buildSidebarListItems({
+        pinned: [],
+        active: [],
+        activeGroups: [],
+        snoozed: [],
+        snoozedCount: 0,
+        settled: [],
+        settledCount: 0,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("planSidebarThreadDrop while grouped by status", () => {
+  const base = {
+    pinnedOrder: ["p1"],
+    pinnedKeysById: new Map([["p1", "f"]]),
+    activeOrder: ["a1", "a2"],
+    activeKeysById: new Map([
+      ["a1", "f"],
+      ["a2", "m"],
+    ]),
+    activeGroupedByStatus: true,
+  };
+
+  it("never reorders the active section", () => {
+    expect(
+      planSidebarThreadDrop({
+        ...base,
+        activeKey: "a1",
+        activeSection: "active",
+        target: { section: "active", pinnedOrder: ["p1"], activeOrder: ["a2", "a1"] },
+      }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("still unpins into the active section without writing order keys", () => {
+    expect(
+      planSidebarThreadDrop({
+        ...base,
+        activeKey: "p1",
+        activeSection: "pinned",
+        target: { section: "active", pinnedOrder: [], activeOrder: ["a1", "p1", "a2"] },
+      }),
+    ).toEqual({
+      kind: "move-active",
+      order: ["a1", "p1", "a2"],
+      assignments: [],
+      unpin: true,
+      unsettle: false,
+      unsnooze: false,
+    });
+  });
+
+  it("still pins and settles active rows", () => {
+    expect(
+      planSidebarThreadDrop({
+        ...base,
+        activeKey: "a1",
+        activeSection: "active",
+        target: { section: "pinned", pinnedOrder: ["a1", "p1"], activeOrder: ["a2"] },
+      }).kind,
+    ).toBe("pin");
+    expect(
+      planSidebarThreadDrop({
+        ...base,
+        activeKey: "a1",
+        activeSection: "active",
+        target: { section: "settled", pinnedOrder: ["p1"], activeOrder: ["a2"] },
+      }),
+    ).toEqual({ kind: "settle" });
+  });
 });

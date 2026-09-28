@@ -253,6 +253,19 @@ describe("mobile connection storage", () => {
     });
   });
 
+  it("persists the thread list grouping and drops unknown values", async () => {
+    await expect(savePreferencesPatch({ threadListGrouping: "status" })).resolves.toEqual({
+      threadListGrouping: "status",
+    });
+    await expect(loadPreferences()).resolves.toEqual({ threadListGrouping: "status" });
+
+    mocks.setPreferencesJson(
+      JSON.stringify({ baseFontSize: 17, threadListGrouping: "project" }),
+      20,
+    );
+    await expect(loadPreferences()).resolves.toEqual({ baseFontSize: 17 });
+  });
+
   it("drops legacy and invalid thread list shelf expansion preferences", async () => {
     mocks.setPreferencesJson(
       JSON.stringify({

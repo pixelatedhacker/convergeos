@@ -27,6 +27,7 @@ import {
   type ThreadMoveDestination,
 } from "./threadOrder";
 import { getThreadListV2OrderedSection } from "./threadListV2";
+import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 
 const ROW_HEIGHT = 56;
 const HEADER_HEIGHT = 48;
@@ -154,6 +155,8 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const pendingOrder = useAtomValue(pendingThreadOrderAtom);
   const dropBusy = useAtomValue(threadDropBusyAtom);
   const { moveThread } = useThreadListActions();
+  const { groupByStatus, setThreadListGrouping, threadListGrouping } =
+    useThreadListV2ShelfPreferences();
   const [now, setNow] = useState(() => new Date().toISOString());
   const [expanded, setExpanded] = useState({ snoozed: false, settled: false });
   useEffect(() => {
@@ -241,8 +244,8 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
   const frame = useRef<number | null>(null);
   const [preview, setPreview] = useState<Drag | null>(null);
   const translateY = useRef(new Animated.Value(0)).current;
-  const latest = useRef({ rows, planners, moveThread });
-  latest.current = { rows, planners, moveThread };
+  const latest = useRef({ rows, planners, moveThread, groupByStatus });
+  latest.current = { rows, planners, moveThread, groupByStatus };
 
   function stop() {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -287,13 +290,21 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
         placement:
           !target.thread || contentY < target.offset + target.height / 2 ? "before" : "after",
       };
+      // Grouping owns the active order: an active row has nowhere to go there.
+      const activeReorderLocked =
+        target.section === "active" &&
+        current.sourceSection === "active" &&
+        latest.current.groupByStatus;
       if (target.section === "settled") {
         if (
           current.sourceSection !== "settled" &&
           configs.get(current.thread.environmentId)?.environment.capabilities.threadSettlement
         )
           destination = { section: "settled", targetId: null, placement: "before" };
-      } else if (latest.current.planners[target.section](keyOf(current.thread), candidate) !== null)
+      } else if (
+        !activeReorderLocked &&
+        latest.current.planners[target.section](keyOf(current.thread), candidate) !== null
+      )
         destination = candidate;
     }
     if (
@@ -382,8 +393,40 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
               <Text className="text-base text-primary-text">Done</Text>
             </Pressable>
           </View>
+          <View className="flex-row gap-2 px-5 pb-3" accessibilityRole="radiogroup">
+            {(
+              [
+                ["manual", "Manual order"],
+                ["status", "Group by status"],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: threadListGrouping === value }}
+                onPress={() => setThreadListGrouping(value)}
+                className={
+                  threadListGrouping === value
+                    ? "min-h-9 justify-center rounded-full bg-subtle px-3"
+                    : "min-h-9 justify-center rounded-full px-3"
+                }
+              >
+                <Text
+                  className={
+                    threadListGrouping === value
+                      ? "text-sm font-t3-medium"
+                      : "text-sm text-foreground-muted"
+                  }
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Text className="px-5 pb-3 text-sm text-foreground-muted">
-            Drag to reorder, pin, or settle. Changes save when you drop.
+            {groupByStatus
+              ? "Active threads are grouped by status. Drag to pin or settle; switch to manual order to reorder."
+              : "Drag to reorder, pin, or settle. Changes save when you drop."}
           </Text>
           <View
             onLayout={(event) => {
@@ -486,8 +529,14 @@ export function ThreadArrangementSheet(props: { onClose: () => void }) {
                               placement: "before",
                             });
                           }}
-                          canMoveUp={planner?.(item.key, "up") != null}
-                          canMoveDown={planner?.(item.key, "down") != null}
+                          canMoveUp={
+                            !(groupByStatus && item.section === "active") &&
+                            planner?.(item.key, "up") != null
+                          }
+                          canMoveDown={
+                            !(groupByStatus && item.section === "active") &&
+                            planner?.(item.key, "down") != null
+                          }
                           onStep={(direction) => {
                             void moveThread(thread, direction);
                           }}
