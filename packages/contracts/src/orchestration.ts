@@ -669,6 +669,14 @@ export const OrchestrationCheckpointSummary = Schema.Struct({
 });
 export type OrchestrationCheckpointSummary = typeof OrchestrationCheckpointSummary.Type;
 
+/** Summed `OrchestrationCheckpointFile` counts of one turn's checkpoint. */
+export const OrchestrationTurnDiffStat = Schema.Struct({
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  files: NonNegativeInt,
+});
+export type OrchestrationTurnDiffStat = typeof OrchestrationTurnDiffStat.Type;
+
 export const OrchestrationThreadActivityTone = Schema.Literals([
   "info",
   "tool",
@@ -1013,6 +1021,12 @@ export const OrchestrationThreadShell = Schema.Struct({
   ),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  /**
+   * Line and file totals of the latest ready turn checkpoint, for the sidebar
+   * row's diff slot. Absent when no turn has a ready checkpoint that changed
+   * files, and from older servers.
+   */
+  latestTurnDiffStat: Schema.optional(OrchestrationTurnDiffStat),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),

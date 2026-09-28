@@ -30,6 +30,7 @@ import {
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { resolveThreadRowSignals } from "@t3tools/client-runtime/thread-row-signals";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -59,6 +60,7 @@ import {
   ClockIcon,
   Columns3Icon,
   EyeIcon,
+  FolderGit2Icon,
   FolderIcon,
   GitBranchIcon,
   HouseIcon,
@@ -210,7 +212,6 @@ import { createSidebarListMotion } from "./Sidebar.motion";
 import {
   ThreadPullRequestBadgeControl,
   ThreadPullRequestsMiniList,
-  ThreadWorktreeIndicator,
   prStatusIndicator,
   resolveThreadPullRequestBadge,
   terminalStatusFromRunningIds,
@@ -248,6 +249,8 @@ import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarT
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
+import { PullRequestChecksGlyph } from "./pullRequest/pullRequestPresentation";
+import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import {
   composerDraftHasUserContent,
   DraftId,
@@ -381,6 +384,16 @@ function SidebarThreadTooltip({
             <div className="flex min-w-0 items-center gap-2 text-foreground/75">
               <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
               <MiddleTruncate value={thread.branch} className="flex" />
+            </div>
+          ) : null}
+          {/* Rows dropped their worktree glyph to cut clutter; the path lives here instead. */}
+          {thread.worktreePath?.trim() ? (
+            <div className="flex min-w-0 items-center gap-2 text-foreground/75">
+              <FolderGit2Icon className="size-3 shrink-0 stroke-muted-foreground" />
+              <MiddleTruncate
+                value={formatWorktreePathForDisplay(thread.worktreePath.trim())}
+                className="flex"
+              />
             </div>
           ) : null}
           {branchMismatch ? (
@@ -1529,6 +1542,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     useRightPanelStore.getState().open(threadRef, "pull-requests");
     if (!props.isActive) onThreadActivate(threadRef);
   }, [onThreadActivate, props.isActive, threadRef]);
+  const rowSignals = useMemo(
+    () =>
+      resolveThreadRowSignals({
+        pullRequests: thread.pullRequests,
+        supportsPullRequestLinks: supportsMultiplePullRequests,
+        turnDiff: thread.latestTurnDiffStat,
+      }),
+    [supportsMultiplePullRequests, thread],
+  );
   const prBadge =
     prBadgeShape?.kind === "stack" || pr || currentLinkedPr ? (
       <ThreadPullRequestBadgeControl
@@ -1756,7 +1778,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     );
   }
 
-  const diff = latestTurnDiff(thread);
+  const diff = rowSignals.diff;
 
   return (
     <li
@@ -1963,22 +1985,29 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   working, but it truncated to a half-sentence and dropped the
                   branch, so the row lost its most stable identifier. */}
               {thread.branch ? (
-                <>
-                  <ThreadWorktreeIndicator thread={thread} />
-                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
-                    <MiddleTruncate value={thread.branch} showTitle={false} />
-                  </span>
-                </>
+                <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+                  <MiddleTruncate value={thread.branch} showTitle={false} />
+                </span>
               ) : (
                 <span className="flex-1" />
               )}
               {terminalStatusIcon}
               {prBadge}
+              {prBadge && rowSignals.checks ? (
+                <PullRequestChecksGlyph state={rowSignals.checks} className="size-3" />
+              ) : null}
               {diff ? (
-                <span className="shrink-0 font-mono">
-                  <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
-                  <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span role="img" aria-label={diff.label} className="shrink-0 font-mono" />
+                    }
+                  >
+                    <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
+                    <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
+                  </TooltipTrigger>
+                  <TooltipPopup>{diff.label}</TooltipPopup>
+                </Tooltip>
               ) : null}
               <span
                 aria-hidden
@@ -2020,15 +2049,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     </li>
   );
 });
-
-function latestTurnDiff(
-  thread: SidebarThreadSummary,
-): { insertions: number; deletions: number } | null {
-  // Shells don't carry checkpoint summaries; diff stats render only when the
-  // shell projection grows them. Kept as a seam so the row layout is ready.
-  void thread;
-  return null;
-}
 
 const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   thread: SidebarThreadSummary;

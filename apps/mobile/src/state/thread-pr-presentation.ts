@@ -1,6 +1,7 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type {
   ExecutionEnvironmentCapabilities,
+  PullRequestChecksState,
   ThreadPullRequestLink,
   VcsStatusResult,
 } from "@t3tools/contracts";
@@ -28,6 +29,28 @@ export interface ThreadPrPresentation {
   readonly accessibilityLabel: string;
   readonly textClassName: string;
 }
+
+/** Row CI glyphs; the labels are the host's own headlines, as on web. */
+export const THREAD_ROW_CHECKS_PRESENTATION = {
+  passing: {
+    symbol: "checkmark.circle",
+    tintClassName: "accent-adaptive-emerald-600-400",
+    accessibilityLabel: "All checks have passed",
+  },
+  failing: {
+    symbol: "xmark.circle.fill",
+    tintClassName: "accent-adaptive-rose-600-400",
+    accessibilityLabel: "Some checks were not successful",
+  },
+  pending: {
+    symbol: "smallcircle.filled.circle",
+    tintClassName: "accent-adaptive-amber-700-300",
+    accessibilityLabel: "Some checks haven't completed yet",
+  },
+} as const satisfies Record<
+  PullRequestChecksState,
+  { symbol: string; tintClassName: string; accessibilityLabel: string }
+>;
 
 const PR_STATE_TEXT_CLASS: Record<ThreadPr["state"], string> = {
   open: "text-adaptive-emerald-600-400",

@@ -5,6 +5,11 @@ import {
   createLinkedPullRequestSummaryAtomFamily,
   pullRequestDetailToVcsStatus,
 } from "@t3tools/client-runtime/state/pull-requests";
+import {
+  resolveThreadRowSignals,
+  type ThreadRowSignals,
+} from "@t3tools/client-runtime/thread-row-signals";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo } from "react";
 
@@ -39,15 +44,33 @@ export {
   type ThreadPrPresentation,
 } from "./thread-pr-presentation";
 
+function useSupportsThreadPullRequests(environmentId: EnvironmentId): boolean {
+  return useAtomValue(
+    serverEnvironment.configValueAtom(environmentId),
+    (config) => config?.environment.capabilities.threadPullRequests === true,
+  );
+}
+
+/** Row diff stats (PR, else last turn) and CI rollup, read from data already on the thread shell. */
+export function useThreadRowSignals(thread: EnvironmentThreadShell): ThreadRowSignals {
+  const supportsLinks = useSupportsThreadPullRequests(thread.environmentId);
+  return useMemo(
+    () =>
+      resolveThreadRowSignals({
+        pullRequests: thread.pullRequests,
+        supportsPullRequestLinks: supportsLinks,
+        turnDiff: thread.latestTurnDiffStat,
+      }),
+    [thread.pullRequests, thread.latestTurnDiffStat, supportsLinks],
+  );
+}
+
 /**
  * Linked PRs use server snapshots. Branch fallback and legacy references share
  * a live summary request across visible rows in the same environment.
  */
 export function useThreadPr(thread: EnvironmentThreadShell): ThreadPrPresentation | null {
-  const supportsLinks = useAtomValue(
-    serverEnvironment.configValueAtom(thread.environmentId),
-    (config) => config?.environment.capabilities.threadPullRequests === true,
-  );
+  const supportsLinks = useSupportsThreadPullRequests(thread.environmentId);
   const { linkedPresentation, pullRequestRef } = useMemo(
     () =>
       resolveThreadPrSource(

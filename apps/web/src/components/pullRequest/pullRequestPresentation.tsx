@@ -286,6 +286,29 @@ export function pullRequestChecksStatePresentation(state: PullRequestChecksState
   return CHECKS_STATE_PRESENTATION[state];
 }
 
+/** The CI rollup as one glyph with its headline as label and tooltip: PR panel and sidebar rows. */
+export function PullRequestChecksGlyph({
+  state,
+  className,
+}: {
+  state: PullRequestChecksState;
+  className?: string;
+}) {
+  const presentation = CHECKS_STATE_PRESENTATION[state];
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+        <presentation.Icon
+          role="img"
+          aria-label={presentation.label}
+          className={cn("size-3.5", presentation.toneClassName, className)}
+        />
+      </TooltipTrigger>
+      <TooltipPopup>{presentation.label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /**
  * The same rollup the server sends with a listing row, worked out here from the checks a detail
  * already holds — so the header shows the icon without a second field travelling with it.

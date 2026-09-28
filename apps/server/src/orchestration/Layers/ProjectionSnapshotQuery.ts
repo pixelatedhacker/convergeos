@@ -16,6 +16,7 @@ import {
   MessageId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
+  OrchestrationTurnDiffStat,
   OrchestrationCheckpointStatus,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
@@ -224,6 +225,10 @@ const ProjectionLatestTurnDbRowSchema = Schema.Struct({
   sourceProposedPlanThreadId: Schema.NullOr(ThreadId),
   sourceProposedPlanId: Schema.NullOr(OrchestrationProposedPlanId),
 });
+const ProjectionShellLatestTurnDbRowSchema = Schema.Struct({
+  ...ProjectionLatestTurnDbRowSchema.fields,
+  latestTurnDiffStat: Schema.fromJsonString(OrchestrationTurnDiffStat),
+});
 const ProjectionStateDbRowSchema = ProjectionState;
 const ProjectionCountsRowSchema = Schema.Struct({
   projectCount: Schema.Number,
@@ -424,6 +429,15 @@ function mapLatestTurn(
         }
       : {}),
   };
+}
+
+/** Shells carry the stat only when the latest ready checkpoint changed files. */
+function mapLatestTurnDiffStat(
+  row: { readonly latestTurnDiffStat: OrchestrationTurnDiffStat } | undefined,
+): { readonly latestTurnDiffStat?: OrchestrationTurnDiffStat } {
+  return row !== undefined && row.latestTurnDiffStat.files > 0
+    ? { latestTurnDiffStat: row.latestTurnDiffStat }
+    : {};
 }
 
 function mapTitleRegeneration(row: Schema.Schema.Type<typeof ProjectionThreadDbRowSchema>) {
@@ -987,6 +1001,26 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     unsettledOnly
       ? sql`AND threads.settled_at IS NULL AND threads.settled_override IS NOT 'settled'`
       : sql``;
+  // Sums the latest ready checkpoint's stored per-file counts in SQL, so shells
+  // gain three integers instead of file lists. Relies on the `turns` alias and
+  // the UNIQUE (thread_id, checkpoint_turn_count) index; no git work.
+  const latestTurnDiffStatColumn = sql`
+    (
+      SELECT json_object(
+        'additions', COALESCE(SUM(json_extract(files.value, '$.additions')), 0),
+        'deletions', COALESCE(SUM(json_extract(files.value, '$.deletions')), 0),
+        'files', COUNT(files.value)
+      )
+      FROM json_each((
+        SELECT checkpoints.checkpoint_files_json
+        FROM projection_turns checkpoints
+        WHERE checkpoints.thread_id = turns.thread_id
+          AND checkpoints.checkpoint_turn_count IS NOT NULL
+          AND checkpoints.checkpoint_status = 'ready'
+        ORDER BY checkpoints.checkpoint_turn_count DESC
+        LIMIT 1
+      )) files
+    ) AS "latestTurnDiffStat"`;
 
   const listActiveThreadRows = SqlSchema.findAll({
     Request: ActiveThreadRowsRequest,
@@ -1398,7 +1432,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const listActiveLatestTurnRows = SqlSchema.findAll({
     Request: ActiveThreadRowsRequest,
-    Result: ProjectionLatestTurnDbRowSchema,
+    Result: ProjectionShellLatestTurnDbRowSchema,
     execute: (request) =>
       sql`
         SELECT
@@ -1410,7 +1444,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          ${latestTurnDiffStatColumn}
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -1425,7 +1460,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const listArchivedLatestTurnRows = SqlSchema.findAll({
     Request: Schema.Void,
-    Result: ProjectionLatestTurnDbRowSchema,
+    Result: ProjectionShellLatestTurnDbRowSchema,
     execute: () =>
       sql`
         SELECT
@@ -1437,7 +1472,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          ${latestTurnDiffStatColumn}
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -2065,7 +2101,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
 
   const getLatestTurnRowByThread = SqlSchema.findOneOption({
     Request: ThreadIdLookupInput,
-    Result: ProjectionLatestTurnDbRowSchema,
+    Result: ProjectionShellLatestTurnDbRowSchema,
     execute: ({ threadId }) =>
       sql`
         SELECT
@@ -2077,7 +2113,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          ${latestTurnDiffStatColumn}
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -3243,6 +3280,9 @@ pending_approval_requests AS (
               const latestTurnByThread = new Map(
                 latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
               );
+              const latestTurnRowByThread = new Map(
+                latestTurnRows.map((row) => [row.threadId, row] as const),
+              );
               const sessionByThread = new Map(
                 sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
               );
@@ -3279,6 +3319,7 @@ pending_approval_requests AS (
                           repositoryIdentities.get(row.projectId),
                         ),
                         latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                        ...mapLatestTurnDiffStat(latestTurnRowByThread.get(row.threadId)),
                         createdAt: row.createdAt,
                         updatedAt: row.updatedAt,
                         archivedAt: row.archivedAt,
@@ -3436,6 +3477,9 @@ pending_approval_requests AS (
               const latestTurnByThread = new Map(
                 latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
               );
+              const latestTurnRowByThread = new Map(
+                latestTurnRows.map((row) => [row.threadId, row] as const),
+              );
               const sessionByThread = new Map(
                 sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
               );
@@ -3466,6 +3510,7 @@ pending_approval_requests AS (
                     repositoryIdentities.get(row.projectId),
                   ),
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                  ...mapLatestTurnDiffStat(latestTurnRowByThread.get(row.threadId)),
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   archivedAt: row.archivedAt,
@@ -3816,6 +3861,7 @@ pending_approval_requests AS (
         ),
         branchPullRequest: threadRow.value.branchPullRequest,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
+        ...mapLatestTurnDiffStat(Option.getOrUndefined(latestTurnRow)),
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
         archivedAt: threadRow.value.archivedAt,

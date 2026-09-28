@@ -34,7 +34,8 @@ import { cn } from "../../lib/cn";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
-import { useThreadPr } from "../../state/use-thread-pr";
+import { THREAD_ROW_CHECKS_PRESENTATION } from "../../state/thread-pr-presentation";
+import { useThreadPr, useThreadRowSignals } from "../../state/use-thread-pr";
 import { useSwipeRowDormant } from "../home/swipe-row-activation";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
@@ -552,6 +553,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const dormant = useSwipeRowDormant(props.activationKey);
 
   const pr = useThreadPr(thread);
+  const rowSignals = useThreadRowSignals(thread);
+  const checks = pr && rowSignals.checks ? THREAD_ROW_CHECKS_PRESENTATION[rowSignals.checks] : null;
 
   const theme = useUniwindTheme();
   const sidebarPane = props.pane === "sidebar";
@@ -1055,6 +1058,26 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               {pr.label}
             </Text>
           </View>
+        ) : null}
+        {checks ? (
+          <View accessible accessibilityRole="image" accessibilityLabel={checks.accessibilityLabel}>
+            <SymbolView
+              name={checks.symbol}
+              size={12}
+              tintColorClassName={checks.tintClassName}
+              type="monochrome"
+            />
+          </View>
+        ) : null}
+        {rowSignals.diff ? (
+          <Text
+            accessibilityLabel={rowSignals.diff.label}
+            className="text-xs tabular-nums"
+            style={{ fontFamily: MONO_FONT }}
+          >
+            <Text className="text-adaptive-emerald-700-300">+{rowSignals.diff.insertions}</Text>{" "}
+            <Text className="text-adaptive-rose-700-300">−{rowSignals.diff.deletions}</Text>
+          </Text>
         ) : null}
         {props.providerInstance ? (
           <ProviderInstanceIcon

@@ -45,6 +45,7 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 | Checkpoint          | A saved workspace state used for diffs and restore, stored as a hidden Git ref.                              |
 | Checkpoint baseline | The workspace state captured before the work being compared.                                                 |
 | Turn diff           | The workspace changes attributed to one turn.                                                                |
+| Last-turn diff stat | `latestTurnDiffStat` on a thread shell: line and file totals of the latest ready checkpoint, summed in SQL.  |
 
 ## Pull requests
 
