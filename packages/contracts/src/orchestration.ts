@@ -1055,6 +1055,13 @@ export const OrchestrationThreadShell = Schema.Struct({
       }),
     ),
   ),
+  /**
+   * The agent-mesh coordinator thread that spawned this thread as an isolated
+   * worker. Only mesh spawns set it; mesh sends and Kanban-requested workers
+   * stay top-level. Clients nest the thread under its parent in thread lists.
+   * Optional so old servers/clients interop; absent = no parent.
+   */
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 export type OrchestrationThreadShell = typeof OrchestrationThreadShell.Type;
 

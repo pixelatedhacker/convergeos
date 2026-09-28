@@ -30,6 +30,7 @@ Terms whose meaning matters across ConvergeOS. Architecture and lifecycle constr
 | Command receipt         | A durable record of a command's result, used to make retries idempotent.                     |
 | Runtime receipt         | A test-only signal that an asynchronous milestone completed.                                 |
 | Quiesced                | The relevant follow-up workers have finished, beyond the provider turn merely ending.        |
+| `parentThreadId`        | Shell field naming the mesh coordinator that spawned a worker thread; absent otherwise.      |
 
 ## Providers and checkpoints
 

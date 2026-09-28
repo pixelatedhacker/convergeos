@@ -985,18 +985,34 @@ const makeWsRpcLayer = (
       };
 
       // Shell updates refetch the aggregate. Message and tool bodies are not needed.
-      const toShellEvent = ({
-        type,
-        aggregateKind,
-        aggregateId,
-        sequence,
-      }: OrchestrationEvent) => ({
-        type,
-        aggregateKind,
-        aggregateId,
-        sequence,
-      });
-      type ShellEvent = ReturnType<typeof toShellEvent>;
+      // A mesh spawn binding its worker is re-read as the worker thread's shell,
+      // so clients see its parentThreadId whether the bind or thread.created
+      // lands first.
+      const toShellEvent = (event: OrchestrationEvent): ShellEvent => {
+        if (
+          event.type === "delegation.target-bound" &&
+          event.payload.delegation.requester.kind === "thread" &&
+          event.payload.delegation.target.kind === "newThread" &&
+          event.payload.delegation.targetThreadId !== null
+        ) {
+          return {
+            type: event.type,
+            aggregateKind: "thread",
+            aggregateId: event.payload.delegation.targetThreadId,
+            sequence: event.sequence,
+          };
+        }
+        return {
+          type: event.type,
+          aggregateKind: event.aggregateKind,
+          aggregateId: event.aggregateId,
+          sequence: event.sequence,
+        };
+      };
+      type ShellEvent = Pick<
+        OrchestrationEvent,
+        "type" | "aggregateKind" | "aggregateId" | "sequence"
+      >;
 
       const toShellStreamEvent = (
         event: ShellEvent,

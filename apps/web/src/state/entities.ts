@@ -102,6 +102,19 @@ export function useThreadShell(ref: ScopedThreadRef | null): EnvironmentThreadSh
   );
 }
 
+const EMPTY_WORKER_SHELLS_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadShell>>([]).pipe(
+  Atom.withLabel("web-thread-workers:empty"),
+);
+
+/** Mesh workers spawned by a coordinator thread, from shell data. */
+export function useWorkerThreadShells(
+  ref: ScopedThreadRef | null,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return useAtomValue(
+    ref === null ? EMPTY_WORKER_SHELLS_ATOM : environmentThreadShells.workerShellsAtom(ref),
+  );
+}
+
 export function useThreadDetail(ref: ScopedThreadRef | null): EnvironmentThread | null {
   return useAtomValue(
     ref === null ? EMPTY_THREAD_DETAIL_ATOM : environmentThreadDetails.detailAtom(ref),

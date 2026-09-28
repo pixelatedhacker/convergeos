@@ -138,7 +138,12 @@ for custom configuration.
 
 ## Inspect agent work
 
-On web and desktop, use **Agents** to follow work delegated to subagents.
+On web and desktop, use **Agents** to follow work delegated to subagents and agent
+mesh workers.
+
+Workers that an agent spawns through [agent mesh](./agent-mesh.md) are listed
+under the thread that spawned them, behind a summary you can expand or collapse.
+Search results stay flat, so every worker is still findable on its own.
 
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it

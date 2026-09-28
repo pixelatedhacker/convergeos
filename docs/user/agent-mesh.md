@@ -39,6 +39,26 @@ Spawning creates a thread and worktree from the caller's branch. It uses the cal
 the agent selects another configured model. Sending reuses an existing bot thread. Bots make those
 isolated threads easier to recognize and reuse as stable destinations.
 
+## Following spawned workers
+
+A spawned worker is listed under the thread that spawned it. In the thread list the coordinator
+shows a summary such as "3 workers · 1 running · 1 needs you"; tap or click it to show or hide the
+workers. Groups start collapsed, and each device remembers which ones you opened. While a group is
+collapsed, the coordinator shows the most urgent worker status, so a worker waiting for approval is
+never hidden behind a quiet coordinator.
+
+Nesting follows the thread list's own rules. A pinned worker stays in the pinned block, and a
+settled or snoozed worker moves to its shelf like any other thread. If the coordinator is settled,
+snoozed, archived, or deleted, its workers return to the list as ordinary threads. Threads you send
+work to with a mesh send, and workers started from Kanban cards, stay top-level. Search and the
+command palette always list workers on their own; on web and desktop the palette names the
+coordinator beside each worker.
+
+On web and desktop, a coordinator with unsettled workers shows a compact summary above its composer.
+Choose **View** to open the **Agents** panel, which lists every worker with its status. Select a
+worker to open its thread. The mobile app nests workers in the thread list but does not yet show the
+composer summary.
+
 ## Bots
 
 A bot is an isolated thread with a name and a durable inbox. Create a worktree-backed thread, open

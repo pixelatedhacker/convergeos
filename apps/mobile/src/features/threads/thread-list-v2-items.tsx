@@ -95,6 +95,9 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
 /** Rounded-row radius shared with the v1 sidebar rows. */
 const SIDEBAR_V2_ROW_RADIUS = 12;
 
+/** One level of indent for mesh workers under their coordinator. */
+const NESTED_ROW_STYLE = { paddingLeft: 16 } as const;
+
 function ThreadListV2Section(props: {
   readonly label: string;
   readonly pane?: "screen" | "sidebar";
@@ -241,6 +244,49 @@ export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(pro
         }
       >
         Show more ({props.hiddenCount} settled hidden)
+      </Text>
+    </Pressable>
+  );
+});
+
+/** A coordinator's worker summary: toggles its nested mesh worker rows. */
+export const ThreadListV2WorkersRow = memo(function ThreadListV2WorkersRow(props: {
+  readonly coordinatorKey: string;
+  readonly summaryText: string;
+  readonly expanded: boolean;
+  readonly pane?: "screen" | "sidebar";
+  readonly onToggle: (coordinatorKey: string) => void;
+}) {
+  const { coordinatorKey, onToggle } = props;
+  const handlePress = useCallback(() => onToggle(coordinatorKey), [coordinatorKey, onToggle]);
+  const sidebarPane = props.pane === "sidebar";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.summaryText}
+      accessibilityHint={`${props.expanded ? "Hides" : "Shows"} this thread's workers.`}
+      accessibilityState={{ expanded: props.expanded }}
+      onPress={handlePress}
+      className={cn("min-h-[32px] flex-row items-center gap-1.5", sidebarPane ? "px-3" : "px-5")}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+    >
+      <SymbolView
+        name="chevron.right"
+        size={10}
+        tintColorClassName={
+          sidebarPane ? "accent-drawer-foreground-muted" : "accent-foreground-muted"
+        }
+        type="monochrome"
+        style={{ transform: [{ rotate: props.expanded ? "90deg" : "0deg" }] }}
+      />
+      <Text
+        className={cn(
+          "min-w-0 flex-1 text-xs",
+          sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-tertiary",
+        )}
+        numberOfLines={1}
+      >
+        {props.summaryText}
       </Text>
     </Pressable>
   );
@@ -527,6 +573,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly simultaneousSwipeGesture?: ComponentProps<
     typeof ThreadSwipeable
   >["simultaneousWithExternalGesture"];
+  /** Mesh worker nested under its coordinator: indented one level. */
+  readonly nested?: boolean;
+  /** A collapsed coordinator's rolled-up worker status, when it outranks its own. */
+  readonly statusOverride?: ThreadListV2Status;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const {
@@ -558,7 +608,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const selected = props.selected === true;
   const rowAppearance = getThreadListV2RowAppearance(theme, sidebarPane, selected);
 
-  const status = resolveThreadListV2Status(thread);
+  const status = props.statusOverride ?? resolveThreadListV2Status(thread);
   const statusLabel = STATUS_LABEL_BY_STATUS[status];
   // The timestamp is precomputed on the list item (same stamps the settled
   // tail sorts by) so a minute tick only re-renders rows that draw it.
@@ -1188,7 +1238,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     );
 
   return (
-    <View collapsable={false}>
+    <View collapsable={false} style={props.nested === true ? NESTED_ROW_STYLE : undefined}>
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
       )}

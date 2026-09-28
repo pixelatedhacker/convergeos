@@ -54,6 +54,7 @@ import { readPastedComposerContext } from "./composerInlineTokenPaste";
 import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
 import { type CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import { effectiveSnoozed, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
+import { workerSummary } from "@t3tools/client-runtime/state/thread-nesting";
 import {
   parseCodexFeedbackCommand,
   submitCodexFeedback,
@@ -238,6 +239,7 @@ import {
   DownloadIcon,
   GitBranchIcon,
   Minimize2Icon,
+  NetworkIcon,
   PaperclipIcon,
   WifiOffIcon,
 } from "lucide-react";
@@ -362,6 +364,7 @@ import {
   useThread,
   useThreadRefs,
   useThreadShell,
+  useWorkerThreadShells,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
@@ -4565,6 +4568,12 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
+  const navigateToMeshWorker = useCallback(
+    (workerRef: ScopedThreadRef) => {
+      void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(workerRef) });
+    },
+    [navigate],
+  );
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
   const visiblePullRequests = visibleThreadPullRequests(
@@ -6326,6 +6335,42 @@ export default function ChatView(props: ChatViewProps) {
     isStoppingBackgroundWork,
     rightPanelOpen,
   ]);
+  // Mesh workers this thread spawned, as a compact pill above the composer.
+  // Settled workers drop out; the Agents panel still lists them.
+  const meshWorkers = useWorkerThreadShells(isServerThread ? activeThreadRef : null);
+  const meshWorkerSummaryText = useMemo(() => {
+    const unsettled = meshWorkers.filter((worker) => worker.settledOverride !== "settled");
+    return unsettled.length === 0 ? null : workerSummary(unsettled).text;
+  }, [meshWorkers]);
+  const meshWorkersBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    // Hidden once the Agents surface is on screen; the pill would point at itself.
+    if (
+      meshWorkerSummaryText === null ||
+      !activeThread ||
+      (rightPanelOpen && activeRightPanelSurface?.kind === "agents")
+    ) {
+      return null;
+    }
+    return {
+      id: `mesh-workers:${activeThread.id}`,
+      variant: "default",
+      priority: "activity",
+      compact: true,
+      icon: <NetworkIcon aria-hidden />,
+      title: meshWorkerSummaryText,
+      actions: (
+        <Button size="xs" variant="ghost" aria-label="View workers" onClick={addAgentsSurface}>
+          View
+        </Button>
+      ),
+    };
+  }, [
+    activeRightPanelSurface?.kind,
+    activeThread,
+    addAgentsSurface,
+    meshWorkerSummaryText,
+    rightPanelOpen,
+  ]);
   // A woken thread announces itself in the open view, not just the sidebar
   // pill. Dismissing marks the wake as seen (same acknowledgment as the
   // pill); sending a message clears it as a side effect of the send path.
@@ -6508,8 +6553,10 @@ export default function ChatView(props: ChatViewProps) {
     [feedbackSubmissions, routeThreadKey],
   );
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
-    const backgroundLivenessItems =
-      backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
+    const backgroundLivenessItems = [
+      ...(backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem]),
+      ...(meshWorkersBannerItem === null ? [] : [meshWorkersBannerItem]),
+    ];
     const resumeCompactionItems =
       resumeCompactionBannerItem === null ? [] : [resumeCompactionBannerItem];
     const wokeThreadItems = wokeThreadBannerItem === null ? [] : [wokeThreadBannerItem];
@@ -6584,6 +6631,7 @@ export default function ChatView(props: ChatViewProps) {
     handleRestoreThreadBranch,
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
+    meshWorkersBannerItem,
     parkedThreadBannerItem,
     projectCloneBannerItem,
     resumeCompactionBannerItem,
@@ -9636,6 +9684,8 @@ export default function ChatView(props: ChatViewProps) {
         model={agentPanelModel}
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
+        workers={meshWorkers}
+        onOpenWorker={navigateToMeshWorker}
       />
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
