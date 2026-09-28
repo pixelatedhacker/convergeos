@@ -1,4 +1,3 @@
-import { ProjectPages } from "../pages/ProjectPages";
 import {
   DndContext,
   DragOverlay,
@@ -13,6 +12,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { useAtomValue } from "@effect/atom-react";
 import { KanbanCardId, type KanbanCard, type KanbanStatus } from "@t3tools/contracts";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -24,32 +24,40 @@ import * as Cause from "effect/Cause";
 import {
   ActivityIcon,
   ArrowUpRightIcon,
-  BellRingIcon,
   BotIcon,
   CalendarClockIcon,
   CheckIcon,
+  ClipboardListIcon,
   Columns3Icon,
+  FileTextIcon,
   HistoryIcon,
-  LoaderIcon,
+  NetworkIcon,
   PlusIcon,
   SettingsIcon,
   SquarePenIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
 import { cn, randomUUID } from "../../lib/utils";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
 import { useHandleNewThread } from "../../hooks/useHandleNewThread";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { kanbanEnvironment } from "../../state/kanban";
+import { projectEnvironment } from "../../state/projects";
 import { useEnvironmentQuery } from "../../state/query";
 import { useSchedules } from "../../state/schedulesView";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { resolvePathLinkTarget } from "../../terminal-links";
+import { useUiStateStore } from "../../uiStateStore";
+import { OpenInPicker } from "../chat/OpenInPicker";
+import { ProjectPages } from "../pages/ProjectPages";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { formatScheduleInstant } from "../schedules/SchedulesPage.logic";
-import { formatWorkingDurationLabel, parseTimestampMs } from "../Sidebar.logic";
+import type { SidebarThreadStatus } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -65,25 +73,43 @@ import {
   activityByDay,
   boardColumns,
   botRoster,
-  partitionProjectActivity,
+  buildCoordinatorSection,
+  buildProjectChecklist,
+  hasProjectInstructionsFile,
+  PROJECT_INSTRUCTIONS_FILE,
+  projectHomeThreads,
   projectMemberKeys,
   recentProjectThreads,
   statusLine,
   upcomingProjectSchedules,
   type BoardView,
   type BotRosterEntry,
+  type ChecklistGroup,
+  type ChecklistItem,
+  type CoordinatorSection,
 } from "./ProjectHomePage.logic";
 
-const NOW_REFRESH_MS = 30_000;
+// Static dots only: no pulse, so a busy project never repaints continuously.
+const TONE_DOT: Record<SidebarThreadStatus, string> = {
+  approval: "bg-amber-500 dark:bg-amber-300/90",
+  input: "bg-indigo-500 dark:bg-indigo-300/90",
+  working: "bg-sky-500 dark:bg-sky-300/80",
+  monitoring: "bg-sky-500/60 dark:bg-sky-300/50",
+  failed: "bg-red-500 dark:bg-red-400/90",
+  ready: "bg-emerald-500 dark:bg-emerald-300/90",
+};
 
-function useNow(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), NOW_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
+const CHECKLIST_GROUPS: ReadonlyArray<{
+  readonly id: ChecklistGroup["id"];
+  readonly title: string;
+  readonly empty: string;
+}> = [
+  { id: "waiting", title: "Waiting on you", empty: "Nothing is waiting on you." },
+  { id: "inProgress", title: "In progress", empty: "Nothing is moving right now." },
+  { id: "ready", title: "Ready", empty: "Nothing new to review." },
+];
+
+const ROOT_DIRECTORY_INPUT = "";
 
 const BOARD_STATUS_LABEL: Record<KanbanStatus, string> = {
   backlog: "Backlog",
@@ -100,13 +126,6 @@ const BOARD_STATUS_DOT: Record<KanbanStatus, string> = {
   review: "bg-warning",
   done: "bg-muted-foreground/40",
 };
-
-const ATTENTION_BADGE = {
-  approval: { label: "Approve", variant: "warning" },
-  input: { label: "Answer", variant: "warning" },
-  plan: { label: "Review plan", variant: "info" },
-  failed: { label: "Retry", variant: "error" },
-} as const;
 
 const BOT_STATE_BADGE: Record<
   BotRosterEntry["state"],
@@ -179,7 +198,7 @@ function failureMessage(result: { readonly _tag: string; readonly cause?: Cause.
 
 export function ProjectHomePage({ projectKey }: { readonly projectKey: string }) {
   const navigate = useNavigate();
-  const now = useNow();
+  const nowMinute = useNowMinute();
   const groups = useSettingsProjectGroups();
   const group = groups.find((candidate) => candidate.projectKey === projectKey) ?? null;
   const representative =
@@ -192,6 +211,7 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
   const memberProjects = group?.memberProjects;
   const keys = useMemo(() => projectMemberKeys(memberProjects ?? []), [memberProjects]);
   const threads = useThreadShells();
+  const lastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const serverConfigs = useServerConfigs();
   const { schedules, isPending: schedulesPending } = useSchedules();
   const { handleNewThread } = useHandleNewThread();
@@ -206,29 +226,27 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
   );
   const board = useMemo(() => boardColumns(boardQuery.data?.cards ?? []), [boardQuery.data]);
 
-  const { running, attention } = useMemo(
-    () => partitionProjectActivity(threads, keys, now),
-    [threads, keys, now],
+  const boardCards = boardQuery.data?.cards;
+  const projectThreads = useMemo(
+    () => projectHomeThreads(threads, keys, lastVisitedAtById),
+    [threads, keys, lastVisitedAtById],
   );
+  const { coordinators, checklist, activity } = useMemo(() => {
+    const now = new Date(`${nowMinute}:00.000Z`);
+    return {
+      coordinators: buildCoordinatorSection(projectThreads, now),
+      checklist: buildProjectChecklist({ threads: projectThreads, cards: boardCards ?? [], now }),
+      activity: activityByDay(threads, keys, now),
+    };
+  }, [boardCards, keys, nowMinute, projectThreads, threads]);
   const recent = useMemo(() => recentProjectThreads(threads, keys), [threads, keys]);
   const upcoming = useMemo(() => upcomingProjectSchedules(schedules, keys), [schedules, keys]);
-  const activity = useMemo(() => activityByDay(threads, keys, now), [threads, keys, now]);
-  const boardCards = boardQuery.data?.cards;
   const roster = useMemo(
     () => botRoster(threads, boardCards ?? [], keys),
     [threads, boardCards, keys],
   );
 
-  const status = useMemo(
-    () =>
-      statusLine({
-        attention: attention.length,
-        running: running.length,
-        ready: board.counts.ready,
-        inProgress: board.counts.inProgress,
-      }),
-    [attention.length, running.length, board.counts.ready, board.counts.inProgress],
-  );
+  const status = statusLine(checklist.counts);
 
   const openThread = useCallback(
     (row: { readonly environmentId: string; readonly threadId: string }) => {
@@ -302,28 +320,27 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                 </div>
               </div>
 
-              {attention.length > 0 ? (
-                <HomeSection
-                  count={attention.length}
-                  icon={<BellRingIcon />}
-                  title="Waiting on you"
-                >
-                  <ul className="-mx-2 flex flex-col">
-                    {attention.map((row) => {
-                      const badge = ATTENTION_BADGE[row.attentionReason ?? "input"];
-                      return (
-                        <HomeRow
-                          key={`${row.environmentId}:${row.threadId}`}
-                          meta={relativeLabel(row.sortAt)}
-                          title={row.title}
-                          trailing={<Badge variant={badge.variant}>{badge.label}</Badge>}
-                          onClick={() => openThread(row)}
-                        />
-                      );
-                    })}
-                  </ul>
-                </HomeSection>
-              ) : null}
+              <CoordinatorsSection coordinators={coordinators} onOpenThread={openThread} />
+
+              <HomeSection count={checklist.total} icon={<ClipboardListIcon />} title="Checklist">
+                {checklist.total === 0 ? (
+                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                    Nothing waiting, moving, or ready to review.
+                  </p>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {CHECKLIST_GROUPS.map(({ id, title, empty }) => (
+                      <ChecklistGroupView
+                        key={id}
+                        empty={empty}
+                        group={checklist[id]}
+                        title={title}
+                        onOpen={(item) => (item.kind === "thread" ? openThread(item) : openBoard())}
+                      />
+                    ))}
+                  </div>
+                )}
+              </HomeSection>
 
               <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
                 <HomeSection count={recent.length} icon={<HistoryIcon />} title="Recent threads">
@@ -351,32 +368,6 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                 </HomeSection>
 
                 <div className="flex min-w-0 flex-col gap-6">
-                  <HomeSection count={running.length} icon={<LoaderIcon />} title="Running now">
-                    {running.length === 0 ? (
-                      <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No agents are working here right now.
-                      </p>
-                    ) : (
-                      <ul className="-mx-2 flex flex-col">
-                        {running.map((row) => (
-                          <HomeRow
-                            key={`${row.environmentId}:${row.threadId}`}
-                            meta={formatWorkingDurationLabel(
-                              now.getTime() - parseTimestampMs(row.sortAt),
-                            )}
-                            title={row.title}
-                            trailing={
-                              <Badge variant={row.status === "monitoring" ? "info" : "success"}>
-                                {row.status === "monitoring" ? "Monitoring" : "Working"}
-                              </Badge>
-                            }
-                            onClick={() => openThread(row)}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </HomeSection>
-
                   <HomeSection
                     count={upcoming.length}
                     icon={<CalendarClockIcon />}
@@ -413,6 +404,11 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
                   <HomeSection icon={<ActivityIcon />} title="Activity">
                     <ActivityStrip activity={activity} />
                   </HomeSection>
+
+                  <InstructionsRow
+                    environmentId={representative.environmentId}
+                    workspaceRoot={representative.workspaceRoot}
+                  />
                 </div>
               </div>
               {group.memberProjects.map((project) => {
@@ -460,6 +456,123 @@ export function ProjectHomePage({ projectKey }: { readonly projectKey: string })
         </ScrollArea>
       </div>
     </SidebarInset>
+  );
+}
+
+function Dot(props: { readonly className: string }) {
+  return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", props.className)} />;
+}
+
+function Overflow(props: { readonly count: number }) {
+  if (props.count === 0) return null;
+  return <li className="px-2 py-1 text-xs text-muted-foreground">+{props.count} more</li>;
+}
+
+/** Mesh coordinators with their workers rolled up. Hidden when there are none. */
+function CoordinatorsSection(props: {
+  readonly coordinators: CoordinatorSection;
+  readonly onOpenThread: (row: {
+    readonly environmentId: string;
+    readonly threadId: string;
+  }) => void;
+}) {
+  const { rows, overflow } = props.coordinators;
+  if (rows.length === 0) return null;
+  return (
+    <HomeSection count={rows.length + overflow} icon={<NetworkIcon />} title="Coordinators">
+      <ul className="-mx-2 flex flex-col">
+        {rows.map((row) => (
+          <HomeRow
+            key={row.key}
+            meta={row.prose}
+            title={row.title}
+            trailing={
+              <span className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                {relativeLabel(row.activityAt)}
+                <Dot className={TONE_DOT[row.tone]} />
+              </span>
+            }
+            onClick={() => props.onOpenThread(row)}
+          />
+        ))}
+        <Overflow count={overflow} />
+      </ul>
+    </HomeSection>
+  );
+}
+
+function ChecklistGroupView(props: {
+  readonly group: ChecklistGroup;
+  readonly title: string;
+  readonly empty: string;
+  readonly onOpen: (item: ChecklistItem) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col">
+      <h3 className="flex items-center gap-2 pb-0.5 text-xs text-muted-foreground">
+        {props.title}
+        <span className="tabular-nums">{props.group.items.length + props.group.overflow}</span>
+      </h3>
+      {props.group.items.length === 0 ? (
+        <p className="py-1.5 text-sm text-muted-foreground">{props.empty}</p>
+      ) : (
+        <ul className="-mx-2 flex flex-col">
+          {props.group.items.map((item) => (
+            <HomeRow
+              key={item.key}
+              meta={item.kind === "card" ? `Card · ${item.status}` : item.status}
+              title={item.title}
+              trailing={item.kind === "thread" ? <Dot className={TONE_DOT[item.tone]} /> : null}
+              onClick={() => props.onOpen(item)}
+            />
+          ))}
+          <Overflow count={props.group.overflow} />
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The project root's AGENTS.md, opened through the editor picker. */
+function InstructionsRow(props: {
+  readonly environmentId: Parameters<typeof OpenInPicker>[0]["environmentId"];
+  readonly workspaceRoot: string;
+}) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const serverConfig = useServerConfigs().get(props.environmentId) ?? null;
+  const rootEntries = useEnvironmentQuery(
+    projectEnvironment.listEntries({
+      environmentId: props.environmentId,
+      input: { cwd: props.workspaceRoot, directoryPath: ROOT_DIRECTORY_INPUT },
+    }),
+  );
+  if (rootEntries.data === null) return null;
+  const hasInstructions = hasProjectInstructionsFile(rootEntries.data.entries);
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 px-2">
+      <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      {hasInstructions ? (
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {PROJECT_INSTRUCTIONS_FILE}
+            <span className="text-xs text-muted-foreground"> · Agent instructions</span>
+          </span>
+          <OpenInPicker
+            environmentId={props.environmentId}
+            keybindings={keybindings}
+            availableEditors={serverConfig?.availableEditors ?? []}
+            openInCwd={resolvePathLinkTarget(PROJECT_INSTRUCTIONS_FILE, props.workspaceRoot)}
+            compact
+            enableShortcut={false}
+          />
+        </>
+      ) : (
+        <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+          No {PROJECT_INSTRUCTIONS_FILE} in the project root. Agents read it for project
+          instructions.
+        </span>
+      )}
+    </div>
   );
 }
 
