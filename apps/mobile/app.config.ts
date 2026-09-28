@@ -214,7 +214,7 @@ const config: ExpoConfig = {
   slug: "convergeos",
   platforms: ["ios", "android"],
   scheme: [...variant.scheme],
-  version: "1.2.1",
+  version: "1.3.1",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
     // expensive native-project calculation there. Preview and production stay

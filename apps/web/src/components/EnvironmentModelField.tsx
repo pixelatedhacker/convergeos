@@ -73,7 +73,6 @@ export function EnvironmentModelField({
       model={resolvedSelection.model}
       modelOptionsByInstance={modelOptionsByInstance}
       triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-      triggerVariant="outline"
       onOpenProviderSetup={(instanceId) => {
         void navigate({
           to: "/settings/providers",
