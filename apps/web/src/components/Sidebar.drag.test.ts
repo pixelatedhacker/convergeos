@@ -835,3 +835,33 @@ describe("lifted card clearance", () => {
     expect(511 + apply(511, 36, -500, 136, 114).y).toBe(250);
   });
 });
+
+describe("sidebar drag projection while grouped by status", () => {
+  const needsYou = marker("status-group-needs-you");
+  const done = marker("status-group-done");
+  const items = [
+    pinnedHeader,
+    thread("p1", "pinned"),
+    divider,
+    needsYou,
+    thread("a1", "active"),
+    done,
+    thread("a2", "active"),
+    settledHeader,
+    thread("s1", "settled"),
+  ];
+
+  it("keeps group headers in place when an active row is lifted into pins", () => {
+    const result = preview({ items, settledOrder: ["s1"], settledExpanded: true }, "a1", "p1");
+    // Headers stay visible and the rows below close the lifted row's gap.
+    expect(result.get(sidebarMarkerId("status-group-needs-you"))?.scaleY).toBe(1);
+    expect(result.get(sidebarMarkerId("status-group-done"))?.scaleY).toBe(1);
+    expect(result.get("a2")?.scaleY).toBe(1);
+  });
+
+  it("opens the gap for a pin dropped into a group without hiding headers", () => {
+    const result = preview({ items, settledOrder: ["s1"], settledExpanded: true }, "p1", "a2");
+    expect(result.get(sidebarMarkerId("status-group-needs-you"))?.scaleY).toBe(1);
+    expect(result.get(sidebarMarkerId("status-group-done"))?.scaleY).toBe(1);
+  });
+});

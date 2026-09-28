@@ -50,6 +50,7 @@ import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
+  ThreadListV2StatusGroupHeader,
   ThreadListV2WorkersRow,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -475,6 +476,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const {
     loaded: shelfPreferencesLoaded,
     expandedWorkerGroups,
+    groupByStatus,
     settledShelfExpanded,
     snoozedShelfExpanded,
     toggleSettledShelf,
@@ -644,9 +646,11 @@ export function HomeScreen(props: HomeScreenProps) {
       settledShelfExpanded,
       selectedThreadKey: null,
       expandedWorkerGroupKeys: expandedWorkerGroups,
+      groupByStatus,
     });
   }, [
     expandedWorkerGroups,
+    groupByStatus,
     pendingOrder,
     queuedThreadKeys,
     nowMinute,
@@ -712,6 +716,7 @@ export function HomeScreen(props: HomeScreenProps) {
         queuedThreadKeys,
         moveAvailability: threadMoveAvailability,
         shelfPreferencesLoading: !shelfPreferencesLoaded,
+        statusGroupHeaders: threadListV2Layout.statusGroupHeaders,
       }),
     [
       nowMinute,
@@ -793,6 +798,9 @@ export function HomeScreen(props: HomeScreenProps) {
             onToggle={toggleSettledShelf}
           />
         );
+      }
+      if (item.type === "v2-status-group") {
+        return <ThreadListV2StatusGroupHeader label={item.label} count={item.count} />;
       }
       if (item.type === "v2-workers") {
         return (

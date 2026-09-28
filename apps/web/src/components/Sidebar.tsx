@@ -31,6 +31,7 @@ import {
   workerSummary,
   type SidebarThreadStatus,
 } from "@t3tools/client-runtime/state/thread-nesting";
+import { groupThreadsByStatus } from "@t3tools/client-runtime/state/thread-status-groups";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
@@ -49,7 +50,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import type { TimestampFormat } from "@t3tools/contracts/settings";
+import type { SidebarThreadGrouping, TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
@@ -143,7 +144,7 @@ import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -177,12 +178,14 @@ import {
   applySidebarThreadDrop,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
+  buildSidebarListItems,
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
   isSidebarNestedLinkClick,
+  isSidebarStatusGroupMarker,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   planSidebarThreadDrop,
@@ -333,6 +336,7 @@ const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new M
 // Collapsed shelves share one empty list so a route change alone does not
 // give the sidebar list a new identity.
 const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
+const EMPTY_LAST_VISITED: Readonly<Record<string, string>> = {};
 
 function terminalProcessLabel(count: number): string {
   return `${count} terminal ${count === 1 ? "process" : "processes"} running`;
@@ -655,6 +659,33 @@ function SidebarDragBoundary(props: {
           />
         </div>
       ) : null}
+    </SortableSidebarMarker>
+  );
+}
+
+// A status group's label and count. Not a drop target of its own: grouping
+// owns the active order, so it only moves with the rows around it.
+function SidebarStatusGroupHeader(props: {
+  marker: SidebarListMarker;
+  label: string;
+  count: number;
+}) {
+  return (
+    <SortableSidebarMarker
+      marker={props.marker}
+      data-testid={`sidebar-${props.marker}`}
+      className="mx-0.5 h-7"
+    >
+      <div
+        role="heading"
+        aria-level={3}
+        className="flex h-full items-center gap-1.5 px-2 text-xs font-medium text-sidebar-muted-foreground"
+      >
+        <span className="shrink-0">{props.label}</span>
+        <span className="shrink-0 tabular-nums text-sidebar-muted-foreground/60">
+          {props.count}
+        </span>
+      </div>
     </SortableSidebarMarker>
   );
 }
@@ -2989,6 +3020,52 @@ export default function Sidebar() {
           ),
     [activeThreads, workerNesting],
   );
+  // Status grouping only reorders what renders; the manual order keys stay
+  // untouched, so switching back to manual restores the arrangement.
+  const threadGrouping = useClientSettings((s) => s.sidebarThreadGrouping);
+  const updateClientSettings = useUpdateClientSettings();
+  const setThreadGrouping = useCallback(
+    (grouping: SidebarThreadGrouping) => {
+      void updateClientSettings({ sidebarThreadGrouping: grouping });
+    },
+    [updateClientSettings],
+  );
+  const groupByStatus = threadGrouping === "status";
+  // Unread state only matters to the grouping; manual mode stays off the map.
+  const lastVisitedAtByKey = useUiStateStore((state) =>
+    groupByStatus ? state.threadLastVisitedAtById : EMPTY_LAST_VISITED,
+  );
+  const activeStatusGroups = useMemo(() => {
+    if (!groupByStatus) return null;
+    return groupThreadsByStatus({
+      threads: topLevelActiveThreads,
+      childrenByCoordinator: workerNesting.childrenByCoordinator,
+      readiness: "unseen",
+      isUnseen: (thread) =>
+        hasUnseenCompletion({
+          ...thread,
+          lastVisitedAt:
+            lastVisitedAtByKey[scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))],
+        }),
+    });
+  }, [groupByStatus, lastVisitedAtByKey, topLevelActiveThreads, workerNesting]);
+  const displayedActiveThreads = useMemo(
+    () =>
+      activeStatusGroups === null
+        ? topLevelActiveThreads
+        : activeStatusGroups.flatMap((group) => group.threads),
+    [activeStatusGroups, topLevelActiveThreads],
+  );
+  const statusGroupHeaderByMarker = useMemo(
+    () =>
+      new Map(
+        (activeStatusGroups ?? []).map((group) => [
+          `status-group-${group.id}`,
+          { label: group.label, count: group.threads.length },
+        ]),
+      ),
+    [activeStatusGroups],
+  );
   const [expandedWorkerGroupList, setExpandedWorkerGroupList] = useLocalStorage(
     WORKER_GROUPS_EXPANDED_KEY,
     EMPTY_EXPANDED_WORKER_GROUPS,
@@ -3044,14 +3121,14 @@ export default function Sidebar() {
           ]);
     return [
       ...withVisibleWorkers(pinnedThreads),
-      ...withVisibleWorkers(topLevelActiveThreads),
+      ...withVisibleWorkers(displayedActiveThreads),
       ...visibleSnoozedThreads,
       ...renderedSettledThreads,
     ];
   }, [
+    displayedActiveThreads,
     pinnedThreads,
     renderedSettledThreads,
-    topLevelActiveThreads,
     visibleSnoozedThreads,
     visibleWorkersByCoordinator,
   ]);
@@ -3635,40 +3712,22 @@ export default function Sidebar() {
   // Include every visible row in the measured order. Older servers disable
   // pickup on their rows without changing where those rows render.
   const sidebarListItems = useMemo((): readonly SidebarListItem[] => {
-    const rowsOf = (
-      list: readonly EnvironmentThreadShell[],
-      section: SidebarSection,
-    ): SidebarListItem[] =>
-      list.map((thread) => {
-        const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-        return { kind: "thread", key, section };
-      });
-    if (
-      pinnedThreads.length +
-        topLevelActiveThreads.length +
-        snoozedThreads.length +
-        settledThreads.length ===
-      0
-    ) {
-      return [];
-    }
-    const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
-    const pinnedRows = rowsOf(pinnedThreads, "pinned");
-    items.push(...pinnedRows);
-    items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(topLevelActiveThreads, "active");
-    items.push({ kind: "marker", marker: "active-placeholder" });
-    items.push(...activeRows);
-    if (snoozedThreads.length > 0) {
-      items.push({ kind: "marker", marker: "snoozed-header" });
-      items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
-    }
-    items.push({ kind: "marker", marker: "settled-header" });
-    const settledRows = rowsOf(renderedSettledThreads, "settled");
-    items.push({ kind: "marker", marker: "settled-placeholder" });
-    items.push(...settledRows);
-    return items;
+    const rowsOf = (list: readonly EnvironmentThreadShell[]) =>
+      list.map((thread) => ({
+        key: scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+      }));
+    return buildSidebarListItems({
+      pinned: rowsOf(pinnedThreads),
+      active: rowsOf(topLevelActiveThreads),
+      activeGroups:
+        activeStatusGroups?.map((group) => ({ ...group, threads: rowsOf(group.threads) })) ?? null,
+      snoozed: rowsOf(visibleSnoozedThreads),
+      snoozedCount: snoozedThreads.length,
+      settled: rowsOf(renderedSettledThreads),
+      settledCount: settledThreads.length,
+    });
   }, [
+    activeStatusGroups,
     pinnedThreads,
     renderedSettledThreads,
     settledThreads.length,
@@ -3802,6 +3861,7 @@ export default function Sidebar() {
             activeOrder: activeKeys,
             activeKeysById,
             activeReorderableKeys: activeReorderableThreadKeys,
+            activeGroupedByStatus: groupByStatus,
           }).kind !== "none"
         );
       },
@@ -3816,6 +3876,7 @@ export default function Sidebar() {
     serverConfigs,
     activeKeys,
     activeReorderableThreadKeys,
+    groupByStatus,
     draggedThreadKey,
     draggedFromSection,
     dragActivationY,
@@ -3850,6 +3911,7 @@ export default function Sidebar() {
         activeOrder: activeKeys,
         activeKeysById,
         activeReorderableKeys: activeReorderableThreadKeys,
+        activeGroupedByStatus: groupByStatus,
       });
       if (plan.kind === "none") return;
       if (plan.kind === "settle" && settlingThreadKeysRef.current.has(activeKey)) return;
@@ -3971,6 +4033,7 @@ export default function Sidebar() {
       activeKeys,
       activeReorderableThreadKeys,
       draggableThreadKeys,
+      groupByStatus,
       pinThread,
       pinnedKeys,
       planForwardNavigation,
@@ -4955,6 +5018,8 @@ export default function Sidebar() {
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+              threadGrouping={threadGrouping}
+              onThreadGroupingChange={setThreadGrouping}
             />
             <SidebarMenuButton
               aria-current={isBotsRoute ? "page" : undefined}
@@ -5283,6 +5348,20 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          continue;
+                        }
+                        if (isSidebarStatusGroupMarker(item.marker)) {
+                          const header = statusGroupHeaderByMarker.get(item.marker);
+                          if (header !== undefined) {
+                            items.push(
+                              <SidebarStatusGroupHeader
+                                key={item.marker}
+                                marker={item.marker}
+                                label={header.label}
+                                count={header.count}
+                              />,
+                            );
+                          }
                           continue;
                         }
                         switch (item.marker) {

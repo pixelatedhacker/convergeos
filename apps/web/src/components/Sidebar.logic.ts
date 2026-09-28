@@ -1,5 +1,9 @@
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import type { SidebarThreadStatus } from "@t3tools/client-runtime/state/thread-nesting";
+import type {
+  ThreadStatusGroup,
+  ThreadStatusGroupId,
+} from "@t3tools/client-runtime/state/thread-status-groups";
 import * as React from "react";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import {
@@ -143,7 +147,9 @@ export type SidebarListMarker =
   /** The boundary between pinned and active rows. */
   | "pinned-divider"
   | "snoozed-header"
-  | "settled-header";
+  | "settled-header"
+  /** A status group's header inside the active section while grouped by status. */
+  | `status-group-${ThreadStatusGroupId}`;
 
 export function sidebarMarkerId(marker: SidebarListMarker): string {
   return `${SIDEBAR_MARKER_PREFIX}${marker}`;
@@ -206,6 +212,56 @@ export function resolveSidebarDropTarget(
   return { section, pinnedOrder, activeOrder };
 }
 
+/**
+ * The sortable list in render order: pinned, active, snoozed shelf, settled
+ * shelf, with the markers that bound each section. With `activeGroups`, the
+ * active rows render under their status group headers instead of in manual
+ * order; pinned rows and both shelves are never grouped.
+ */
+export function buildSidebarListItems<T extends { readonly key: string }>(input: {
+  readonly pinned: readonly T[];
+  readonly active: readonly T[];
+  readonly activeGroups?: ReadonlyArray<ThreadStatusGroup<T>> | null;
+  /** Rendered snoozed rows; the header shows whenever `snoozedCount` > 0. */
+  readonly snoozed: readonly T[];
+  readonly snoozedCount: number;
+  /** Rendered settled rows. */
+  readonly settled: readonly T[];
+  readonly settledCount: number;
+}): SidebarListItem[] {
+  if (input.pinned.length + input.active.length + input.snoozedCount + input.settledCount === 0) {
+    return [];
+  }
+  const rowsOf = (list: readonly T[], section: SidebarSection): SidebarListItem[] =>
+    list.map(({ key }) => ({ kind: "thread", key, section }));
+  const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
+  items.push(...rowsOf(input.pinned, "pinned"));
+  items.push({ kind: "marker", marker: "pinned-divider" });
+  items.push({ kind: "marker", marker: "active-placeholder" });
+  if (input.activeGroups) {
+    for (const group of input.activeGroups) {
+      items.push({ kind: "marker", marker: `status-group-${group.id}` });
+      items.push(...rowsOf(group.threads, "active"));
+    }
+  } else {
+    items.push(...rowsOf(input.active, "active"));
+  }
+  if (input.snoozedCount > 0) {
+    items.push({ kind: "marker", marker: "snoozed-header" });
+    items.push(...rowsOf(input.snoozed, "snoozed"));
+  }
+  items.push({ kind: "marker", marker: "settled-header" });
+  items.push({ kind: "marker", marker: "settled-placeholder" });
+  items.push(...rowsOf(input.settled, "settled"));
+  return items;
+}
+
+export function isSidebarStatusGroupMarker(
+  marker: SidebarListMarker,
+): marker is `status-group-${ThreadStatusGroupId}` {
+  return marker.startsWith("status-group-");
+}
+
 export type SidebarThreadDropPlan =
   | { readonly kind: "none" }
   /** Within the pinned block: the existing key writes. */
@@ -265,6 +321,9 @@ export function planSidebarThreadDrop(input: {
   readonly activeOrder: readonly string[];
   readonly activeKeysById: ReadonlyMap<string, string | null | undefined>;
   readonly activeReorderableKeys?: ReadonlySet<string>;
+  /** Status grouping owns the active order: rows can enter or leave the
+      active section, but nothing reorders it or writes its order keys. */
+  readonly activeGroupedByStatus?: boolean;
 }): SidebarThreadDropPlan {
   const {
     activeKey,
@@ -285,6 +344,17 @@ export function planSidebarThreadDrop(input: {
   switch (target.section) {
     case "active": {
       const order = target.activeOrder;
+      if (input.activeGroupedByStatus === true) {
+        if (activeSection === "active") return { kind: "none" };
+        return {
+          kind: "move-active",
+          order,
+          assignments: [],
+          unpin: activePinned,
+          unsettle: activeSettled,
+          unsnooze: activeSection === "snoozed",
+        };
+      }
       if (
         activeSection === "active" &&
         order.length === activeOrder.length &&

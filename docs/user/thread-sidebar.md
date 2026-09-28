@@ -84,6 +84,35 @@ If dragging is unavailable for one environment, update the ConvergeOS server run
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
+## Group threads by status
+
+Instead of your manual order, the active list can group threads by what they need
+from you. Pinned threads stay on top and the **Snoozed** and **Settled** shelves
+work as before; only active threads are grouped. Each group header shows how many
+threads it holds, and empty groups are hidden:
+
+- **Needs you**: waiting for an approval or your input, a plan ready for review,
+  or a failed run.
+- **Working**: running, connecting, or monitoring background work.
+- **Ready to review**: finished since you last opened it.
+- **Done**: finished and already seen.
+
+Threads in each group are listed most recent activity first, and move between
+groups as their status changes. A coordinator thread sits in the group of its
+most urgent worker, with its workers still nested under it.
+
+On web and desktop, turn grouping on from the thread list options button next to
+**New thread**, from **Settings → General → Group threads by status**, or with the
+command palette actions **Group threads by status** and **Use manual thread order**.
+While grouped, dragging within the active list does nothing, but you can still drag
+threads to pin, unpin, settle, or wake them. Your manual order is kept and comes back
+when you switch to **Manual order**. The legacy sidebar does not group threads.
+
+On mobile, choose **Group by status** at the top of **Arrange threads**. Mobile does
+not track which threads you have seen, so **Ready to review** and **Done** appear as a
+single **Ready** group. While grouped, **Move up** and **Move down** are unavailable
+for active threads. The setting belongs to each device.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

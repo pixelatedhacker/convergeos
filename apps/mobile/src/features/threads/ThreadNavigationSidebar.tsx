@@ -60,6 +60,7 @@ import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
+  ThreadListV2StatusGroupHeader,
   ThreadListV2WorkersRow,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -292,6 +293,7 @@ function ThreadNavigationSidebarPane(
   const {
     loaded: shelfPreferencesLoaded,
     expandedWorkerGroups,
+    groupByStatus,
     settledShelfExpanded,
     snoozedShelfExpanded,
     toggleSettledShelf,
@@ -446,9 +448,11 @@ function ThreadNavigationSidebarPane(
       settledShelfExpanded,
       selectedThreadKey: props.selectedThreadKey ?? null,
       expandedWorkerGroupKeys: expandedWorkerGroups,
+      groupByStatus,
     });
   }, [
     expandedWorkerGroups,
+    groupByStatus,
     pendingOrder,
     queuedThreadKeys,
     nowMinute,
@@ -511,6 +515,7 @@ function ThreadNavigationSidebarPane(
       queuedThreadKeys,
       moveAvailability: threadMoveAvailability,
       shelfPreferencesLoading: !shelfPreferencesLoaded,
+      statusGroupHeaders: threadListV2Layout.statusGroupHeaders,
     });
     if (settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0) {
       items.push({
@@ -842,6 +847,10 @@ function ThreadNavigationSidebarPane(
               onToggle={toggleSettledShelf}
               pane="sidebar"
             />
+          );
+        case "v2-status-group":
+          return (
+            <ThreadListV2StatusGroupHeader label={item.label} count={item.count} pane="sidebar" />
           );
         case "v2-workers":
           return (

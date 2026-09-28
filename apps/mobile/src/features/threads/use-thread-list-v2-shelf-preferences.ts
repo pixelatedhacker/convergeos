@@ -2,6 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
+import type { ThreadListGrouping } from "../../persistence/mobile-preferences";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 
 /**
@@ -23,6 +24,8 @@ export function useThreadListV2ShelfPreferences() {
   const settledShelfExpandedRef = useRef(settledShelfExpanded);
   snoozedShelfExpandedRef.current = snoozedShelfExpanded;
   settledShelfExpandedRef.current = settledShelfExpanded;
+  const threadListGrouping: ThreadListGrouping =
+    loaded && preferencesResult.value.threadListGrouping === "status" ? "status" : "manual";
   const expandedWorkerGroupList = loaded
     ? (preferencesResult.value.threadListExpandedWorkerGroups ?? EMPTY_WORKER_GROUPS)
     : EMPTY_WORKER_GROUPS;
@@ -62,8 +65,20 @@ export function useThreadListV2ShelfPreferences() {
     [loaded, savePreferences],
   );
 
+  // Grouping never rewrites the saved order, so switching back restores it.
+  const setThreadListGrouping = useCallback(
+    (grouping: ThreadListGrouping) => {
+      if (!loaded) return;
+      savePreferences({ threadListGrouping: grouping });
+    },
+    [loaded, savePreferences],
+  );
+
   return {
     loaded,
+    groupByStatus: threadListGrouping === "status",
+    setThreadListGrouping,
+    threadListGrouping,
     expandedWorkerGroups,
     settledShelfExpanded,
     snoozedShelfExpanded,

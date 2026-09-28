@@ -653,6 +653,17 @@ describe("ClientSettings sidebar", () => {
     );
   });
 
+  it("defaults thread grouping to the manual order and accepts status grouping", () => {
+    expect(decodeClientSettings({}).sidebarThreadGrouping).toBe("manual");
+    expect(decodeClientSettings({ sidebarThreadGrouping: "status" }).sidebarThreadGrouping).toBe(
+      "status",
+    );
+    expect(
+      decodeClientSettingsPatch({ sidebarThreadGrouping: "manual" }).sidebarThreadGrouping,
+    ).toBe("manual");
+    expect(() => decodeClientSettingsPatch({ sidebarThreadGrouping: "project" })).toThrow();
+  });
+
   it("keeps unpin confirmation opt-in and patchable", () => {
     expect(decodeClientSettings({}).confirmThreadUnpin).toBe(false);
     expect(decodeClientSettingsPatch({ confirmThreadUnpin: true }).confirmThreadUnpin).toBe(true);

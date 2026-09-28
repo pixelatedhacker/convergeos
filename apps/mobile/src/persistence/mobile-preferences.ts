@@ -45,7 +45,11 @@ export interface Preferences {
   readonly threadListSnoozedShelfExpanded?: boolean;
   /** Scoped keys of coordinators whose mesh workers are expanded. Collapsed by default. */
   readonly threadListExpandedWorkerGroups?: readonly string[];
+  /** Active thread list layout; absent means the manual order. */
+  readonly threadListGrouping?: ThreadListGrouping;
 }
+
+export type ThreadListGrouping = "manual" | "status";
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
   "MobilePreferencesLoadError",
@@ -106,6 +110,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
     threadListExpandedWorkerGroups?: readonly string[];
+    threadListGrouping?: ThreadListGrouping;
   } = {};
 
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
@@ -194,6 +199,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.threadListExpandedWorkerGroups = parsed.threadListExpandedWorkerGroups.filter(
       (key): key is string => typeof key === "string",
     );
+  }
+  if (parsed.threadListGrouping === "manual" || parsed.threadListGrouping === "status") {
+    preferences.threadListGrouping = parsed.threadListGrouping;
   }
   return preferences;
 }

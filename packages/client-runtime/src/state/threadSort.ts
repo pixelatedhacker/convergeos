@@ -28,7 +28,19 @@ export function resolveSettledThreadTimestamp(thread: SettledThreadTimestampInpu
   if (thread.settledAt != null && toSortableTimestamp(thread.settledAt) !== null) {
     return thread.settledAt;
   }
+  return resolveThreadActivityTimestamp(thread);
+}
 
+export type ThreadActivityTimestampInput = Pick<
+  OrchestrationThreadShell,
+  "latestUserMessageAt" | "latestTurn" | "updatedAt"
+>;
+
+/** A thread's most recent activity: the latest message or turn stamp, then
+    updatedAt. Null when every candidate is malformed. */
+export function resolveThreadActivityTimestamp(
+  thread: ThreadActivityTimestampInput,
+): string | null {
   let latest: string | null = null;
   let latestMs = Number.NEGATIVE_INFINITY;
   for (const candidate of [

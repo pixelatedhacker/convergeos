@@ -251,6 +251,10 @@
       "types": "./src/state/threadNesting.ts",
       "default": "./src/state/threadNesting.ts"
     },
+    "./state/thread-status-groups": {
+      "types": "./src/state/threadStatusGroups.ts",
+      "default": "./src/state/threadStatusGroups.ts"
+    },
     "./state/thread-sort": {
       "types": "./src/state/threadSort.ts",
       "default": "./src/state/threadSort.ts"
