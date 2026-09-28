@@ -88,12 +88,6 @@ export const PROVIDER_OPTIONS: Array<{
     available: true,
     pickerSidebarBadge: "new",
   },
-  {
-    value: ProviderDriverKind.make("antigravityCli"),
-    label: "Antigravity CLI",
-    available: true,
-    pickerSidebarBadge: "new",
-  },
 ];
 
 export { formatDuration } from "@t3tools/shared/orchestrationTiming";

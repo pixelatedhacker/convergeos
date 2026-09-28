@@ -230,7 +230,6 @@ function SubscriptionProviderMark({ provider }: { readonly provider: ProviderDri
     case "ohMyPi":
       return <OhMyPiIcon className={className} aria-hidden />;
     case "antigravity":
-    case "antigravityCli":
       return <AntigravityIcon className={className} aria-hidden />;
     default:
       return <CircleIcon className={className} aria-hidden />;

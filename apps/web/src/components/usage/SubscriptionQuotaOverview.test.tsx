@@ -203,29 +203,26 @@ describe("SubscriptionQuotaOverview", () => {
     expect(markup).not.toContain("0% left");
   });
 
-  it.each(["opencode", "ohMyPi", "antigravity", "antigravityCli"])(
-    "uses the built-in mark for %s",
-    (provider) => {
-      const markup = renderToStaticMarkup(
-        <SubscriptionQuotaOverview
-          environments={[
-            ready({
-              id: `environment-${provider}`,
-              label: "Local",
-              subjects: [
-                subject({
-                  provider: ProviderDriverKind.make(provider),
-                  windows: [window({ id: "session", label: "Session", usedPercent: 25 })],
-                }),
-              ],
-            }),
-          ]}
-        />,
-      );
+  it.each(["opencode", "ohMyPi", "antigravity"])("uses the built-in mark for %s", (provider) => {
+    const markup = renderToStaticMarkup(
+      <SubscriptionQuotaOverview
+        environments={[
+          ready({
+            id: `environment-${provider}`,
+            label: "Local",
+            subjects: [
+              subject({
+                provider: ProviderDriverKind.make(provider),
+                windows: [window({ id: "session", label: "Session", usedPercent: 25 })],
+              }),
+            ],
+          }),
+        ]}
+      />,
+    );
 
-      expect(markup).not.toContain("lucide-circle");
-    },
-  );
+    expect(markup).not.toContain("lucide-circle");
+  });
 
   it("formats an unknown provider safely and shows supplemental quota metadata", () => {
     const markup = renderToStaticMarkup(

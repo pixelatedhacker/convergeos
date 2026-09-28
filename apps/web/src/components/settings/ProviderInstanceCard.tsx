@@ -501,9 +501,7 @@ export function ProviderInstanceCard({
     ? instance.driver
     : null;
   const customModels =
-    instance.driver === "antigravity" ||
-    instance.driver === "ohMyPi" ||
-    instance.driver === "antigravityCli"
+    instance.driver === "antigravity" || instance.driver === "ohMyPi"
       ? []
       : readConfigCustomModels(instance.config);
   // Server-returned models may lag behind settings writes. Treat probe

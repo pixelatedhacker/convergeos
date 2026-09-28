@@ -6,9 +6,9 @@ import {
   supportsProviderRuntimeMode,
 } from "./providerRuntimeModes.ts";
 
-const cli = {
-  driver: ProviderDriverKind.make("antigravityCli"),
-  displayName: "Antigravity CLI",
+const fullAccessOnly = {
+  driver: ProviderDriverKind.make("fullAccessOnly"),
+  displayName: "Full-access provider",
   supportedRuntimeModes: ["full-access"],
 } satisfies Pick<ServerProvider, "driver" | "displayName" | "supportedRuntimeModes">;
 
@@ -24,21 +24,24 @@ describe("provider runtime mode availability", () => {
 
   it("blocks every restricted selection without changing it or choosing Full access", () => {
     for (const mode of ["approval-required", "auto-accept-edits", "auto"] satisfies RuntimeMode[]) {
-      expect(supportsProviderRuntimeMode(cli, mode)).toBe(false);
-      expect(getProviderRuntimeModeBlockReason(cli, mode)).toContain(
+      expect(supportsProviderRuntimeMode(fullAccessOnly, mode)).toBe(false);
+      expect(getProviderRuntimeModeBlockReason(fullAccessOnly, mode)).toContain(
         "Select Full access in Access",
       );
     }
-    expect(getProviderRuntimeModeBlockReason(cli, "full-access")).toBeNull();
-    expect(cli.supportedRuntimeModes).toEqual(["full-access"]);
+    expect(getProviderRuntimeModeBlockReason(fullAccessOnly, "full-access")).toBeNull();
+    expect(fullAccessOnly.supportedRuntimeModes).toEqual(["full-access"]);
   });
 
   it("does not treat an explicitly empty capability as unrestricted", () => {
-    expect(supportsProviderRuntimeMode({ ...cli, supportedRuntimeModes: [] }, "full-access")).toBe(
-      false,
-    );
     expect(
-      getProviderRuntimeModeBlockReason({ ...cli, supportedRuntimeModes: [] }, "full-access"),
+      supportsProviderRuntimeMode({ ...fullAccessOnly, supportedRuntimeModes: [] }, "full-access"),
+    ).toBe(false);
+    expect(
+      getProviderRuntimeModeBlockReason(
+        { ...fullAccessOnly, supportedRuntimeModes: [] },
+        "full-access",
+      ),
     ).toContain("Select another provider");
   });
 

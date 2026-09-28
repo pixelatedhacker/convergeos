@@ -1,5 +1,4 @@
 import { isTransportConnectionErrorMessage } from "@t3tools/client-runtime/errors";
-import { getProviderRuntimeModeBlockReason } from "@t3tools/client-runtime/providerRuntimeModes";
 import {
   clampFileAttachmentUploadBytes,
   fileAttachmentTooLargeMessage,
@@ -95,26 +94,6 @@ export interface ThreadSettingsSnapshot {
   readonly modelSelection: ModelSelectionType;
   readonly runtimeMode: RuntimeModeType;
   readonly interactionMode: ProviderInteractionModeType;
-}
-
-/** Reject unsupported queued input before upload and again against current delivery state. */
-export function queuedProviderInputBlockReason(input: {
-  readonly provider:
-    | Pick<ServerProvider, "driver" | "displayName" | "supportedRuntimeModes">
-    | undefined;
-  readonly runtimeMode: RuntimeModeType;
-  readonly attachments: ReadonlyArray<Pick<DraftComposerAttachment, "type">>;
-  readonly threadBusy: boolean;
-}): string | null {
-  const modeError = getProviderRuntimeModeBlockReason(input.provider, input.runtimeMode);
-  if (modeError) return modeError;
-  if (input.provider?.driver !== "antigravityCli") return null;
-  if (input.attachments.some((attachment) => attachment.type === "image")) {
-    return "Antigravity CLI accepts text only. Remove image attachments to continue.";
-  }
-  return input.threadBusy
-    ? "Antigravity CLI cannot steer an active turn. Wait or stop it, then send your draft."
-    : null;
 }
 
 export function resolveQueuedThreadSettings(

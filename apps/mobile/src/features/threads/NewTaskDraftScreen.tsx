@@ -223,11 +223,6 @@ export function NewTaskDraftScreen(props: {
     activeProvider,
     flow.runtimeMode,
   );
-  const cliAttachmentBlockReason =
-    activeProvider?.driver === "antigravityCli" &&
-    flow.attachments.some((attachment) => attachment.type === "image")
-      ? "Antigravity CLI accepts text only. Remove image attachments to continue."
-      : null;
   // A project added by cloning exists before its files do: the prompt can be
   // written meanwhile, but Start waits for the clone.
   const projectCloneState = useProjectClone(
@@ -1219,16 +1214,6 @@ export function NewTaskDraftScreen(props: {
       Alert.alert("Access mode unavailable", modeError);
       return;
     }
-    if (
-      provider?.driver === "antigravityCli" &&
-      draft.attachments.some((attachment) => attachment.type === "image")
-    ) {
-      Alert.alert(
-        "Images unavailable",
-        "Antigravity CLI accepts text only. Remove image attachments to continue.",
-      );
-      return;
-    }
 
     if (
       attachmentBlockReason !== null ||
@@ -1380,7 +1365,6 @@ export function NewTaskDraftScreen(props: {
     !cloneBlocksStart &&
     attachmentBlockReason === null &&
     providerModeBlockReason === null &&
-    cliAttachmentBlockReason === null &&
     !modelUnavailable &&
     Boolean(flow.selectedProject) &&
     Boolean(flow.selectedModel) &&
@@ -1633,16 +1617,14 @@ export function NewTaskDraftScreen(props: {
       ) : null}
       <View className="pb-1">{workspaceControls}</View>
 
-      {providerModeBlockReason || cliAttachmentBlockReason ? (
+      {providerModeBlockReason ? (
         <Pressable
           accessibilityRole="button"
           className="px-3 py-2"
           disabled={isComposerInteractionLocked}
           onPress={settingsSheetPresentation.open}
         >
-          <Text className="text-xs text-foreground">
-            {providerModeBlockReason ?? cliAttachmentBlockReason}
-          </Text>
+          <Text className="text-xs text-foreground">{providerModeBlockReason}</Text>
         </Pressable>
       ) : null}
 

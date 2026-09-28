@@ -229,7 +229,7 @@ it.effect("lists only same-project agents with bounded status metadata", () =>
         session: {
           threadId: targetId,
           status: "ready",
-          providerName: "antigravityCli",
+          providerName: "antigravity",
           mcpAttachment: "leafOnly",
           runtimeMode: "full-access",
           activeTurnId: null,
