@@ -15,11 +15,16 @@ import {
   activityByDay,
   boardColumns,
   botRoster,
-  partitionProjectActivity,
+  buildCoordinatorSection,
+  buildProjectChecklist,
+  hasProjectInstructionsFile,
+  projectHomeThreads,
   projectMemberKeys,
   recentProjectThreads,
+  resolveThreadChecklistState,
   statusLine,
   upcomingProjectSchedules,
+  type ProjectHomeThread,
 } from "./ProjectHomePage.logic";
 
 const NOW = new Date("2026-09-06T15:00:00.000Z");
@@ -45,18 +50,19 @@ function makeSession(
   } as NonNullable<EnvironmentThreadShell["session"]>;
 }
 
-function makeRunningTurn(startedAt: string): NonNullable<EnvironmentThreadShell["latestTurn"]> {
+
+function completedTurn(completedAt: string): NonNullable<EnvironmentThreadShell["latestTurn"]> {
   return {
-    turnId: TurnId.make(`turn-${startedAt}`),
-    state: "running",
-    requestedAt: startedAt,
-    startedAt,
-    completedAt: null,
+    turnId: TurnId.make(`turn-${completedAt}`),
+    state: "completed",
+    requestedAt: completedAt,
+    startedAt: completedAt,
+    completedAt,
     assistantMessageId: null,
   };
 }
 
-function makeThread(overrides: Partial<EnvironmentThreadShell> = {}): EnvironmentThreadShell {
+function makeThread(overrides: Partial<ProjectHomeThread> = {}): ProjectHomeThread {
   threadCounter += 1;
   return {
     environmentId: ENV,
@@ -80,8 +86,10 @@ function makeThread(overrides: Partial<EnvironmentThreadShell> = {}): Environmen
     hasPendingUserInput: false,
     hasActionableProposedPlan: false,
     ...overrides,
-  } as EnvironmentThreadShell;
+  } as ProjectHomeThread;
 }
+
+const RUNNING = { session: makeSession(ThreadId.make("thread-running"), { status: "running" }) };
 
 function makeCard(overrides: Partial<KanbanCard> = {}): KanbanCard {
   return {
@@ -101,37 +109,234 @@ function makeCard(overrides: Partial<KanbanCard> = {}): KanbanCard {
   } as KanbanCard;
 }
 
-describe("partitionProjectActivity", () => {
-  it("scopes running and attention rows to the project group", () => {
-    const running = makeThread({
-      session: makeSession(ThreadId.make("thread-running"), {
-        status: "running",
-        activeTurnId: TurnId.make("turn-running"),
-        updatedAt: "2026-09-06T14:30:00.000Z",
-      }),
-      latestTurn: makeRunningTurn("2026-09-06T14:30:00.000Z"),
+describe("projectHomeThreads", () => {
+  it("keeps the project group's threads and merges their last visit", () => {
+    const owned = makeThread();
+    const foreign = makeThread({ projectId: ProjectId.make("project-elsewhere") });
+    const scoped = projectHomeThreads([owned, foreign], KEYS, {
+      [`${ENV}:${owned.id}`]: "2026-09-06T12:00:00.000Z",
+      [`${ENV}:${foreign.id}`]: "2026-09-06T12:00:00.000Z",
     });
+    expect(scoped.map((thread) => [thread.id, thread.lastVisitedAt])).toEqual([
+      [owned.id, "2026-09-06T12:00:00.000Z"],
+    ]);
+  });
+});
+
+describe("resolveThreadChecklistState", () => {
+  it("puts approvals, input, plans, and failures in waiting", () => {
+    expect(resolveThreadChecklistState(makeThread({ hasPendingApprovals: true }))).toMatchObject({
+      group: "waiting",
+      label: "Pending approval",
+    });
+    expect(resolveThreadChecklistState(makeThread({ hasPendingUserInput: true }))).toMatchObject({
+      group: "waiting",
+      label: "Awaiting input",
+    });
+    expect(
+      resolveThreadChecklistState(
+        makeThread({
+          interactionMode: "plan",
+          hasActionableProposedPlan: true,
+          latestTurn: completedTurn("2026-09-06T13:00:00.000Z"),
+          session: makeSession(ThreadId.make("thread-plan")),
+        }),
+      ),
+    ).toMatchObject({ group: "waiting", label: "Plan ready" });
+    expect(
+      resolveThreadChecklistState(
+        makeThread({ session: makeSession(ThreadId.make("thread-failed"), { status: "error" }) }),
+      ),
+    ).toMatchObject({ group: "waiting", label: "Failed", tone: "failed" });
+  });
+
+  it("ranks a failed session above lingering background work", () => {
+    expect(
+      resolveThreadChecklistState(
+        makeThread({
+          session: makeSession(ThreadId.make("thread-failed-bg"), { status: "error" }),
+          backgroundLiveness: "working",
+        }),
+      ),
+    ).toMatchObject({ group: "waiting", label: "Failed" });
+  });
+
+  it("marks unseen completions ready and seen ones as nothing to report", () => {
+    const turn = completedTurn("2026-09-06T13:00:00.000Z");
+    expect(
+      resolveThreadChecklistState(
+        makeThread({ latestTurn: turn, lastVisitedAt: "2026-09-06T12:00:00.000Z" }),
+      ),
+    ).toMatchObject({ group: "ready", label: "Completed" });
+    expect(
+      resolveThreadChecklistState(
+        makeThread({ latestTurn: turn, lastVisitedAt: "2026-09-06T14:00:00.000Z" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("buildProjectChecklist", () => {
+  it("groups threads and cards by who has to move next", () => {
     const approval = makeThread({ hasPendingApprovals: true });
-    const otherProject = makeThread({
+    const working = makeThread(RUNNING);
+    const done = makeThread({
+      latestTurn: completedTurn("2026-09-06T13:00:00.000Z"),
+      lastVisitedAt: "2026-09-06T12:00:00.000Z",
+    });
+    const idle = makeThread();
+    const foreign = makeThread({
       projectId: ProjectId.make("project-elsewhere"),
       hasPendingApprovals: true,
     });
-    const { running: runningRows, attention } = partitionProjectActivity(
-      [running, approval, otherProject],
-      KEYS,
-      NOW,
+
+    const checklist = buildProjectChecklist({
+      threads: projectHomeThreads([approval, working, done, idle, foreign], KEYS, {
+        [`${ENV}:${done.id}`]: "2026-09-06T12:00:00.000Z",
+      }),
+      cards: [
+        makeCard({ status: "inProgress" }),
+        makeCard({ status: "ready" }),
+        makeCard({ status: "review" }),
+        makeCard({ status: "backlog" }),
+        makeCard({ status: "done" }),
+      ],
+      now: NOW,
+    });
+
+    expect(checklist.waiting.items.map((item) => item.key)).toEqual([
+      `thread:${ENV}:${approval.id}`,
+    ]);
+    expect(checklist.inProgress.items.map((item) => [item.kind, item.status])).toEqual(
+      expect.arrayContaining([
+        ["thread", "Working"],
+        ["card", "In progress"],
+      ]),
     );
-    expect(runningRows.map((row) => row.threadId)).toEqual([running.id]);
-    expect(attention.map((row) => row.threadId)).toEqual([approval.id]);
+    expect(checklist.ready.items.map((item) => item.status).toSorted()).toEqual([
+      "Completed",
+      "In review",
+      "Ready to start",
+    ]);
+    expect(checklist.total).toBe(6);
+    expect(checklist.counts).toEqual({ waiting: 1, runningThreads: 1, openCards: 3 });
   });
 
-  it("never lists archived threads", () => {
-    const archived = makeThread({
+  it("keeps snoozed, settled, and archived threads off the waiting and ready groups", () => {
+    const snoozed = makeThread({
       hasPendingApprovals: true,
-      archivedAt: "2026-09-05T00:00:00.000Z",
+      snoozedUntil: "2026-09-06T18:00:00.000Z",
     });
-    const { attention } = partitionProjectActivity([archived], KEYS, NOW);
-    expect(attention).toEqual([]);
+    const settled = makeThread({ hasPendingUserInput: true, settledOverride: "settled" });
+    const archived = makeThread({ hasPendingApprovals: true, archivedAt: NOW.toISOString() });
+    const snoozedWorking = makeThread({ ...RUNNING, snoozedUntil: "2026-09-06T18:00:00.000Z" });
+
+    const checklist = buildProjectChecklist({
+      threads: [snoozed, settled, archived, snoozedWorking],
+      cards: [makeCard({ status: "ready", deletedAt: NOW.toISOString() })],
+      now: NOW,
+    });
+
+    expect(checklist.waiting.items).toEqual([]);
+    expect(checklist.ready.items).toEqual([]);
+    expect(checklist.inProgress.items.map((item) => item.title)).toEqual([snoozedWorking.title]);
+  });
+
+  it("shows the running plan step as the status", () => {
+    const planning = makeThread({
+      ...RUNNING,
+      planProgress: { step: "Write tests", completedSteps: 1, totalSteps: 4 },
+    });
+    const checklist = buildProjectChecklist({ threads: [planning], cards: [], now: NOW });
+    expect(checklist.inProgress.items[0]?.status).toBe("Write tests (2/4)");
+  });
+
+  it("caps each group, newest first, and counts the overflow", () => {
+    const threads = Array.from({ length: 5 }, (_, index) =>
+      makeThread({ hasPendingApprovals: true, updatedAt: `2026-09-06T1${index}:00:00.000Z` }),
+    );
+    const checklist = buildProjectChecklist({ threads, cards: [], now: NOW, limit: 3 });
+    expect(checklist.waiting.items.map((item) => item.title)).toEqual([
+      threads[4]!.title,
+      threads[3]!.title,
+      threads[2]!.title,
+    ]);
+    expect(checklist.waiting.overflow).toBe(2);
+    expect(checklist.counts.waiting).toBe(5);
+  });
+});
+
+describe("buildCoordinatorSection", () => {
+  it("lists threads with live mesh workers and summarizes them in prose", () => {
+    const coordinator = makeThread({ ...RUNNING, title: "Coordinator" });
+    const workers = [
+      makeThread({ ...RUNNING, parentThreadId: coordinator.id }),
+      makeThread({ ...RUNNING, parentThreadId: coordinator.id }),
+      makeThread({
+        hasPendingApprovals: true,
+        parentThreadId: coordinator.id,
+        updatedAt: "2026-09-06T14:30:00.000Z",
+      }),
+    ];
+    const bystander = makeThread({ ...RUNNING });
+
+    const section = buildCoordinatorSection([coordinator, ...workers, bystander], NOW);
+
+    expect(section.rows).toHaveLength(1);
+    expect(section.rows[0]).toMatchObject({
+      threadId: coordinator.id,
+      prose: "Working · 3 workers · 1 needs you",
+      // A worker waiting on approval outranks the coordinator's own Working.
+      tone: "approval",
+      activityAt: "2026-09-06T14:30:00.000Z",
+    });
+  });
+
+  it("leads with the coordinator's plan step when it has one", () => {
+    const coordinator = makeThread({
+      ...RUNNING,
+      planProgress: { step: "Migrate schema", completedSteps: 0, totalSteps: 0 },
+    });
+    const worker = makeThread({ parentThreadId: coordinator.id });
+    const section = buildCoordinatorSection([coordinator, worker], NOW);
+    expect(section.rows[0]?.prose).toBe("Migrate schema · 1 worker");
+  });
+
+  it("is empty without coordinators, ignoring settled workers and archived coordinators", () => {
+    const archivedCoordinator = makeThread({ archivedAt: NOW.toISOString() });
+    const orphan = makeThread({ parentThreadId: archivedCoordinator.id });
+    const quiet = makeThread();
+    const settledWorker = makeThread({ parentThreadId: quiet.id, settledOverride: "settled" });
+
+    const section = buildCoordinatorSection(
+      [archivedCoordinator, orphan, quiet, settledWorker],
+      NOW,
+    );
+
+    expect(section).toEqual({ rows: [], overflow: 0 });
+  });
+
+  it("caps the rows, most recent activity first", () => {
+    const coordinators = Array.from({ length: 3 }, (_, index) =>
+      makeThread({ updatedAt: `2026-09-06T1${index}:00:00.000Z` }),
+    );
+    const workers = coordinators.map((coordinator) =>
+      makeThread({ parentThreadId: coordinator.id, updatedAt: "2026-09-01T00:00:00.000Z" }),
+    );
+    const section = buildCoordinatorSection([...coordinators, ...workers], NOW, 2);
+    expect(section.rows.map((row) => row.threadId)).toEqual([
+      coordinators[2]!.id,
+      coordinators[1]!.id,
+    ]);
+    expect(section.overflow).toBe(1);
+  });
+});
+
+describe("hasProjectInstructionsFile", () => {
+  it("finds AGENTS.md only as a root file", () => {
+    expect(hasProjectInstructionsFile([{ path: "AGENTS.md", kind: "file" }])).toBe(true);
+    expect(hasProjectInstructionsFile([{ path: "AGENTS.md", kind: "directory" }])).toBe(false);
+    expect(hasProjectInstructionsFile([{ path: "docs/AGENTS.md", kind: "file" }])).toBe(false);
   });
 });
 
@@ -195,19 +400,17 @@ describe("boardColumns", () => {
 
 describe("statusLine", () => {
   it("joins the in-flight signals with separators", () => {
-    expect(statusLine({ attention: 2, running: 1, ready: 2, inProgress: 1 })).toBe(
+    expect(statusLine({ waiting: 2, runningThreads: 1, openCards: 3 })).toBe(
       "2 waiting on you · 1 agent working · 3 tasks in play",
     );
   });
 
   it("returns null when nothing is in flight", () => {
-    expect(statusLine({ attention: 0, running: 0, ready: 0, inProgress: 0 })).toBeNull();
+    expect(statusLine({ waiting: 0, runningThreads: 0, openCards: 0 })).toBeNull();
   });
 
   it("omits quiet signals instead of padding with zeros", () => {
-    expect(statusLine({ attention: 0, running: 0, ready: 1, inProgress: 0 })).toBe(
-      "1 task in play",
-    );
+    expect(statusLine({ waiting: 0, runningThreads: 0, openCards: 1 })).toBe("1 task in play");
   });
 });
 
