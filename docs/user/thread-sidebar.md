@@ -125,6 +125,26 @@ On web and desktop, right-click a pull request link in a thread and choose
 same link to return to the branch PR, if one exists.
 The linked pull request participates in automatic settlement.
 
+### Pull request status on thread rows
+
+A thread with a linked pull request shows its PR badge on the branch line of its
+row, on web, desktop, and mobile. Beside the badge:
+
+- **Checks.** While the pull request is open, a glyph shows its CI checks: a
+  green check when all checks have passed, a red cross when some failed, and an
+  amber dot while some are still running. Hover it on web and desktop, or use
+  your screen reader on mobile, to read the status. Merged and closed pull
+  requests, and pull requests without reported checks, show no glyph.
+- **Line counts.** Green and red numbers show the lines the pull request adds
+  and removes. Hosts that don't report line counts show none.
+
+When a thread has several pull requests, the row describes the one its badge
+opens: the open pull request, or the highest open layer of a stack. These
+details refresh when ConvergeOS syncs the pull request with its host.
+
+To see a thread's worktree path, hover its row on web and desktop. The branch
+toolbar in the thread also shows whether it runs in a worktree.
+
 ## Find and reference work
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
