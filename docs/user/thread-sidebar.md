@@ -145,6 +145,16 @@ details refresh when ConvergeOS syncs the pull request with its host.
 To see a thread's worktree path, hover its row on web and desktop. The branch
 toolbar in the thread also shows whether it runs in a worktree.
 
+### Last-turn changes on thread rows
+
+A thread without pull request line counts shows the changes its last finished
+turn made instead: green and red numbers for the lines that turn added and
+removed. Hover the numbers on web and desktop, or use your screen reader on
+mobile, to tell the two apart: pull request counts read "Pull request: +120 −45",
+and turn counts read "Last turn: +12 −3 in 2 files". The numbers update when a
+turn finishes. A turn that changed no lines shows none, and once a pull request
+reports its line counts, the row shows those instead.
+
 ## Find and reference work
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads

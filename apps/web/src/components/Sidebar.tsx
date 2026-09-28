@@ -30,10 +30,7 @@ import {
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import {
-  resolveThreadRowSignals,
-  type ThreadRowDiffStat,
-} from "@t3tools/client-runtime/thread-row-signals";
+import { resolveThreadRowSignals } from "@t3tools/client-runtime/thread-row-signals";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -1550,7 +1547,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       resolveThreadRowSignals({
         pullRequests: thread.pullRequests,
         supportsPullRequestLinks: supportsMultiplePullRequests,
-        turnDiff: latestTurnDiff(thread),
+        turnDiff: thread.latestTurnDiffStat,
       }),
     [supportsMultiplePullRequests, thread],
   );
@@ -2000,10 +1997,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <PullRequestChecksGlyph state={rowSignals.checks} className="size-3" />
               ) : null}
               {diff ? (
-                <span className="shrink-0 font-mono">
-                  <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
-                  <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span role="img" aria-label={diff.label} className="shrink-0 font-mono" />
+                    }
+                  >
+                    <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
+                    <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
+                  </TooltipTrigger>
+                  <TooltipPopup>{diff.label}</TooltipPopup>
+                </Tooltip>
               ) : null}
               <span
                 aria-hidden
@@ -2045,16 +2049,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     </li>
   );
 });
-
-/**
- * Per-turn checkpoint stats for the row's diff slot, used when the thread has no pull request
- * line counts (`resolveThreadRowSignals` gives PR stats precedence). Shells don't carry
- * checkpoint summaries yet, so this stays null until the shell projection grows them.
- */
-function latestTurnDiff(thread: SidebarThreadSummary): ThreadRowDiffStat | null {
-  void thread;
-  return null;
-}
 
 const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   thread: SidebarThreadSummary;

@@ -32,7 +32,19 @@ function link(
   };
 }
 
-const turnDiff = { insertions: 3, deletions: 1 };
+const turnDiff = { additions: 12, deletions: 3, files: 2 };
+const lastTurn = {
+  insertions: 12,
+  deletions: 3,
+  source: "turn",
+  label: "Last turn: +12 −3 in 2 files",
+} as const;
+const prDiff = (insertions: number, deletions: number) => ({
+  insertions,
+  deletions,
+  source: "pull-request" as const,
+  label: `Pull request: +${insertions} −${deletions}`,
+});
 
 describe("resolveThreadRowSignals", () => {
   it("shows nothing for a thread without a pull request or turn stats", () => {
@@ -45,7 +57,34 @@ describe("resolveThreadRowSignals", () => {
   it("falls back to turn stats when there is no pull request", () => {
     expect(
       resolveThreadRowSignals({ pullRequests: [], supportsPullRequestLinks: true, turnDiff }),
-    ).toEqual({ diff: turnDiff, checks: null });
+    ).toEqual({ diff: lastTurn, checks: null });
+  });
+
+  it("labels a single-file turn and hides a turn without line changes", () => {
+    expect(
+      resolveThreadRowSignals({
+        pullRequests: [],
+        supportsPullRequestLinks: true,
+        turnDiff: { additions: 5, deletions: 0, files: 1 },
+      }).diff?.label,
+    ).toBe("Last turn: +5 −0 in 1 file");
+    expect(
+      resolveThreadRowSignals({
+        pullRequests: [],
+        supportsPullRequestLinks: true,
+        turnDiff: { additions: 0, deletions: 0, files: 1 },
+      }).diff,
+    ).toBeNull();
+  });
+
+  it("falls back to turn stats in environments without link snapshots", () => {
+    expect(
+      resolveThreadRowSignals({
+        pullRequests: [link(7, { additions: 120, deletions: 45 })],
+        supportsPullRequestLinks: false,
+        turnDiff,
+      }).diff,
+    ).toEqual(lastTurn);
   });
 
   it("prefers the pull request's line counts over turn stats", () => {
@@ -54,7 +93,7 @@ describe("resolveThreadRowSignals", () => {
       supportsPullRequestLinks: true,
       turnDiff,
     });
-    expect(signals).toEqual({ diff: { insertions: 120, deletions: 45 }, checks: "passing" });
+    expect(signals).toEqual({ diff: prDiff(120, 45), checks: "passing" });
   });
 
   it("uses the open pull request the badge shows over a merged one", () => {
@@ -71,7 +110,7 @@ describe("resolveThreadRowSignals", () => {
       ],
       supportsPullRequestLinks: true,
     });
-    expect(signals).toEqual({ diff: { insertions: 10, deletions: 2 }, checks: "pending" });
+    expect(signals).toEqual({ diff: prDiff(10, 2), checks: "pending" });
   });
 
   it("uses the top open layer of a stack", () => {
@@ -88,7 +127,7 @@ describe("resolveThreadRowSignals", () => {
       ],
       supportsPullRequestLinks: true,
     });
-    expect(signals).toEqual({ diff: { insertions: 8, deletions: 0 }, checks: "failing" });
+    expect(signals).toEqual({ diff: prDiff(8, 0), checks: "failing" });
   });
 
   it.each([
@@ -102,7 +141,7 @@ describe("resolveThreadRowSignals", () => {
         supportsPullRequestLinks: true,
         turnDiff,
       }).diff,
-    ).toEqual(turnDiff);
+    ).toEqual(lastTurn);
   });
 
   it.each(["passing", "failing", "pending"] as const)(

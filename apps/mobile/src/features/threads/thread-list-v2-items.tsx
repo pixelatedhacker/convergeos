@@ -1071,7 +1071,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         ) : null}
         {rowSignals.diff ? (
           <Text
-            accessibilityLabel={`${rowSignals.diff.insertions} lines added, ${rowSignals.diff.deletions} removed`}
+            accessibilityLabel={rowSignals.diff.label}
             className="text-xs tabular-nums"
             style={{ fontFamily: MONO_FONT }}
           >

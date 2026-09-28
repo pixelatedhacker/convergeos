@@ -51,7 +51,7 @@ function useSupportsThreadPullRequests(environmentId: EnvironmentId): boolean {
   );
 }
 
-/** Row diff stats and CI rollup, read from the snapshots already on the thread shell. */
+/** Row diff stats (PR, else last turn) and CI rollup, read from data already on the thread shell. */
 export function useThreadRowSignals(thread: EnvironmentThreadShell): ThreadRowSignals {
   const supportsLinks = useSupportsThreadPullRequests(thread.environmentId);
   return useMemo(
@@ -59,8 +59,9 @@ export function useThreadRowSignals(thread: EnvironmentThreadShell): ThreadRowSi
       resolveThreadRowSignals({
         pullRequests: thread.pullRequests,
         supportsPullRequestLinks: supportsLinks,
+        turnDiff: thread.latestTurnDiffStat,
       }),
-    [thread.pullRequests, supportsLinks],
+    [thread.pullRequests, thread.latestTurnDiffStat, supportsLinks],
   );
 }
 
