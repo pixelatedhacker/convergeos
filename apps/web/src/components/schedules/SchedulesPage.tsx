@@ -275,7 +275,7 @@ export function SchedulesPage() {
   };
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron} className="border-b border-border">
           <WorkspaceBreadcrumb ariaLabel="Schedules breadcrumb">
@@ -419,7 +419,7 @@ function EmptyNotice({
         <CalendarClockIcon className="size-6" />
       </span>
       <div className="flex flex-col gap-1">
-        <h2 className="font-heading text-xl font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
         <p className="max-w-lg text-sm text-muted-foreground">{body}</p>
       </div>
       {action}
@@ -619,183 +619,186 @@ function ScheduleEditorDialog({
               : "Each run starts a new thread in the chosen project."}
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4">
-          {editing === null ? (
-            <Field label="Project">
+        <DialogPanel>
+          <div className="flex flex-col gap-4">
+            {editing === null ? (
+              <Field label="Project">
+                <Select
+                  value={projectKey}
+                  onValueChange={(value) => {
+                    if (typeof value !== "string") return;
+                    setProjectKey(value);
+                    const next = projects.find((project) => project.key === value);
+                    if (next) setModelSelection(next.defaultModelSelection);
+                  }}
+                >
+                  <SelectTrigger aria-label="Project">
+                    <SelectValue>
+                      {selectedProject ? projectChoiceLabel(selectedProject) : "Select a project"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {projects.map((project) => (
+                      <SelectItem key={project.key} value={project.key}>
+                        {projectChoiceLabel(project)}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </Field>
+            ) : (
+              <Field label="Project">
+                <p className="text-sm text-muted-foreground">
+                  {projects.find((project) => project.key === projectKey)?.name ??
+                    "Unknown project"}
+                </p>
+              </Field>
+            )}
+
+            <Field label="Title">
+              <Input
+                aria-label="Schedule title"
+                maxLength={160}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </Field>
+            <Field label="Prompt">
+              <Textarea
+                aria-label="Schedule prompt"
+                rows={5}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+              />
+            </Field>
+
+            <Field label="Repeats">
               <Select
-                value={projectKey}
+                value={kind}
                 onValueChange={(value) => {
-                  if (typeof value !== "string") return;
-                  setProjectKey(value);
-                  const next = projects.find((project) => project.key === value);
-                  if (next) setModelSelection(next.defaultModelSelection);
+                  if (
+                    value === "once" ||
+                    value === "daily" ||
+                    value === "weekly" ||
+                    value === "monthly"
+                  ) {
+                    setKind(value);
+                  }
                 }}
               >
-                <SelectTrigger aria-label="Project">
+                <SelectTrigger aria-label="Recurrence">
                   <SelectValue>
-                    {selectedProject ? projectChoiceLabel(selectedProject) : "Select a project"}
+                    {kind === "once"
+                      ? "Once"
+                      : kind === "daily"
+                        ? "Daily"
+                        : kind === "weekly"
+                          ? "Weekly"
+                          : "Monthly"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
-                  {projects.map((project) => (
-                    <SelectItem key={project.key} value={project.key}>
-                      {projectChoiceLabel(project)}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="once">Once</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
                 </SelectPopup>
               </Select>
             </Field>
-          ) : (
-            <Field label="Project">
-              <p className="text-sm text-muted-foreground">
-                {projects.find((project) => project.key === projectKey)?.name ?? "Unknown project"}
-              </p>
-            </Field>
-          )}
 
-          <Field label="Title">
-            <Input
-              aria-label="Schedule title"
-              maxLength={160}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </Field>
-          <Field label="Prompt">
-            <Textarea
-              aria-label="Schedule prompt"
-              rows={5}
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-            />
-          </Field>
+            {kind === "once" ? (
+              <Field label="Date and time">
+                <Input
+                  aria-label="Date and time"
+                  nativeInput
+                  type="datetime-local"
+                  value={onceLocal}
+                  onChange={(event) => setOnceLocal(event.target.value)}
+                />
+              </Field>
+            ) : null}
+            {kind === "weekly" ? (
+              <Field label="Weekday">
+                <Select
+                  value={weekday}
+                  onValueChange={(value) => typeof value === "string" && setWeekday(value)}
+                >
+                  <SelectTrigger aria-label="Weekday">
+                    <SelectValue>{WEEKDAY_LABELS[Number(weekday)] ?? "Weekday"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {WEEKDAY_LABELS.map((label, index) => (
+                      <SelectItem key={label} value={String(index)}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </Field>
+            ) : null}
+            {kind === "monthly" ? (
+              <Field label="Day of month">
+                <Input
+                  aria-label="Day of month"
+                  max={31}
+                  min={1}
+                  nativeInput
+                  type="number"
+                  value={monthDay}
+                  onChange={(event) => setMonthDay(event.target.value)}
+                />
+              </Field>
+            ) : null}
+            {kind !== "once" ? (
+              <Field label="Time">
+                <Input
+                  aria-label="Time"
+                  nativeInput
+                  type="time"
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                />
+              </Field>
+            ) : null}
 
-          <Field label="Repeats">
-            <Select
-              value={kind}
-              onValueChange={(value) => {
-                if (
-                  value === "once" ||
-                  value === "daily" ||
-                  value === "weekly" ||
-                  value === "monthly"
-                ) {
-                  setKind(value);
-                }
-              }}
-            >
-              <SelectTrigger aria-label="Recurrence">
-                <SelectValue>
-                  {kind === "once"
-                    ? "Once"
-                    : kind === "daily"
-                      ? "Daily"
-                      : kind === "weekly"
-                        ? "Weekly"
-                        : "Monthly"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="once">Once</SelectItem>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          {kind === "once" ? (
-            <Field label="Date and time">
+            <Field label="Time zone">
               <Input
-                aria-label="Date and time"
-                nativeInput
-                type="datetime-local"
-                value={onceLocal}
-                onChange={(event) => setOnceLocal(event.target.value)}
+                aria-label="Time zone"
+                list="schedule-timezones"
+                value={timeZone}
+                onChange={(event) => setTimeZone(event.target.value)}
               />
+              <datalist id="schedule-timezones">
+                {IANA_TIME_ZONES.map((zone) => (
+                  <option key={zone} value={zone} />
+                ))}
+              </datalist>
             </Field>
-          ) : null}
-          {kind === "weekly" ? (
-            <Field label="Weekday">
-              <Select
-                value={weekday}
-                onValueChange={(value) => typeof value === "string" && setWeekday(value)}
-              >
-                <SelectTrigger aria-label="Weekday">
-                  <SelectValue>{WEEKDAY_LABELS[Number(weekday)] ?? "Weekday"}</SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {WEEKDAY_LABELS.map((label, index) => (
-                    <SelectItem key={label} value={String(index)}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </Field>
-          ) : null}
-          {kind === "monthly" ? (
-            <Field label="Day of month">
-              <Input
-                aria-label="Day of month"
-                max={31}
-                min={1}
-                nativeInput
-                type="number"
-                value={monthDay}
-                onChange={(event) => setMonthDay(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          {kind !== "once" ? (
-            <Field label="Time">
-              <Input
-                aria-label="Time"
-                nativeInput
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-            </Field>
-          ) : null}
 
-          <Field label="Time zone">
-            <Input
-              aria-label="Time zone"
-              list="schedule-timezones"
-              value={timeZone}
-              onChange={(event) => setTimeZone(event.target.value)}
-            />
-            <datalist id="schedule-timezones">
-              {IANA_TIME_ZONES.map((zone) => (
-                <option key={zone} value={zone} />
-              ))}
-            </datalist>
-          </Field>
+            {environmentId !== null ? (
+              <Field label="Model">
+                <EnvironmentModelField
+                  environmentId={environmentId}
+                  projectDefault={
+                    editing?.modelSelection ?? selectedProject?.defaultModelSelection ?? null
+                  }
+                  selection={modelSelection}
+                  onChange={setModelSelection}
+                />
+              </Field>
+            ) : (
+              <p className="text-sm text-muted-foreground">Select a project to choose a model.</p>
+            )}
 
-          {environmentId !== null ? (
-            <Field label="Model">
-              <EnvironmentModelField
-                environmentId={environmentId}
-                projectDefault={
-                  editing?.modelSelection ?? selectedProject?.defaultModelSelection ?? null
-                }
-                selection={modelSelection}
-                onChange={setModelSelection}
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium">Enabled</span>
+              <Switch
+                aria-label="Enabled"
+                checked={enabled}
+                onCheckedChange={(checked) => setEnabled(Boolean(checked))}
               />
-            </Field>
-          ) : (
-            <p className="text-sm text-muted-foreground">Select a project to choose a model.</p>
-          )}
-
-          <label className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium">Enabled</span>
-            <Switch
-              aria-label="Enabled"
-              checked={enabled}
-              onCheckedChange={(checked) => setEnabled(Boolean(checked))}
-            />
-          </label>
+            </label>
+          </div>
         </DialogPanel>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

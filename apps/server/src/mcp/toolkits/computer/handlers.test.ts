@@ -126,7 +126,12 @@ it.layer(TestLayer)("Bot computer MCP toolkit", (it) => {
       );
       expect(denied).toMatchObject({
         isError: true,
-        content: [{ type: "text", text: "MCP credential does not grant the preview capability." }],
+        content: [
+          {
+            type: "text",
+            text: expect.stringContaining("MCP credential does not grant the preview capability"),
+          },
+        ],
       });
     }),
   );

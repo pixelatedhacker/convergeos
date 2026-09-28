@@ -26,6 +26,7 @@ import { servicePreflightCommand } from "./cli/servicePreflight.ts";
 import { sshHelperCommand } from "./cli/sshHelper.ts";
 import { themeCommand } from "./cli/theme.ts";
 import { meshExportCommand } from "./cli/meshExport.ts";
+import { traceCommand } from "./cli/trace.ts";
 import { triageCommand } from "./cli/triage.ts";
 
 applyConvergeOsEnvironmentAliases(process.env);
@@ -76,6 +77,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       sshHelperCommand,
       themeCommand,
       meshExportCommand,
+      traceCommand,
       triageCommand,
       cloudEnabled ? connectCommand : connectUnavailableCommand,
     ]),

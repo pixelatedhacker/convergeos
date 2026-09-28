@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as NodeVm from "node:vm";
+import * as NodeVM from "node:vm";
 
 import { it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -42,7 +42,7 @@ describe("BotComputerViewerProxy", () => {
     );
     const script = injected?.match(/<script>([\s\S]*?)<\/script>/)?.[1];
     expect(script).toBeDefined();
-    const context = NodeVm.createContext({ Map });
+    const context = NodeVM.createContext({ Map });
     Object.defineProperty(context, "window", { value: context });
     Object.defineProperty(context, "localStorage", {
       configurable: true,
@@ -50,7 +50,7 @@ describe("BotComputerViewerProxy", () => {
         throw new Error("opaque origin");
       },
     });
-    NodeVm.runInContext(script ?? "", context);
+    NodeVM.runInContext(script ?? "", context);
     const storage = context.localStorage as Storage;
     storage.setItem("resize", "remote");
     expect(storage.getItem("resize")).toBe("remote");

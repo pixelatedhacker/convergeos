@@ -22,7 +22,6 @@ import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { toastManager } from "../ui/toast";
@@ -319,10 +318,7 @@ function InstalledSkillsSection({
                       {SKILL_STORE_HARNESSES.map((harness) => {
                         const enabled = target.harnesses.includes(harness.id);
                         return (
-                          <Label
-                            key={harness.id}
-                            className="flex items-center gap-1.5 text-xs font-normal"
-                          >
+                          <label key={harness.id} className="flex items-center gap-1.5 text-xs">
                             <Switch
                               size="sm"
                               checked={enabled}
@@ -333,7 +329,7 @@ function InstalledSkillsSection({
                               }
                             />
                             {skillStoreHarnessLabel(harness.id)}
-                          </Label>
+                          </label>
                         );
                       })}
                     </div>
@@ -545,14 +541,14 @@ function SkillDetailDialog({
               <h3 className="text-sm font-medium">Providers</h3>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {SKILL_STORE_HARNESSES.map((harness) => (
-                  <Label key={harness.id} className="flex items-center gap-1.5 text-sm font-normal">
+                  <label key={harness.id} className="flex items-center gap-1.5 text-sm">
                     <Checkbox
                       checked={selectedHarnesses.has(harness.id)}
                       onCheckedChange={() => toggleHarness(harness.id)}
                       aria-label={harness.label}
                     />
                     {harness.label}
-                  </Label>
+                  </label>
                 ))}
               </div>
             </div>
@@ -579,9 +575,9 @@ function SkillDetailDialog({
               {scope === "global" ? (
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {connectedEnvironments.map((environment) => (
-                    <Label
+                    <label
                       key={environment.environmentId}
-                      className="flex items-center gap-1.5 text-sm font-normal"
+                      className="flex items-center gap-1.5 text-sm"
                     >
                       <Checkbox
                         checked={selectedEnvironmentIds.has(environment.environmentId)}
@@ -589,7 +585,7 @@ function SkillDetailDialog({
                         aria-label={environment.label}
                       />
                       {environment.label}
-                    </Label>
+                    </label>
                   ))}
                 </div>
               ) : (

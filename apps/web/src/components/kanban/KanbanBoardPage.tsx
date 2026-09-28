@@ -62,7 +62,7 @@ export function KanbanBoardPage({ projectKey }: { readonly projectKey: string })
     null;
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader electron={isElectron}>
           <KanbanBreadcrumb projectKey={projectKey} title={group?.displayName ?? "Project"} />
@@ -223,7 +223,7 @@ function KanbanBoard({
               >
                 <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
                   <h2 className="text-xs font-semibold uppercase tracking-wide">{column.label}</h2>
-                  <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                  <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
                     {columnCards.length}
                   </span>
                 </header>
@@ -387,7 +387,7 @@ function KanbanCardView({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
         />
-        <label className="block text-[11px] text-muted-foreground">
+        <label className="block text-2xs text-muted-foreground">
           Assign bot
           <select
             className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground"
@@ -442,15 +442,16 @@ function KanbanCardView({
     <article className="group rounded-md border bg-card p-2.5 shadow-sm">
       <div className="flex items-start gap-2">
         <h3 className="min-w-0 flex-1 text-sm font-medium leading-5">{card.title}</h3>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Edit ${card.title}`}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          onClick={() => setEditing(true)}
-        >
-          <PencilIcon />
-        </Button>
+        <span className="flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label={`Edit ${card.title}`}
+            onClick={() => setEditing(true)}
+          >
+            <PencilIcon />
+          </Button>
+        </span>
       </div>
       {card.description.length > 0 ? (
         <p className="mt-1 line-clamp-3 text-xs leading-4 text-muted-foreground">
@@ -458,13 +459,13 @@ function KanbanCardView({
         </p>
       ) : null}
       {assigneeBot !== null ? (
-        <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-1 text-2xs text-muted-foreground">
           <BotIcon className="size-3" />
           {assigneeBot.botProfile?.displayName ?? assigneeBot.title}
         </div>
       ) : null}
       {executionStatus === null ? null : (
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-2 text-2xs text-muted-foreground">
           <span className="capitalize">{executionStatus}</span>
           {executionStatus === "failed" || executionStatus === "interrupted" ? (
             <Button size="xs" variant="outline" onClick={() => void onRetry()}>
