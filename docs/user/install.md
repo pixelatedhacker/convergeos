@@ -11,59 +11,52 @@ launch ConvergeOS and configure providers afterwards.
 ## Command line
 
 ```bash
-curl -fsSL https://t3.codes/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pixelatedhacker/convergeos/main/scripts/install.sh | sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://t3.codes/install.ps1 | iex
+irm https://raw.githubusercontent.com/pixelatedhacker/convergeos/main/scripts/install.ps1 | iex
 ```
 
-This puts `t3` in `~/.local/bin`. If your shell reports `command not found`
+This puts `convergeos` in `~/.local/bin`. If your shell reports `command not found`
 afterwards, that directory is not on your `PATH` yet; the installer prints the
-line to add. Set `T3CODE_CHANNEL=nightly` to install the nightly train, or
-`T3CODE_VERSION` to pin an exact version.
+line to add. Set `CONVERGEOS_CHANNEL=nightly` to install the nightly train, or
+`CONVERGEOS_VERSION` to pin an exact version.
 
-| Task                                             | Command                                                   |
-| ------------------------------------------------ | --------------------------------------------------------- |
-| Start the server and open the web app            | `t3`                                                      |
-| Start the server without a browser               | `t3 serve`                                                |
-| Keep it running in the background (macOS, Linux) | `t3 service install` ([details](./background-service.md)) |
-| Move to the newest release                       | `t3 update`                                               |
-| Remove it again                                  | `t3 uninstall`                                            |
+| Task                                             | Command                                                           |
+| ------------------------------------------------ | ----------------------------------------------------------------- |
+| Start the server and open the web app            | `convergeos`                                                      |
+| Start the server without a browser               | `convergeos serve`                                                |
+| Keep it running in the background (macOS, Linux) | `convergeos service install` ([details](./background-service.md)) |
+| Move to the newest release                       | `convergeos update`                                               |
+| Remove it again                                  | `convergeos uninstall`                                            |
 
-Run `t3 --help` for the full reference.
+Run `convergeos --help` for the full reference.
 
-To try T3 Code once without installing it, run `npx t3@latest` instead (needs
+To try ConvergeOS once without installing it, run `npx @convergeos/cli@latest` instead (needs
 Node.js for `npx`).
 
 ### Intel Macs
 
-There is no `t3` executable for Intel Macs (the desktop app is available). To
+There is no `convergeos` executable for Intel Macs (the desktop app is available). To
 run a server there, build it from source with Node.js 24 and `vp`
-([Install vp](https://github.com/pingdotgg/t3code#install-vp)):
+([Install vp](https://github.com/pixelatedhacker/convergeos#install-vp)):
 
 ```bash
-git clone https://github.com/pingdotgg/t3code
-cd t3code && vp i && vp run build:desktop
+git clone https://github.com/pixelatedhacker/convergeos
+cd convergeos && vp i && vp run build:desktop
 node apps/server/dist/bin.mjs
 ```
 
-`t3 update` and the background service do not apply to a server run this way;
+`convergeos update` and the background service do not apply to a server run this way;
 update it with `git pull` and a rebuild.
 
 ## Desktop app
 
-Download a release from [GitHub Releases](https://github.com/pingdotgg/t3code/releases),
-or use a package manager:
-
-| Platform           | Install                         |
-| ------------------ | ------------------------------- |
-| Windows            | `winget install T3Tools.T3Code` |
-| macOS              | `brew install --cask t3-code`   |
-| Arch Linux         | `yay -S t3code-bin`             |
-| Arch Linux nightly | `yay -S t3code-nightly-bin`     |
+Download a ConvergeOS build from [GitHub Releases](https://github.com/pixelatedhacker/convergeos/releases).
+Install it alongside T3 Code as a separate application.
 
 ### Windows Subsystem for Linux
 
@@ -77,21 +70,39 @@ take longer.
 With the desktop app already running on the same machine:
 
 ```bash
-t3 app
+convergeos app
 ```
 
 This opens a new thread for the current directory, adding the project if needed.
-Pass a path, such as `t3 app ../my-project`, to open another directory. It requires
+Pass a path, such as `convergeos app ../my-project`, to open another directory. It requires
 the desktop app, so a standalone server or an SSH session is not enough. If the
 command cannot reach the app, start or update the desktop app and try again.
 
+## Running beside T3 Code
+
+ConvergeOS and T3 Code can run on the same computer. ConvergeOS uses the
+`convergeos` command, stores its state under `~/.convergeos`, and starts its
+server on port `4773`. Desktop chooses another available port if needed.
+Use `CONVERGEOS_HOME`, `CONVERGEOS_PORT`, or the corresponding command flags
+when you want different settings. T3 Code's home and port variables do not
+configure ConvergeOS.
+
+Each app keeps its own thread history, settings, browser profile, and background
+service. ConvergeOS handles `convergeos://` links; T3 Code keeps `t3code://` links.
+Both can use installed provider CLIs and the same repositories. Use separate
+worktrees when agents in both apps will edit a project at the same time.
+
+Earlier ConvergeOS builds reused T3 Code's desktop browser profile. This version
+starts a separate profile, so you may need to sign in again. Existing thread
+history under `~/.convergeos` remains available. If you configured a previous
+ConvergeOS install with `T3CODE_HOME`, set `CONVERGEOS_HOME` to that directory
+explicitly, and keep it separate from a running T3 Code server.
+
 ## Mobile app
 
-Install ConvergeOS from the
-[App Store](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824) or
-[Google Play](https://play.google.com/store/apps/details?id=com.t3tools.t3code).
-The phone connects to a server on another machine. Follow
-[remote access](./remote-access.md) to link it through T3 Connect or a pairing URL.
+Use a ConvergeOS mobile build and connect it to the pairing URL for the
+ConvergeOS server. See [remote access](./remote-access.md). Running both desktop
+apps does not imply that their clients and servers are interchangeable.
 
 If the app crashes during launch, open Settings → Diagnostics on the next launch
 that succeeds. It lists startup crashes from the last 7 days with the error and
@@ -113,7 +124,7 @@ computer.
 | Cursor      | Install [Cursor CLI](https://cursor.com/cli), then run `agent login`.                        |
 | Grok Build  | Install [Grok Build CLI](https://x.ai/cli), then run `grok login`.                           |
 | OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                     |
-| Antigravity | Install and sign in with Google from ConvergeOS's provider settings.                            |
+| Antigravity | Install and sign in with Google from ConvergeOS's provider settings.                         |
 
 Provider CLIs must be on the server's `PATH`. If ConvergeOS cannot find one, set its
 **Binary path** in provider settings, especially when using a version manager.

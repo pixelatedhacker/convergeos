@@ -2703,7 +2703,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "ConvergeOS",
-          schemes: ["convergeos", "convergeos-dev", "t3code", "t3code-dev"],
+          schemes: ["convergeos", "convergeos-dev"],
         },
       ],
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
@@ -2750,7 +2750,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "ConvergeOS",
-          schemes: ["convergeos", "convergeos-dev", "t3code", "t3code-dev"],
+          schemes: ["convergeos", "convergeos-dev"],
         },
       ],
       desktop: {

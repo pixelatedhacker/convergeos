@@ -303,10 +303,7 @@ function setConvergeOsEnvironmentVariable(
   environment[`T3CODE_${suffix}`] = value;
 }
 
-function deleteConvergeOsEnvironmentVariable(
-  environment: NodeJS.ProcessEnv,
-  suffix: string,
-): void {
+function deleteConvergeOsEnvironmentVariable(environment: NodeJS.ProcessEnv, suffix: string): void {
   delete environment[`CONVERGEOS_${suffix}`];
   delete environment[`T3CODE_${suffix}`];
 }
@@ -327,7 +324,7 @@ export function createDevRunnerEnv({
   return Effect.gen(function* () {
     const serverPort = port ?? BASE_SERVER_PORT + serverOffset;
     const webPort = BASE_WEB_PORT + webOffset;
-    // Precedence (--home-dir > worktree .t3 > ambient T3CODE_HOME) is resolved
+    // Precedence (--home-dir > worktree .t3 > ambient CONVERGEOS_HOME) is resolved
     // by the caller; an unset t3Home here genuinely means "use the default".
     const configuredBaseDir = t3Home?.trim() || undefined;
     const resolvedBaseDir = yield* resolveBaseDir(configuredBaseDir);
@@ -689,7 +686,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     const hostEnvironment = yield* HostProcessEnvironment;
     // A dev server started inside a worktree defaults to that worktree's own
     // (gitignored) `.t3` — see @t3tools/shared/devHome for why this must
-    // outrank an ambient T3CODE_HOME. `--home-dir` still wins.
+    // outrank an ambient CONVERGEOS_HOME. `--home-dir` still wins.
     const worktreeHome = yield* resolveWorktreeT3Home(yield* HostProcessWorkingDirectory);
     // Trim before choosing: `--home-dir ""` is not a selection, and treating it
     // as one would skip the worktree default and land on the shared home —
@@ -697,7 +694,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     const resolvedT3Home =
       (input.t3Home?.trim() || undefined) ??
       worktreeHome ??
-      (hostEnvironment.CONVERGEOS_HOME?.trim() || hostEnvironment.T3CODE_HOME?.trim() || undefined);
+      (hostEnvironment.CONVERGEOS_HOME?.trim() || undefined);
     const env = yield* createDevRunnerEnv({
       mode: input.mode,
       baseEnv: hostEnvironment,
@@ -716,7 +713,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
         : "";
-    const baseDir = env.CONVERGEOS_HOME ?? env.T3CODE_HOME ?? (yield* DEFAULT_T3_HOME);
+    const baseDir = env.CONVERGEOS_HOME ?? (yield* DEFAULT_T3_HOME);
 
     yield* Effect.logInfo(
       `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${baseDir}`,
@@ -889,7 +886,9 @@ const devRunnerCli = Command.make("dev-runner", {
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
   ),
   logWebSocketEvents: Flag.Boolean("log-websocket-events").pipe(
-    Flag.withDescription("WebSocket event logging toggle (equivalent to CONVERGEOS_LOG_WS_EVENTS)."),
+    Flag.withDescription(
+      "WebSocket event logging toggle (equivalent to CONVERGEOS_LOG_WS_EVENTS).",
+    ),
     Flag.withAlias("log-ws-events"),
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_LOG_WS_EVENTS")),
   ),
@@ -900,7 +899,7 @@ const devRunnerCli = Command.make("dev-runner", {
   port: Flag.Int("port").pipe(
     Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
     Flag.withDescription("Server port override (forwards to CONVERGEOS_PORT)."),
-    Flag.withFallbackConfig(optionalPortConfig("T3CODE_PORT")),
+    Flag.withFallbackConfig(optionalPortConfig("CONVERGEOS_PORT")),
   ),
   devUrl: Flag.String("dev-url").pipe(
     Flag.withSchema(Schema.URLFromString),

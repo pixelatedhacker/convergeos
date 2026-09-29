@@ -455,7 +455,7 @@ describe("releaseManagedTunnelOnShutdown", () => {
   });
 
   it.effect("still releases a pending update when the launcher is stopping", () => {
-    // `t3 service uninstall` or `systemctl stop` during the pending window:
+    // `convergeos service uninstall` or `systemctl stop` during the pending window:
     // the launcher writes its stop marker before signalling the child, so no
     // replacement server is coming and the tunnel must not be kept.
     const { store, values } = makeMemorySecretStore(managedLinkSecrets);

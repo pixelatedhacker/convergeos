@@ -130,7 +130,7 @@ const withTempDirectory = <A, E, R>(
     (root) => Effect.promise(() => NodeFSP.rm(root, { recursive: true, force: true })),
   );
 
-describe("t3 app", () => {
+describe("convergeos app", () => {
   it.effect("rejects SSH before it tries to reach a desktop app", () =>
     withTempDirectory("t3-app-ssh-test-", (root) =>
       Effect.gen(function* () {
@@ -142,7 +142,7 @@ describe("t3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppSshUnsupportedError",
           message:
-            "`t3 app` only controls a desktop app on the same machine. It cannot run over SSH.",
+            "`convergeos app` only controls a desktop app on the same machine. It cannot run over SSH.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -161,7 +161,7 @@ describe("t3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppPlatformUnsupportedError",
           platform: "freebsd",
-          message: "`t3 app` is not supported on freebsd.",
+          message: "`convergeos app` is not supported on freebsd.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -231,7 +231,7 @@ describe("t3 app", () => {
         const development = yield* fakeDesktop({ baseDir, stateSubdirectory: "dev" });
 
         yield* runCli(["app"]);
-        yield* runCli(["app"], { T3CODE_HOME: "   " });
+        yield* runCli(["app"], { CONVERGEOS_HOME: "   " });
 
         expect(development.received).toHaveLength(2);
         expect(yield* pathExists(baseDir)).toBe(false);

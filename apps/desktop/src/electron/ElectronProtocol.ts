@@ -15,8 +15,6 @@ import * as Electron from "electron";
 export const DESKTOP_HOST = "app";
 export const DESKTOP_PRODUCTION_SCHEME = "convergeos";
 export const DESKTOP_DEVELOPMENT_SCHEME = "convergeos-dev";
-export const LEGACY_DESKTOP_PRODUCTION_SCHEME = "t3code";
-export const LEGACY_DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
@@ -119,12 +117,7 @@ function withContentSecurityPolicy(response: Response, policy: string): Response
  */
 export function registerDesktopSchemePrivilegesSync(): void {
   Electron.protocol.registerSchemesAsPrivileged(
-    [
-      DESKTOP_PRODUCTION_SCHEME,
-      DESKTOP_DEVELOPMENT_SCHEME,
-      LEGACY_DESKTOP_PRODUCTION_SCHEME,
-      LEGACY_DESKTOP_DEVELOPMENT_SCHEME,
-    ].map((scheme) => ({
+    [DESKTOP_PRODUCTION_SCHEME, DESKTOP_DEVELOPMENT_SCHEME].map((scheme) => ({
       scheme,
       privileges: {
         standard: true,

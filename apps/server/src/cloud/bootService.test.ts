@@ -29,7 +29,7 @@ const linuxPlan = {
   program: [linuxRuntime, "__service-launcher"],
   baseDir: "/home/theo/.t3",
   logPath: "/home/theo/.t3/userdata/logs/boot-service.log",
-  unitPath: "/home/theo/.config/systemd/user/t3code.service",
+  unitPath: "/home/theo/.config/systemd/user/convergeos.service",
 };
 
 it("runs the pinned runtime's own executable as the systemd launcher", () => {
@@ -45,7 +45,7 @@ it("reads the served T3 home back out of a rendered unit or plist", () => {
     program: [`${baseDir}/runtime/versions/1.2.3/t3`, "__service-launcher"],
     baseDir,
     logPath: `${baseDir}/userdata/logs/boot-service.log`,
-    unitPath: "/home/theo/.config/systemd/user/t3code.service",
+    unitPath: "/home/theo/.config/systemd/user/convergeos.service",
   });
 
   expect(
@@ -79,7 +79,7 @@ const macPlan = {
   program: [macRuntime, "__service-launcher"],
   baseDir: "/Users/theo/.t3",
   logPath: "/Users/theo/.t3/userdata/logs/boot-service.log",
-  unitPath: "/Users/theo/Library/LaunchAgents/com.t3tools.t3code.service.plist",
+  unitPath: "/Users/theo/Library/LaunchAgents/com.convergeos.server.plist",
 };
 const macInstallerPath =
   "/opt/homebrew/bin:/Users/theo/.npm-global/bin:/Users/theo/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin";
@@ -170,11 +170,13 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
       const failed = command === control.failCommand;
       if (!failed && command === "loginctl enable-linger --no-ask-password 501")
         control.linger = "yes";
-      if (!failed && command === "systemctl --user enable t3code.service") control.enabled = true;
-      if (!failed && command === "systemctl --user restart t3code.service") control.active = true;
+      if (!failed && command === "systemctl --user enable convergeos.service")
+        control.enabled = true;
+      if (!failed && command === "systemctl --user restart convergeos.service")
+        control.active = true;
       if (
         control.stateAfterStop !== undefined &&
-        (command === "systemctl --user stop t3code.service" ||
+        (command === "systemctl --user stop convergeos.service" ||
           command.startsWith("launchctl bootout --wait "))
       ) {
         yield* fs.writeFileString(statePath, control.stateAfterStop).pipe(Effect.orDie);
@@ -251,6 +253,30 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
 });
 
 it.layer(NodeServices.layer)("boot service install", (it) => {
+  for (const platform of ["linux", "darwin"] as const) {
+    it.effect(`leaves T3 Code's ${platform} service untouched throughout its lifecycle`, () =>
+      Effect.gen(function* () {
+        const { service, fs, commands } = yield* makeHarness(platform);
+        const path = yield* Path.Path;
+        const ownUnitPath = (yield* service.status).unitPath;
+        const upstreamUnitPath = path.join(
+          path.dirname(ownUnitPath),
+          platform === "linux" ? "t3code.service" : "com.t3tools.t3code.service.plist",
+        );
+        yield* fs.makeDirectory(path.dirname(upstreamUnitPath), { recursive: true });
+        yield* fs.writeFileString(upstreamUnitPath, "existing T3 Code service");
+
+        yield* service.install();
+        expect(yield* service.restart).toBe(true);
+        expect(yield* service.uninstall).toBe(true);
+
+        expect(yield* fs.readFileString(upstreamUnitPath)).toBe("existing T3 Code service");
+        expect(commands.some((command) => command.includes("t3code.service"))).toBe(false);
+        expect(yield* fs.exists(ownUnitPath)).toBe(false);
+      }),
+    );
+  }
+
   it.effect(
     "fails before installing files or validating a runtime when lingering needs an administrator",
     () =>
@@ -302,7 +328,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
         );
         expect(yield* fs.readFileString(statePath)).toBe(before);
         expect(yield* fs.readFileString(plan.unitPath)).toBe(unit);
-        expect(commands).not.toContain("systemctl --user stop t3code.service");
+        expect(commands).not.toContain("systemctl --user stop convergeos.service");
       }),
   );
 
@@ -377,7 +403,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect((yield* service.status).installed).toBe(false);
       // The stop can block up to systemd's 90s TimeoutStopSec; the runner's
       // 60s default would cancel it mid-shutdown.
-      expect(timeouts.get("systemctl --user disable --now t3code.service")).toEqual(
+      expect(timeouts.get("systemctl --user disable --now convergeos.service")).toEqual(
         Duration.seconds(120),
       );
     }),
@@ -449,9 +475,12 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           ),
         ).toEqual(
           platform === "linux"
-            ? ["systemctl --user stop t3code.service", "systemctl --user restart t3code.service"]
+            ? [
+                "systemctl --user stop convergeos.service",
+                "systemctl --user restart convergeos.service",
+              ]
             : [
-                "launchctl bootout --wait gui/501/com.t3tools.t3code.service",
+                "launchctl bootout --wait gui/501/com.convergeos.server",
                 `launchctl bootstrap gui/501 ${plan.unitPath}`,
               ],
         );
@@ -509,7 +538,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
         ),
       ).toEqual([]);
       // The files say 1.2.4 but the process is still 1.2.3: not current, and
-      // the reason is named so `t3 service status` can point at restart.
+      // the reason is named so `convergeos service status` can point at restart.
       const status = yield* newer.status;
       expect(status.current).toBe(false);
       expect(status.problems).toContain("restart-pending");
@@ -579,10 +608,10 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           (command) => command.startsWith("systemctl ") && !command.includes("show-environment"),
         ),
       ).toEqual([
-        "systemctl --user stop t3code.service",
+        "systemctl --user stop convergeos.service",
         "systemctl --user daemon-reload",
-        "systemctl --user enable t3code.service",
-        "systemctl --user restart t3code.service",
+        "systemctl --user enable convergeos.service",
+        "systemctl --user restart convergeos.service",
       ]);
     }),
   );
@@ -615,9 +644,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           (command) => command.startsWith("systemctl ") && !command.includes("show-environment"),
         ),
       ).toEqual([
-        "systemctl --user stop t3code.service",
+        "systemctl --user stop convergeos.service",
         "systemctl --user daemon-reload",
-        "systemctl --user restart t3code.service",
+        "systemctl --user restart convergeos.service",
       ]);
     }),
   );
@@ -636,9 +665,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           (command) => command.startsWith("systemctl ") && !command.includes("show-environment"),
         ),
       ).toEqual([
-        "systemctl --user stop t3code.service",
+        "systemctl --user stop convergeos.service",
         "systemctl --user daemon-reload",
-        "systemctl --user restart t3code.service",
+        "systemctl --user restart convergeos.service",
       ]);
     }),
   );
@@ -671,8 +700,8 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
             (command) => command.startsWith("systemctl ") && !command.includes("show-environment"),
           ),
         ).toEqual([
-          "systemctl --user stop t3code.service",
-          "systemctl --user restart t3code.service",
+          "systemctl --user stop convergeos.service",
+          "systemctl --user restart convergeos.service",
         ]);
       }
     }),
@@ -693,9 +722,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const plan = yield* service.install();
 
       expect(
-        plan.unitPath.endsWith(
-          path.join("Library", "LaunchAgents", "com.t3tools.t3code.service.plist"),
-        ),
+        plan.unitPath.endsWith(path.join("Library", "LaunchAgents", "com.convergeos.server.plist")),
       ).toBe(true);
       expect(yield* fs.readFileString(plan.unitPath)).toContain(
         `    <key>PATH</key>\n    <string>${macInstallerPath}:/usr/local/bin:/usr/sbin:/sbin</string>`,
@@ -716,7 +743,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect(commands.some((command) => command.startsWith("systemctl "))).toBe(false);
       // A bootout can block up to the plist's 90s ExitTimeOut; the runner's
       // 60s default would cancel it and let bootstrap race a loaded job.
-      expect(timeouts.get("launchctl bootout --wait gui/501/com.t3tools.t3code.service")).toEqual(
+      expect(timeouts.get("launchctl bootout --wait gui/501/com.convergeos.server")).toEqual(
         Duration.seconds(120),
       );
     }),
@@ -733,8 +760,8 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const error = yield* service.install().pipe(Effect.flip);
       expect(error._tag).toBe("BootServiceCommandError");
       expect(commands.filter((command) => command.startsWith("launchctl "))).toEqual([
-        "launchctl bootout --wait gui/501/com.t3tools.t3code.service",
-        "launchctl enable gui/501/com.t3tools.t3code.service",
+        "launchctl bootout --wait gui/501/com.convergeos.server",
+        "launchctl enable gui/501/com.convergeos.server",
         `launchctl bootstrap gui/501 ${plistPath}`,
         `launchctl bootstrap gui/501 ${plistPath}`,
       ]);
@@ -796,7 +823,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
     Effect.gen(function* () {
       const { service, control } = yield* makeHarness("darwin");
       yield* service.install();
-      control.failCommand = "launchctl bootout --wait gui/501/com.t3tools.t3code.service";
+      control.failCommand = "launchctl bootout --wait gui/501/com.convergeos.server";
 
       yield* service.install();
       expect((yield* service.status).current).toBe(true);
@@ -828,7 +855,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
         );
         expect(serviceStateHasPendingUpdate(yield* fs.readFileString(statePath))).toBe(true);
         expect(commands.filter((command) => command.startsWith("launchctl "))).toEqual([
-          "launchctl bootout --wait gui/501/com.t3tools.t3code.service",
+          "launchctl bootout --wait gui/501/com.convergeos.server",
           `launchctl bootstrap gui/501 ${plistPath}`,
         ]);
       }

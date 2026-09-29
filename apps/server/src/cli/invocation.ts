@@ -44,13 +44,13 @@ function detectCliRunner(entryPath: string): CliRunner | null {
  */
 function suggestedPackageSpec(version: string): string {
   const channel = /^[^-+]+-(nightly|preview)\./.exec(version)?.[1];
-  return channel === undefined ? "t3" : `t3@${channel}`;
+  return channel === undefined ? "@convergeos/cli" : `@convergeos/cli@${channel}`;
 }
 
 /**
  * Render a `t3 <subcommand>` suggestion that matches how this process was
- * launched, so copy/pasting it actually works: `npx t3 connect` suggests
- * `npx t3 serve`, a global install suggests `t3 serve`, and a nightly build
+ * launched, so copy/pasting it actually works: `npx @convergeos/cli connect` suggests
+ * `npx @convergeos/cli serve`, a global install suggests `t3 serve`, and a nightly build
  * keeps the `@nightly` tag.
  */
 export function formatCliCommand(input: {
@@ -60,7 +60,7 @@ export function formatCliCommand(input: {
 }): string {
   const runner = detectCliRunner(input.entryPath);
   if (runner === null) {
-    return `t3 ${input.subcommand}`;
+    return `convergeos ${input.subcommand}`;
   }
   return `${runner} ${suggestedPackageSpec(input.version)} ${input.subcommand}`;
 }

@@ -31,7 +31,7 @@ const testLayer = Layer.mergeAll(
   NodeServices.layer,
   NetService.layer,
   TestConsole.layer,
-  ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+  ConfigProvider.layer(ConfigProvider.fromEnv({ env: { CONVERGEOS_PORT: "3773" } })),
 );
 
 it.effect("records rapid disable and enable transitions without a running exporter", () =>

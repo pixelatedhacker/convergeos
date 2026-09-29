@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
  * Turns the per-platform CLI archives of one release into the npm packages
- * behind `npx t3` / `npm i -g t3`: one `@t3code/t3-<platformKey>` package per
- * archive holding the archive's contents verbatim, plus the `t3` launcher
+ * behind `npx @convergeos/cli` / `npm i -g @convergeos/cli`: one `@convergeos/t3-<platformKey>` package per
+ * archive holding the archive's contents verbatim, plus the `@convergeos/cli` launcher
  * that lists them as optionalDependencies and execs the one npm installed.
  * The bytes a user gets from npm are therefore the release archive's, and
  * running them needs neither a Node runtime, npm, nor a native build.
  *
  * Output layout under `--output-dir`:
  *
- *   @t3code/t3-<platformKey>/      archive contents flattened + package.json
- *   @t3code/t3-<platformKey>.tgz   the same tree as an npm tarball
- *   t3/                             launcher: package.json, bin/t3.js, README.md
- *   t3.tgz                          the launcher as an npm tarball
+ *   @convergeos/t3-<platformKey>/      archive contents flattened + package.json
+ *   @convergeos/t3-<platformKey>.tgz   the same tree as an npm tarball
+ *   @convergeos/cli/                 launcher: package.json, bin/t3.js, README.md
+ *   @convergeos/cli.tgz             the launcher as an npm tarball
  *
  * The tarballs are what gets published. `npm publish <dir>` always drops
  * `node_modules/` (npm-packlist ignores it whatever `files` says, and
@@ -43,8 +43,8 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 
 import { windowsSystemTar } from "./build-cli-archive.ts";
 
-export const NPM_PLATFORM_PACKAGE_SCOPE = "@t3code";
-export const NPM_LAUNCHER_PACKAGE_NAME = "t3";
+export const NPM_PLATFORM_PACKAGE_SCOPE = "@convergeos";
+export const NPM_LAUNCHER_PACKAGE_NAME = "@convergeos/cli";
 
 const encodePackageJson = Schema.encodeEffect(fromJsonStringPretty(Schema.Unknown));
 
@@ -107,7 +107,7 @@ export function npmPlatformPackageManifest(
   return {
     name: npmPlatformPackageName(platformKey),
     version,
-    description: `T3 Code CLI executable for ${platformKey}`,
+    description: `ConvergeOS CLI executable for ${platformKey}`,
     license: serverPackageJson.license,
     repository: serverPackageJson.repository,
     os: [os],
@@ -155,7 +155,7 @@ export function npmPlatformPackageReadme(platformKey: CliArchivePlatformKey): st
   return [
     `# ${npmPlatformPackageName(platformKey)}`,
     "",
-    `The T3 Code CLI executable for ${platformKey}. Do not install this package directly:`,
+    `The ConvergeOS CLI executable for ${platformKey}. Do not install this package directly:`,
     `it is an optional dependency of \`${NPM_LAUNCHER_PACKAGE_NAME}\`, which picks the package for the`,
     "current platform and runs the executable inside it.",
     "",
@@ -163,12 +163,12 @@ export function npmPlatformPackageReadme(platformKey: CliArchivePlatformKey): st
     `npx ${NPM_LAUNCHER_PACKAGE_NAME}@latest`,
     "```",
     "",
-    "Source and documentation: https://github.com/pingdotgg/t3code",
+    "Source and documentation: https://github.com/pixelatedhacker/convergeos",
     "",
   ].join("\n");
 }
 
-/** package.json for the `t3` launcher. No engines: bin/t3.js is trivial CJS. */
+/** package.json for the ConvergeOS launcher. No engines: bin/t3.js is trivial CJS. */
 export function npmLauncherPackageManifest(
   version: string,
   platformKeys: ReadonlyArray<CliArchivePlatformKey>,
@@ -176,10 +176,10 @@ export function npmLauncherPackageManifest(
   return {
     name: NPM_LAUNCHER_PACKAGE_NAME,
     version,
-    description: "T3 Code CLI. Installs the self-contained executable for this platform.",
+    description: "ConvergeOS CLI. Installs the self-contained executable for this platform.",
     license: serverPackageJson.license,
     repository: serverPackageJson.repository,
-    bin: { t3: "./bin/t3.js" },
+    bin: { convergeos: "./bin/t3.js" },
     files: ["bin", "dist"],
     optionalDependencies: Object.fromEntries(
       platformKeys.map((key) => [npmPlatformPackageName(key), version]),
@@ -207,10 +207,10 @@ try {
 } catch {
   process.stderr.write(
     [
-      "t3: no T3 Code CLI build is available for this platform (" + key + ").",
+      "convergeos: no ConvergeOS CLI build is available for this platform (" + key + ").",
       "Supported platforms: " + SUPPORTED.join(", ") + ".",
-      "If yours is listed, reinstall t3 so npm fetches its optional dependency.",
-      "The desktop app and release archives are at https://github.com/pingdotgg/t3code/releases",
+      "If yours is listed, reinstall @convergeos/cli so npm fetches its optional dependency.",
+      "The desktop app and release archives are at https://github.com/pixelatedhacker/convergeos/releases",
       "",
     ].join("\\n"),
   );
@@ -479,7 +479,7 @@ const command = Command.make(
   buildNpmPlatformPackages,
 ).pipe(
   Command.withDescription(
-    "Build the t3 launcher and @t3code/t3-<platform> npm packages from CLI release archives.",
+    "Build the ConvergeOS launcher and @convergeos/t3-<platform> npm packages from CLI release archives.",
   ),
 );
 

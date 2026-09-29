@@ -5,39 +5,39 @@ to keep a terminal open.
 
 ## Manage the service
 
-Install the `t3` CLI first ([Install ConvergeOS](./install.md#command-line)), then
+Install the `convergeos` CLI first ([Install ConvergeOS](./install.md#command-line)), then
 run these commands on the machine that will host ConvergeOS:
 
-| Task                            | Command                |
-| ------------------------------- | ---------------------- |
-| Install and start               | `t3 service install`   |
-| Inspect status and log location | `t3 service status`    |
-| Move to a newer release         | `t3 update`            |
-| Restart                         | `t3 service restart`   |
-| Stop and remove from startup    | `t3 service uninstall` |
+| Task                            | Command                        |
+| ------------------------------- | ------------------------------ |
+| Install and start               | `convergeos service install`   |
+| Inspect status and log location | `convergeos service status`    |
+| Move to a newer release         | `convergeos update`            |
+| Restart                         | `convergeos service restart`   |
+| Stop and remove from startup    | `convergeos service uninstall` |
 
 Uninstalling the service leaves your projects, threads, and settings intact.
-Running `t3 service install` again repairs a service that `t3 service status`
+Running `convergeos service install` again repairs a service that `convergeos service status`
 reports as broken.
 
-`t3 update` downloads the newest release on your channel and switches `t3`
+`convergeos update` downloads the newest release on your channel and switches `convergeos`
 and the service to it. Restarting interrupts running agent turns, terminals,
 and remote clients, so it asks first; answer no and the service keeps running
-the old version until you run `t3 service restart`. Pass `--yes` from a
+the old version until you run `convergeos service restart`. Pass `--yes` from a
 script. A server you started by hand is left running; stop and start it again
 to pick up the new version. Wait for any remote update already in progress
 before updating; to match a remote client's version, follow
 [Updating ConvergeOS](./updating.md).
 
-Pass an exact version (`t3 update 0.0.42`) to pin one, `--channel nightly` to
+Pass an exact version (`convergeos update 0.0.42`) to pin one, `--channel nightly` to
 switch trains, or `--allow-downgrade` to move backwards. `preview` is a
 maintainers' test train: its builds can be broken and are never offered as
-updates, so the installer and `t3 update` ask for confirmation before
+updates, so the installer and `convergeos update` ask for confirmation before
 installing one.
 
-`t3 uninstall` removes the background service, the `t3` launcher, and the
+`convergeos uninstall` removes the background service, the `convergeos` launcher, and the
 downloaded versions after showing you the list and asking once. Your projects,
-threads, and settings under `~/.t3/userdata` are kept. Pass `--yes` from a
+threads, and settings under `~/.convergeos/userdata` are kept. Pass `--yes` from a
 script.
 
 ## Platform support
@@ -58,7 +58,7 @@ separately. Signing out of T3 Connect does not stop or uninstall the service.
 
 ## Troubleshooting
 
-Start with `t3 service status` on the host. It prints the log path and, on Linux,
+Start with `convergeos service status` on the host. It prints the log path and, on Linux,
 checks whether the installed service is running, enabled, and allowed to survive
 logout.
 
@@ -77,21 +77,21 @@ ssh -t your-server 'sudo loginctl enable-linger "$(id -un)"'
 
 Then retry service setup as your normal user. Run only the `loginctl` command
 with sudo; running ConvergeOS as root creates a separate installation and Connect
-identity. Without administrator access, run `t3 serve` in a terminal and keep
+identity. Without administrator access, run `convergeos serve` in a terminal and keep
 that session open.
 
 | Status problem                          | Next step                                                                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `linger-unavailable`                    | Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.                             |
 | `user-manager-unavailable`              | Run `systemctl --user status` in a login session for the service user; check your distribution's systemd user-session support. |
-| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status t3code.service`, then use the repair command printed by ConvergeOS.                     |
-| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `t3 service restart`.                            |
+| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status convergeos.service`, then use the repair command printed by ConvergeOS.              |
+| `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `convergeos service restart`.                    |
 
 On macOS, check **System Settings → General → Login Items** if the service no
 longer starts at login. If agent work cannot access Desktop, Documents, or
-Downloads, it may need Full Disk Access for the `t3` executable listed in
+Downloads, it may need Full Disk Access for the server executable listed in
 `ProgramArguments` in
-`~/Library/LaunchAgents/com.t3tools.t3code.service.plist`.
+`~/Library/LaunchAgents/com.convergeos.server.plist`.
 
 For failures after signing in to T3 Connect, see
 [connection troubleshooting](./remote-access.md#t3-connect-troubleshooting).

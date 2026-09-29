@@ -910,11 +910,11 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
 
     // `tailscale serve` config outlives the process, so a dry run that shared
     // would replace and then tear down whatever mapping the port already had.
-    // Base-dir precedence (--home-dir > worktree .t3 > ambient T3CODE_HOME)
+    // Base-dir precedence (--home-dir > worktree .t3 > ambient CONVERGEOS_HOME)
     // lives in runDevRunnerWithInput; the env builder must not consult the
     // ambient variable on its own, or it would silently outrank the worktree
     // default and land dev state on the user's real database.
-    it.effect("ignores an ambient T3CODE_HOME when no home is resolved", () =>
+    it.effect("ignores an ambient CONVERGEOS_HOME when no home is resolved", () =>
       Effect.gen(function* () {
         const env = yield* createDevRunnerEnv({
           mode: "dev",
@@ -1280,7 +1280,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             Effect.provideService(HostProcessWorkingDirectory, input.cwd),
             Effect.provideService(
               HostProcessEnvironment,
-              input.ambientHome === undefined ? {} : { T3CODE_HOME: input.ambientHome },
+              input.ambientHome === undefined ? {} : { CONVERGEOS_HOME: input.ambientHome },
             ),
           );
 
@@ -1313,7 +1313,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         }).pipe(Effect.scoped),
       );
 
-      it.effect("prefers the worktree .t3 over an ambient T3CODE_HOME", () =>
+      it.effect("prefers the worktree .t3 over an ambient CONVERGEOS_HOME", () =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
           const root = yield* makeWorktree;
@@ -1326,7 +1326,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         }).pipe(Effect.scoped),
       );
 
-      it.effect("falls back to an ambient T3CODE_HOME outside a worktree", () =>
+      it.effect("falls back to an ambient CONVERGEOS_HOME outside a worktree", () =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
           const home = yield* spawnedHome({

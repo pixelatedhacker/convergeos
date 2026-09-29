@@ -13,7 +13,7 @@ import {
 
 import { repointLauncher, resolveLauncherPath } from "./update.ts";
 
-it.layer(NodeServices.layer)("t3 update launcher", (it) => {
+it.layer(NodeServices.layer)("convergeos update launcher", (it) => {
   it.effect("repoints a symlink that lives in a runtime versions tree", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
