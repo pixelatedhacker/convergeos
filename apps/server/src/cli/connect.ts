@@ -205,7 +205,7 @@ function formatCloudStatus(status: CloudCliStatus, options?: { readonly json?: b
     `  Publish agent activity: ${status.publishAgentActivity ? "enabled" : "disabled"}`,
     ...formatRelayClientStatus(status.relayClient),
     "",
-    "This is saved setup, not a live connection check. Check the background service with `t3 service status`.",
+    "This is saved setup, not a live connection check. Check the background service with `convergeos service status`.",
     ...(nextStep ? ["", `Next: ${nextStep}`] : []),
   ].join("\n");
 }
@@ -410,7 +410,7 @@ const disconnectCloud = Effect.fn("cloud.cli.disconnect")(function* (options: {
 
   if (options.clearAuthorization) {
     yield* Console.log(
-      "Signed out of T3 Connect locally.\nThe background service is managed separately with `t3 service`.",
+      "Signed out of T3 Connect locally.\nThe background service is managed separately with `convergeos service`.",
     );
   }
 });

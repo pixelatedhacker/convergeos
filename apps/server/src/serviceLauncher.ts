@@ -627,7 +627,7 @@ export class Launcher {
 }
 
 export async function main(): Promise<void> {
-  const baseDir = (process.env.CONVERGEOS_HOME ?? process.env.T3CODE_HOME)?.trim();
+  const baseDir = process.env.CONVERGEOS_HOME?.trim();
   if (baseDir === undefined || baseDir === "") {
     throw new Error("CONVERGEOS_HOME is required by the ConvergeOS service launcher.");
   }

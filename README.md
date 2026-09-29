@@ -27,50 +27,25 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 ### Command line
 
 ```bash
-curl -fsSL https://t3.codes/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pixelatedhacker/convergeos/main/scripts/install.sh | sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://t3.codes/install.ps1 | iex
+irm https://raw.githubusercontent.com/pixelatedhacker/convergeos/main/scripts/install.ps1 | iex
 ```
 
-Then run `t3` to start the server and open the local web app. `t3 service install` keeps it running in the background, `t3 update` moves to a newer release, and `t3 --help` has the full reference.
+Then run `convergeos` to start the server and open the local web app. `convergeos service install` keeps it running in the background, `convergeos update` moves to a newer release, and `convergeos --help` has the full reference.
 
-To try it once without installing, run `npx t3@latest` instead.
+To try it once without installing, run `npx @convergeos/cli@latest` instead.
 
 ### Desktop app
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Arch Linux (AUR)
-
-Stable:
-
-```bash
-yay -S t3code-bin
-```
-
-Nightly:
-
-```bash
-yay -S t3code-nightly-bin
-```
-
-The AUR packaging is maintained in this repository under [`packaging/aur`](./packaging/aur).
+Install ConvergeOS from [GitHub Releases](https://github.com/pixelatedhacker/convergeos/releases).
+It uses its own application identity and can run beside T3 Code. See
+[Install and first run](./docs/user/install.md#running-beside-t3-code) for the
+separate commands, data directories, ports, and services.
 
 ## Some notes
 

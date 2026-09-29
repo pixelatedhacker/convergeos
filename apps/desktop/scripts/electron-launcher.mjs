@@ -113,8 +113,8 @@ function shellSingleQuote(value) {
 export function makeDevelopmentEnvironmentScript(environment) {
   const envEntries = [
     ["VITE_DEV_SERVER_URL", environment.VITE_DEV_SERVER_URL],
-    ["CONVERGEOS_PORT", environment.CONVERGEOS_PORT ?? environment.T3CODE_PORT],
-    ["CONVERGEOS_HOME", environment.CONVERGEOS_HOME ?? environment.T3CODE_HOME],
+    ["CONVERGEOS_PORT", environment.CONVERGEOS_PORT],
+    ["CONVERGEOS_HOME", environment.CONVERGEOS_HOME],
     [
       "CONVERGEOS_COMMIT_HASH",
       environment.CONVERGEOS_COMMIT_HASH ?? environment.T3CODE_COMMIT_HASH,

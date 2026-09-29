@@ -255,10 +255,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "ConvergeOS (Alpha)");
-    assert.equal(
-      resolveDesktopProductName("0.0.17-nightly.20260413.42"),
-      "ConvergeOS (Nightly)",
-    );
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "ConvergeOS (Nightly)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -676,7 +673,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
         {
           name: "ConvergeOS",
-          schemes: ["convergeos", "convergeos-dev", "t3code", "t3code-dev"],
+          schemes: ["convergeos", "convergeos-dev"],
         },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
@@ -1885,7 +1882,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(mac.protocols, [
         {
           name: "ConvergeOS",
-          schemes: ["convergeos", "convergeos-dev", "t3code", "t3code-dev"],
+          schemes: ["convergeos", "convergeos-dev"],
         },
       ]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),

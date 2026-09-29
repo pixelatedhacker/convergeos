@@ -129,9 +129,7 @@ const withIdentity = <A, E, R>(
             exists: (path) =>
               input.legacyPathProbeError
                 ? Effect.fail(input.legacyPathProbeError)
-                : Effect.succeed(
-                    input.legacyPathExists === true && path.includes("t3code"),
-                  ),
+                : Effect.succeed(input.legacyPathExists === true && path.includes("t3code")),
             readFileString: () =>
               Effect.succeed(input.packageJson ?? '{"t3codeCommitHash":"abcdef1234567890"}'),
           }),
@@ -145,19 +143,19 @@ const withIdentity = <A, E, R>(
 };
 
 describe("DesktopAppIdentity", () => {
-  it.effect("keeps using the legacy userData path when it already exists", () =>
+  it.effect("keeps a separate profile when T3 Code already has one", () =>
     withIdentity(
       Effect.gen(function* () {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         const userDataPath = yield* identity.resolveUserDataPath;
 
-        assert.equal(userDataPath, "/Users/alice/Library/Application Support/t3code");
+        assert.equal(userDataPath, "/Users/alice/Library/Application Support/convergeos");
       }),
       { legacyPathExists: true },
     ),
   );
 
-  it.effect("preserves failures while inspecting the legacy userData path", () => {
+  it.effect("does not inspect T3 Code profile permissions", () => {
     const legacyPath = "/Users/alice/Library/Application Support/t3code";
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
@@ -170,15 +168,8 @@ describe("DesktopAppIdentity", () => {
     return withIdentity(
       Effect.gen(function* () {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
-        const error = yield* identity.resolveUserDataPath.pipe(Effect.flip);
-
-        assert.instanceOf(error, DesktopAppIdentity.DesktopUserDataPathResolutionError);
-        assert.equal(error.legacyPath, legacyPath);
-        assert.strictEqual(error.cause, cause);
-        assert.equal(
-          error.message,
-          `Failed to inspect legacy desktop user-data path at "${legacyPath}".`,
-        );
+        const userDataPath = yield* identity.resolveUserDataPath;
+        assert.equal(userDataPath, "/Users/alice/Library/Application Support/convergeos");
       }),
       { legacyPathProbeError: cause },
     );

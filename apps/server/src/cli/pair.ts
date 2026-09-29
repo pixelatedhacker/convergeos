@@ -80,7 +80,7 @@ export class NoRunningServerError extends Schema.TaggedError<NoRunningServerErro
     return [
       "No running ConvergeOS server found.",
       ...this.checkedStatePaths.map((statePath) => `  checked ${statePath}`),
-      "Start one with `npx t3 serve`, or connect this machine with T3 Connect: `npx t3 connect`.",
+      "Start one with `npx @convergeos/cli serve`, or connect this machine with T3 Connect: `npx @convergeos/cli connect`.",
     ].join("\n");
   }
 }
@@ -252,7 +252,7 @@ const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function* (
     if (worktreeHome !== undefined) {
       bases.push(worktreeHome);
     }
-    const envHome = yield* Config.String("T3CODE_HOME").pipe(Config.option);
+    const envHome = yield* Config.String("CONVERGEOS_HOME").pipe(Config.option);
     bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
   }
 

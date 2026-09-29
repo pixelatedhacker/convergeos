@@ -35,7 +35,6 @@ const makeDesktopClerkLayer = (isDevelopment = true, events: string[] = []) => {
     isDevelopment,
     appDataDirectory: "/tmp/app-data",
     userDataDirName: isDevelopment ? "convergeos-dev" : "convergeos",
-    legacyUserDataDirName: isDevelopment ? "ConvergeOS (Dev)" : "ConvergeOS (Alpha)",
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
